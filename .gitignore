@@ -4,3 +4,7 @@ server/data/
 # Local smoke-test output
 .smoke/
 *.log
+# Desktop installer builds: staging, outputs and the downloaded WebView2 SDK
+build/
+dist/
+.cache/

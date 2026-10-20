@@ -32,7 +32,8 @@ export function findBrowser() {
 
 /**
  * @typedef {Object} Page
- * @property {(method: string, params?: object) => Promise<any>} send
+ * @property {(method: string, params?: object) => Promise<any>} send command to this page
+ * @property {(method: string, params?: object) => Promise<any>} sendBrowser browser-level command (Browser.*)
  * @property {(expression: string) => Promise<any>} evaluate value of an expression (promises awaited)
  * @property {(event: string, fn: (params: any) => void) => void} on
  * @property {(pred: string, timeoutMs?: number) => Promise<any>} waitFor poll an expression until truthy
@@ -112,6 +113,7 @@ export async function launch(opts = {}) {
   /** @type {Page} */
   const page = {
     send,
+    sendBrowser: (method, params) => raw(method, params),
     on(event, fn) {
       if (!listeners.has(event)) listeners.set(event, []);
       /** @type {any[]} */ (listeners.get(event)).push(fn);

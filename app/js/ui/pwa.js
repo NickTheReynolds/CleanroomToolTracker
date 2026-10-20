@@ -17,8 +17,23 @@ let reloadRequested = false;
 
 const notifyInstall = () => installListeners.forEach((f) => f());
 
-/** Register the service worker and listen for install and update events. */
+/**
+ * The Windows and macOS desktop apps define window.LNF_DESKTOP before the
+ * page loads.
+ * @returns {{platform: string, version: string} | null}
+ */
+export function desktopWrapper() {
+  const d = /** @type {any} */ (window).LNF_DESKTOP;
+  return d && typeof d === 'object' ? { platform: String(d.platform || ''), version: String(d.version || '') } : null;
+}
+
+/**
+ * Register the service worker and listen for install and update events.
+ * The desktop apps load their bundled files directly and update through
+ * their installers, so they skip the service worker.
+ */
 export function initPwa() {
+  if (desktopWrapper()) return;
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     installEvent = e;

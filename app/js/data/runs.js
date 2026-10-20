@@ -13,6 +13,8 @@ import { toMs } from '../core/time.js';
 
 /** Draft key of the Log run form. */
 export const LOG_DRAFT = 'log';
+/** Draft key of the current lookup query. */
+export const LOOKUP_DRAFT = 'lookup';
 
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/types.js').Measurement} Measurement */

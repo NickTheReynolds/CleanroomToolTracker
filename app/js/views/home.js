@@ -52,7 +52,7 @@ function iosHint(dismiss) {
       h('p', null, h('strong', null, 'Install on iPhone: '),
         'in Safari tap the Page Menu or Share button, then Share → Add to Home Screen, and keep “Open as Web App” on.'),
       h('p', { class: 'small' }, 'The Home Screen app keeps its own data, separate from Safari, so install it before you log runs.'),
-      h('div', null, button('Got it', { onClick: dismiss }))));
+      h('div', { class: 'row-wrap' }, linkButton('Step by step', '#/install', { icon: 'info' }), button('Got it', { onClick: dismiss }))));
 }
 
 /** @param {import('../router.js').ViewContext} ctx */

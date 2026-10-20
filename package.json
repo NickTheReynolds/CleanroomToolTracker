@@ -13,6 +13,8 @@
     "lines": "node scripts/check-line-limits.mjs",
     "icons": "node scripts/make-icons.mjs",
     "bump": "node scripts/bump-version.mjs",
-    "smoke": "node scripts/smoke-browser.mjs"
+    "smoke": "node scripts/smoke-browser.mjs",
+    "build:windows": "node scripts/build-windows.mjs",
+    "build:macos": "bash desktop/macos/build-macos.sh"
   }
 }

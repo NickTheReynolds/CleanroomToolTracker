@@ -3,7 +3,7 @@
  * Run detail parts: the results list (derived values marked, manual values
  * editable, "Use derived" to go back) and the measurement list.
  */
-import { h } from './dom.js';
+import { h, uid } from './dom.js';
 import { icon } from './icons.js';
 import { button, badge, listRow, emptyState } from './components.js';
 import { numberStepper, renderField } from './fields.js';
@@ -34,7 +34,10 @@ export function outputsList(o) {
     const spec = (o.template.derived || []).find((d) => d.output === f.key);
     const v = o.run.results ? o.run.results[f.key] : undefined;
     const isDerived = (o.run.derivedKeys || []).includes(f.key) && typeof v === 'number';
-    const head = h('div', { class: 'spread' }, h('span', { class: 'label' }, f.label, f.unit ? h('span', { class: 'unit' }, ` (${f.unit})`) : null),
+    const id = uid(f.key);
+    const editable = !isDerived && f.type === 'number';
+    const head = h('div', { class: 'spread' },
+      h(editable ? 'label' : 'span', { class: 'label', for: editable ? id : undefined }, f.label, f.unit ? h('span', { class: 'unit' }, ` (${f.unit})`) : null),
       isDerived ? badge('derived', 'ok', 'check') : v !== undefined && v !== null && v !== '' ? badge('manual', 'muted', 'edit') : null);
     if (isDerived) {
       return h('div', { class: 'card stack' }, head,
@@ -46,12 +49,14 @@ export function outputsList(o) {
     const note = spec
       ? derivable ? null : h('p', { class: 'field-note' }, `Derived value: ${missing[f.key] || 'not available'}.`)
       : null;
-    const field = f.type === 'number'
-      ? h('div', { class: 'field' }, numberStepper({
-        label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max,
-        onChange: (nv) => o.onManual(f.key, nv),
-      }).el)
-      : renderField({ ...f, label: f.label }, v, (nv) => o.onManual(f.key, nv));
+    if (!editable) {
+      // A text, choice or yes/no output: renderField brings its own label.
+      return h('div', { class: 'card stack' }, renderField(f, v, (nv) => o.onManual(f.key, nv)), note);
+    }
+    const field = h('div', { class: 'field' }, numberStepper({
+      id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max,
+      onChange: (nv) => o.onManual(f.key, nv),
+    }).el);
     return h('div', { class: 'card stack' }, head, field, note,
       derivable ? button(`Use derived (${fmtValue(values[f.key], f.unit)})`, {
         icon: 'undo', onClick: () => o.onUseDerived(f.key),

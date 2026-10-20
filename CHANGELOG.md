@@ -2,6 +2,40 @@
 
 One entry per milestone (spec Section 16).
 
+## M4: History and data safety
+
+- **History.** Filter by tool, template, material, status and date range (local days, inclusive), plus a keyword search over notes, recipe and tags. Filters are remembered, and `?tool=` presets the tool. Results show 50 at a time.
+- **Tool detail.** Tool facts, the event timeline, a chart of each template's primary output over time with event markers, recent runs, and a "Log run" bar.
+- **Backup.**
+  - A JSON backup (`lnf-runlog-backup-YYYY-MM-DD.json`), photos optional with a size estimate, assembled one photo at a time.
+  - Two-step export: prepare, then **Share…** (system share sheet) or **Download**.
+  - CSV export: `runs.csv` with `p.*`/`r.*` columns, plus `measurements.csv` and `events.csv`, with a UTF-8 BOM and a guard against spreadsheet formula injection.
+- **Merge import.** It validates the file, migrates, normalises, keeps the newer `updatedAt` per record by id, respects tombstones, never deletes, writes in one transaction, and reports added, updated, skipped and invalid counts. **Erase all data** asks you to type ERASE.
+- **Storage status:** usage, quota, persisted, photo usage, and a request for persistent storage.
+- **Quality checks.**
+  - The browser smoke test (`npm run smoke`): load, log, measure, look up, export with a real download, offline reload, an every-control-is-labelled check, and a page-error check.
+  - A WCAG AA contrast test for both themes; it found and fixed one dark-mode problem.
+  - Router and helper tests.
+
+## M3: Lookup
+
+- **Core.** `core/similarity.js` (filters, distance, spreads, weights, ranking, extrapolation, relax counts), `core/summary.js` (sensitivity, estimates, average, headline, trend, last event, suggested time, confidence) and `core/summary-text.js` (sentences).
+  - All Section 11 cases pass exactly.
+  - Edge cases are covered: no candidates, a single candidate, missing fields, spread fallbacks, non-ASCII materials, siblings, events, half-life override, trends, determinism.
+- **Look up.**
+  - The tool → template → planned inputs flow: every field optional with Clear, prefilled from the last run.
+  - Material and target thickness.
+  - The Strict chemistry, Same material and Include siblings toggles.
+- **Results.**
+  - A summary card: headline, range, confidence with reasons, warnings, suggested time with range, sentences.
+  - An output switcher.
+  - Ranked matches with signed differences, d and w, and the "Exact match" and "Before last clean" flags.
+  - An SVG chart of the output over time with event markers; points before an event are hollow.
+  - Relax suggestions when nothing matches.
+  - **Log this run**, which prefills the form and fills in the suggested time.
+- The real UI reproduces the worked example. Case 4 gives 85 nm/min (exact match), 5:53 suggested, A and C before the clean; Case 3 gives 103 nm/min with the warning; Case 5 offers +3 runs.
+- `docs/ALGORITHM.md` describes every rule and constant.
+
 ## M2: Capture
 
 - **Log run.** Tool tiles (recent first, with search), then template (skipped when a tool has one), then the form.

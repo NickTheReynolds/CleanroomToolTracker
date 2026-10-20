@@ -203,7 +203,9 @@ export async function render(ctx) {
       },
     }),
     section('Points', pointsBox, stats, h('p', { class: 'field-note' }, 'Empty points are skipped. Enter moves to the next point.')),
-    section('Notes', textInput({ value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el),
+    section('Notes', h('div', { class: 'field' },
+      h('label', { class: 'visually-hidden', for: 'measure-notes' }, 'Measurement notes'),
+      textInput({ id: 'measure-notes', value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el)),
     h('details', { class: 'more' }, h('summary', null, 'Time measured'),
       h('div', { class: 'stack' }, dateTimeField('Measured at', state.takenAt, (iso) => change({ takenAt: iso })))),
   ]);

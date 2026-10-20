@@ -23,10 +23,12 @@ import {
  * @returns {string}
  */
 export function keyFromLabel(label, taken) {
-  const words = String(label).normalize('NFKD').replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const words = String(label).normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9 ]+/g, ' ').trim().split(/\s+/).filter(Boolean);
   let key = words.map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase())).join('');
-  if (!/^[A-Za-z]/.test(key)) key = `f${key}`;
-  key = key.slice(0, 48) || 'field';
+  if (!key) key = 'field';
+  else if (!/^[A-Za-z]/.test(key)) key = `f${key}`;
+  key = key.slice(0, 48);
   let out = key;
   for (let n = 2; taken.includes(out); n++) out = `${key}${n}`;
   return out;

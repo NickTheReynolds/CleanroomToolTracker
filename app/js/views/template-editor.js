@@ -141,6 +141,7 @@ export async function render(ctx) {
       h('option', { value: '' }, 'None'),
       outputs.map((/** @type {FieldSpec} */ f) => h('option', { value: f.key, selected: f.key === t.primaryOutput }, f.label))));
     primSel.addEventListener('change', () => { t.primaryOutput = primSel.value || null; touch(); });
+    /** @type {Record<string, any>} */
     const previewValues = {};
     fill(body,
       section('Fields',

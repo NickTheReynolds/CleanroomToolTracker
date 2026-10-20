@@ -132,7 +132,7 @@ async function form(ctx, toolId, templateId) {
     runId: draft.runId,
     onChange: (ids) => { if (ids.join() !== draft.photoIds.join()) change({ photoIds: ids }); },
   });
-  /** @type {{dispose: () => void} | null} */
+  /** @type {{el: HTMLElement, dispose: () => void} | null} */
   let timer = null;
   const body = h('div', { class: 'view' });
 

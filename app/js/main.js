@@ -10,7 +10,7 @@ import { h, clear } from './ui/dom.js';
 import { toast, button, linkButton, errorText } from './ui/components.js';
 import { initShell, setTitle, setBack, setActions, setNavActive } from './ui/shell.js';
 import { applyTheme } from './ui/theme.js';
-import { initPwa, requestPersist } from './ui/pwa.js';
+import { initPwa, requestPersist, desktopWrapper } from './ui/pwa.js';
 
 const main = /** @type {HTMLElement} */ (document.getElementById('view'));
 let token = 0;
@@ -126,7 +126,7 @@ async function boot() {
   window.addEventListener('hashchange', render);
   await render();
   initPwa();
-  if (!settings.persistAsked) {
+  if (!settings.persistAsked && !desktopWrapper()) {
     await requestPersist();
     await saveSettings({ persistAsked: true });
   }

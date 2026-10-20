@@ -21,6 +21,7 @@
   --warn-soft: #fbedc9;
   --danger: #b3261e;
   --danger-soft: #fbe0de;
+  --danger-ink: #ffffff;
   --focus: #1f6feb;
   --chart-line: #0b5d7a;
   --chart-grid: #d5dce3;
@@ -58,6 +59,7 @@
     --warn-soft: #3a2d0c;
     --danger: #ff8f86;
     --danger-soft: #3d1614;
+    --danger-ink: #2b0805;
     --focus: #79b8ff;
     --chart-line: #6cc6e4;
     --chart-grid: #2c3945;
@@ -85,6 +87,7 @@
   --warn-soft: #3a2d0c;
   --danger: #ff8f86;
   --danger-soft: #3d1614;
+  --danger-ink: #2b0805;
   --focus: #79b8ff;
   --chart-line: #6cc6e4;
   --chart-grid: #2c3945;

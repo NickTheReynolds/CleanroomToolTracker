@@ -91,9 +91,21 @@ test('views never touch IndexedDB directly', async () => {
 });
 
 test('the app loads nothing from other origins', async () => {
+  // Resource loads: src/href attributes or properties, fetch(), import(),
+  // CSS url() and @import, manifest "src". Plain text such as an example
+  // address shown to the user is fine.
+  const LOADS = [
+    /\b(src|href)\s*[=:]\s*['"`]\s*(https?:)?\/\//i,
+    /\bfetch\(\s*['"`]\s*(https?:)?\/\//i,
+    /\bimport\(\s*['"`]\s*(https?:)?\/\//i,
+    /\bimport\s+[^'"`]*['"`]\s*(https?:)?\/\//i,
+    /url\(\s*['"]?\s*(https?:)?\/\//i,
+    /@import\s+['"]?\s*(https?:)?\/\//i,
+    /"src"\s*:\s*"(https?:)?\/\//i,
+  ];
   for (const f of await walk(join(ROOT, 'app'), /\.(m?js|css|html|svg|webmanifest|json)$/)) {
-    const src = (await readFile(f, 'utf8')).replace(/http:\/\/www\.w3\.org\/2000\/svg/g, '');
-    assert.ok(!/https?:\/\/(?!localhost)/.test(src), `${relative(ROOT, f)} references an external URL`);
+    const src = await readFile(f, 'utf8');
+    for (const re of LOADS) assert.ok(!re.test(src), `${relative(ROOT, f)} loads from another origin (${re})`);
   }
 });
 

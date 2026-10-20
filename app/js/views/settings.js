@@ -8,7 +8,7 @@ import { icon } from '../ui/icons.js';
 import { button, section, listRow, segmented, toast } from '../ui/components.js';
 import { textInput, numberStepper } from '../ui/fields.js';
 import { applyTheme } from '../ui/theme.js';
-import { checkForUpdate, updateWaiting, applyUpdate } from '../ui/pwa.js';
+import { checkForUpdate, updateWaiting, applyUpdate, desktopWrapper } from '../ui/pwa.js';
 import { getSettings, saveSettings, listTools } from '../data/repo.js';
 import { DEFAULTS, TUNABLE } from '../config.js';
 import { APP_VERSION, APP_BUILD } from '../../version.js';
@@ -135,6 +135,13 @@ function tuningEditor(settings) {
 
 /** @returns {HTMLElement} version, build and the update check */
 function aboutBlock() {
+  const wrapper = desktopWrapper();
+  if (wrapper) {
+    const name = wrapper.platform === 'macos' ? 'macOS' : 'Windows';
+    return h('div', { class: 'stack' },
+      h('p', null, `Version ${APP_VERSION}, ${name} desktop app${wrapper.version ? ` ${wrapper.version}` : ''}.`),
+      h('p', { class: 'field-note' }, `To update, install the newer ${name} app over this one; your data is kept.`));
+  }
   const status = h('p', { class: 'field-note', role: 'status' }, updateWaiting() ? 'An update is ready.' : '');
   const messages = {
     available: 'An update is ready. Tap Reload in the message below.',
@@ -178,12 +185,17 @@ export async function render(ctx) {
     section('Materials', h('p', { class: 'muted small' }, 'Shown in the material and substrate pickers; the ones you used recently come first.'),
       materialsEditor(settings)),
     section('Lookup tuning', tuningEditor(settings)),
-    section('Data',
+    section('Data and devices',
       h('div', { class: 'list' },
         listRow({
           title: 'Backup, import and storage', lead: icon('download'),
           subtitle: settings.lastExportAt ? `Last export ${new Date(settings.lastExportAt).toLocaleDateString()}` : 'No backup exported yet',
           href: '#/settings/data',
+        }),
+        listRow({
+          title: 'Install on your devices', lead: icon('share'),
+          subtitle: 'Phone and computer install steps, with a QR code for the app address',
+          href: '#/install',
         }))),
     section('Appearance',
       segmented({

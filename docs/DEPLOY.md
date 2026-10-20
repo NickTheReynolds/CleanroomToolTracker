@@ -9,7 +9,19 @@ GitHub Pages is free for public repositories and serves `*.github.io` over HTTPS
 - **Private repositories** need a paid GitHub plan for Pages, and the published site is public either way. Only the app code is published; your data stays on your devices.
 - **Caching.** GitHub Pages sends a short cache lifetime (about 10 minutes). The service worker bypasses it when it installs a new version.
 
-### One-time setup
+### One-time setup with GitHub Desktop (no command line)
+
+GitHub Desktop is installed on the development PC. The project folder is already a git repository with the milestone commits.
+
+1. Open GitHub Desktop, choose **File → Add local repository…**, and pick this folder (`CleanroomToolTracker`).
+2. Click **Publish repository**. Untick **Keep this code private**: free GitHub Pages needs a public repository. Only the app's code is published; your runs live on your devices, never in the repository.
+3. On github.com, open the new repository → **Settings → Pages**. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+4. Open the **Actions** tab. When "Deploy to GitHub Pages" finishes, it shows the address `https://<user>.github.io/<repository>/`.
+5. In the app, open **Settings → Install on your devices** and enter that address. The screen shows a QR code; scan it with each phone and follow the install steps for that phone.
+
+Later changes ship with **Commit** and then **Push origin** in GitHub Desktop.
+
+### One-time setup from the command line
 
 1. Create a repository on GitHub and push this folder to its `main` branch.
 2. In the repository, open **Settings → Pages**. Under **Build and deployment**, set **Source** to **GitHub Actions**.
@@ -31,6 +43,29 @@ If you forget to bump, the deploy workflow's commit stamp still changes the cach
 ## Any other static host
 
 Upload the contents of `app/` to any static web server that serves HTTPS. Service workers, installation and offline mode all require HTTPS; `localhost` is the only exception. Serve `.webmanifest` as `application/manifest+json` if the host lets you set types; most do this already.
+
+### A Synology NAS
+
+A Synology NAS can serve the app with its Web Station package. This route takes more setup than GitHub Pages, and it only works if the phones can reach the NAS:
+
+1. Install Web Station.
+2. Create a web portal that serves a copy of `app/`.
+3. Give the portal a trusted HTTPS certificate. One option is **Control Panel → Security → Certificate → Add → Let's Encrypt** with a Synology DDNS name.
+4. Make the NAS reachable over HTTPS from the phones, either from the internet (router port forwarding) or through a private VPN such as Tailscale, which also issues HTTPS names. Campus networks usually block incoming connections, so a NAS at home behind port forwarding, or a VPN, is the realistic setup.
+
+Check the current DSM menus and the VPN provider's terms before relying on this. The installed app works offline either way; the address only needs to be reachable for the first install and for updates.
+
+## Installed apps per platform
+
+| Platform | What "the app" is | Built from |
+|---|---|---|
+| iPhone, iPad | A Home Screen web app (Safari → Share → Add to Home Screen, "Open as Web App" on): full screen and offline, with its own storage | The HTTPS address |
+| Android | A WebAPK (Chrome → Install): a real installed app in the app drawer and Settings → Apps | The HTTPS address |
+| Windows | `LNF-Run-Log-Setup-<version>.exe`: a per-user installer for a native window (WebView2) that bundles the app files and needs no hosting | `npm run build:windows` (see [DESKTOP.md](DESKTOP.md)) |
+| macOS | `LNF Run Log.app` in a `.dmg`: a native window (WKWebView) that bundles the app files | `desktop/macos/build-macos.sh`, run on a Mac (see [DESKTOP-MACOS.md](DESKTOP-MACOS.md)) |
+| Any desktop, without an installer | Chrome or Edge **Install**, or Safari **File → Add to Dock** | The HTTPS address |
+
+Every installed copy keeps its own data. Move data between copies with **Settings → Backup and data**: export on one device, import on the other.
 
 ## Local development
 

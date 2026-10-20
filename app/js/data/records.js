@@ -9,24 +9,35 @@ import { normalizeRecord, validateRecord } from './schema.js';
 import { uuid } from '../core/ids.js';
 import { toMs } from '../core/time.js';
 
+/**
+ * @typedef {Object} Settings
+ * @property {string} userName
+ * @property {string} deviceName
+ * @property {string} deviceId
+ * @property {string} theme "system", "light" or "dark"
+ * @property {string[]} materials
+ * @property {Record<string, number>} tuning lookup overrides {halfLifeDays, eventPenalty, topK}
+ * @property {string | null} lastExportAt
+ * @property {boolean} iosHintDismissed
+ * @property {boolean} persistAsked
+ * @property {string | null} firstRunAt
+ * @property {string} publicUrl published HTTPS address, for the install QR code
+ */
+
+/** @type {Readonly<Settings>} */
 export const DEFAULT_SETTINGS = Object.freeze({
   userName: '',
   deviceName: '',
   deviceId: '',
   theme: 'system',
-  /** @type {string[]} */
   materials: [],
-  /** @type {Record<string, number>} */
   tuning: {},
-  /** @type {string | null} */
   lastExportAt: null,
   iosHintDismissed: false,
   persistAsked: false,
-  /** @type {string | null} */
   firstRunAt: null,
+  publicUrl: '',
 });
-
-/** @typedef {typeof DEFAULT_SETTINGS} Settings */
 
 /** Settings that belong to this device or person and stay out of backups. */
 export const DEVICE_SETTINGS = Object.freeze([
