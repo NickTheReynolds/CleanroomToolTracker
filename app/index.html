@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LNF Run Log</title>
+  <meta name="description" content="Offline-first log and lookup for cleanroom process runs.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0b5d7a" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0c2c38" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Run Log">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/forms.css">
+  <script>
+    // Apply a forced light/dark theme before first paint (per-device mirror of Settings).
+    try {
+      var t = localStorage.getItem('lnf-runlog-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) { /* storage unavailable: follow the system theme */ }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#view">Skip to content</a>
+  <header class="appbar">
+    <button class="appbar-btn appbar-back" id="nav-back" type="button" aria-label="Back" hidden>
+      <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <h1 id="view-title">LNF Run Log</h1>
+    <nav class="appbar-nav" aria-label="Main">
+      <a class="appbar-btn" href="#/" data-nav="/">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+        <span>Home</span>
+      </a>
+      <a class="appbar-btn" href="#/history" data-nav="/history">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3 4v4h4"/></svg>
+        <span>History</span>
+      </a>
+      <a class="appbar-btn" href="#/settings" data-nav="/settings">
+        <svg class="icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9"/><path d="M17 6h3"/><path d="M4 12h3"/><path d="M11 12h9"/><path d="M4 18h11"/><path d="M19 18h1"/><path d="M15 4v4"/><path d="M9 10v4"/><path d="M17 16v4"/></svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+  </header>
+  <main id="view" tabindex="-1">
+    <p class="boot-msg">Loading…</p>
+  </main>
+  <div id="actionbar" class="actionbar" hidden>
+    <div id="actionbar-inner" class="actionbar-inner"></div>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <noscript><p class="boot-msg">LNF Run Log needs JavaScript.</p></noscript>
+</body>
+</html>

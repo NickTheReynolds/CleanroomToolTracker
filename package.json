@@ -1,0 +1,18 @@
+{
+  "name": "lnf-runlog",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-first PWA for logging and looking up cleanroom process runs.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node scripts/check-line-limits.mjs && node --test",
+    "serve": "node serve.mjs",
+    "lines": "node scripts/check-line-limits.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "bump": "node scripts/bump-version.mjs",
+    "smoke": "node scripts/smoke-browser.mjs"
+  }
+}

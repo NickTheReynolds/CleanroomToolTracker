@@ -1,0 +1,261 @@
+/* Tokens, reset, typography and page layout. Colours meet WCAG AA in both
+   themes; state is never shown by colour alone. */
+
+:root {
+  color-scheme: light;
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --surface-2: #e8edf1;
+  --text: #11161b;
+  --text-2: #46525e;
+  --border: #c3ccd5;
+  --border-strong: #7f8c99;
+  --brand: #0b5d7a;
+  --brand-ink: #ffffff;
+  --brand-soft: #d6eaf2;
+  --header-bg: #0b5d7a;
+  --header-ink: #ffffff;
+  --ok: #17703a;
+  --ok-soft: #dcf2e3;
+  --warn: #7a5200;
+  --warn-soft: #fbedc9;
+  --danger: #b3261e;
+  --danger-soft: #fbe0de;
+  --focus: #1f6feb;
+  --chart-line: #0b5d7a;
+  --chart-grid: #d5dce3;
+  --shadow: 0 1px 2px rgb(16 24 32 / 0.08), 0 2px 10px rgb(16 24 32 / 0.06);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --tap: 48px;
+  --tap-lg: 56px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0e1317;
+    --surface: #172028;
+    --surface-2: #212c36;
+    --text: #e9eef2;
+    --text-2: #a7b4c0;
+    --border: #34424f;
+    --border-strong: #66778a;
+    --brand: #6cc6e4;
+    --brand-ink: #04222d;
+    --brand-soft: #123848;
+    --header-bg: #0c2c38;
+    --header-ink: #ffffff;
+    --ok: #7ad69a;
+    --ok-soft: #133222;
+    --warn: #f2c35b;
+    --warn-soft: #3a2d0c;
+    --danger: #ff8f86;
+    --danger-soft: #3d1614;
+    --focus: #79b8ff;
+    --chart-line: #6cc6e4;
+    --chart-grid: #2c3945;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1317;
+  --surface: #172028;
+  --surface-2: #212c36;
+  --text: #e9eef2;
+  --text-2: #a7b4c0;
+  --border: #34424f;
+  --border-strong: #66778a;
+  --brand: #6cc6e4;
+  --brand-ink: #04222d;
+  --brand-soft: #123848;
+  --header-bg: #0c2c38;
+  --header-ink: #ffffff;
+  --ok: #7ad69a;
+  --ok-soft: #133222;
+  --warn: #f2c35b;
+  --warn-soft: #3a2d0c;
+  --danger: #ff8f86;
+  --danger-soft: #3d1614;
+  --focus: #79b8ff;
+  --chart-line: #6cc6e4;
+  --chart-grid: #2c3945;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-size: 17px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--header-bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.45 var(--font);
+  -webkit-tap-highlight-color: transparent;
+  overflow-wrap: anywhere;
+}
+
+h1, h2, h3 { line-height: 1.25; margin: 0; }
+h2 { font-size: 1.12rem; }
+h3 { font-size: 1rem; }
+p { margin: 0 0 0.6em; }
+a { color: var(--brand); }
+img, svg { display: block; max-width: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 50;
+  padding: 12px 16px;
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+.skip-link:focus { top: calc(var(--safe-top) + 8px); }
+
+/* App bar: brand colour in both themes so the iOS status bar text (white)
+   stays readable. */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: calc(56px + var(--safe-top));
+  padding: var(--safe-top) max(6px, var(--safe-right)) 0 max(6px, var(--safe-left));
+  background: var(--header-bg);
+  color: var(--header-ink);
+}
+.appbar h1 {
+  flex: 1;
+  min-width: 0;
+  padding-left: 8px;
+  font-size: 1.12rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.appbar-back + h1 { padding-left: 0; }
+.appbar-nav { display: flex; gap: 2px; }
+.appbar-btn {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 2px 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.appbar-btn:hover { background: rgb(255 255 255 / 0.1); }
+.appbar-btn[aria-current="page"] { background: rgb(255 255 255 / 0.18); }
+.appbar-btn:focus-visible { outline-color: #ffffff; }
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 14px max(16px, var(--safe-right)) 28px max(16px, var(--safe-left));
+}
+main:focus { outline: none; }
+.view { display: flex; flex-direction: column; gap: 16px; }
+.view > div:empty { display: none; }
+
+/* Sticky bottom bar for each screen's primary actions. */
+.actionbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  padding: 10px max(16px, var(--safe-right)) calc(10px + var(--safe-bottom)) max(16px, var(--safe-left));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 10px rgb(16 24 32 / 0.06);
+}
+.actionbar-inner {
+  max-width: 728px;
+  margin: 0 auto;
+  display: flex;
+  gap: 8px;
+}
+.actionbar-inner > * { flex: 1 1 0; }
+
+.toasts {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(max(var(--actionbar-h, 0px), var(--safe-bottom)) + 12px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;
+}
+
+.boot-msg { padding: 24px 16px; color: var(--text-2); text-align: center; }
+.muted { color: var(--text-2); }
+.small { font-size: 0.88rem; }
+.mono { font-family: var(--mono); }
+.nowrap { white-space: nowrap; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.row-wrap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 340px) {
+  .appbar-btn span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

@@ -1,0 +1,6 @@
+node_modules/
+# Phase 2 sync server data (never commit lab data)
+server/data/
+# Local smoke-test output
+.smoke/
+*.log
