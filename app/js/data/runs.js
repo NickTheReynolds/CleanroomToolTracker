@@ -5,10 +5,14 @@
  */
 import { deleteKey, getAll } from './db.js';
 import {
-  createRecord, updateRecord, getLive, getRecord, listLive, softDelete, restoreRecord,
+  createRecord, updateRecord, getLive, getRecord, listLive, softDelete, restoreRecord, getDraft, saveDraft, clearDraft,
 } from './records.js';
 import { applyDerived } from '../core/derive.js';
+import { draftToRun } from '../core/run-draft.js';
 import { toMs } from '../core/time.js';
+
+/** Draft key of the Log run form. */
+export const LOG_DRAFT = 'log';
 
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/types.js').Measurement} Measurement */
@@ -242,6 +246,38 @@ export async function restorePhoto(id) {
 export async function purgeUnsavedPhotos(runId) {
   if (await getRecord('runs', runId)) return;
   for (const p of await getAll('photos', 'runId', runId)) await deleteKey('photos', p.id);
+}
+
+/**
+ * Move the current Log run form out of the way without losing typed data:
+ * a form the person changed becomes a draft run in Open runs; an untouched
+ * one is dropped with its unsaved photos.
+ * @returns {Promise<boolean>} true when a draft run was kept
+ */
+export async function setAsideLogDraft() {
+  /** @type {import('../core/run-draft.js').RunDraft | null} */
+  const d = await getDraft(LOG_DRAFT);
+  if (!d) return false;
+  if (d.touched) {
+    await saveRun(draftToRun(d, 'draft'));
+    await clearDraft(LOG_DRAFT);
+    return true;
+  }
+  await clearDraft(LOG_DRAFT);
+  await purgeUnsavedPhotos(d.runId);
+  return false;
+}
+
+/**
+ * Start a new Log run form (Duplicate, Log this run), setting aside any
+ * unsaved one first.
+ * @param {import('../core/run-draft.js').RunDraft} draft
+ * @returns {Promise<boolean>} true when an earlier form was kept as a draft run
+ */
+export async function startLogDraft(draft) {
+  const kept = await setAsideLogDraft();
+  await saveDraft(LOG_DRAFT, draft);
+  return kept;
 }
 
 /** @returns {Promise<{count: number, bytes: number}>} stored photo usage */

@@ -2,6 +2,35 @@
 
 One entry per milestone (spec Section 16).
 
+## M2: Capture
+
+- **Log run.** Tool tiles (recent first, with search), then template (skipped when a tool has one), then the form.
+  - The form is prefilled from the last run with the same tool and template, with a "Copied from Oct 6 run" chip and Clear.
+  - It has steppers with hold-to-repeat and an mm:ss duration input.
+  - Material, substrate and mask pickers list recent choices first and can add a new material.
+  - It also has recipe, target thickness, context fields, optional results, camera photos (resized on the device), notes with dictation and tags.
+  - An optional run timer fills the time field.
+  - Save as Open, or Save complete once results exist.
+  - The form autosaves to IndexedDB. If you start another form, a changed unsaved form is kept as a draft run and never lost.
+- **Quick capture.** Tool, photo and note, saved as a draft run.
+- **Open runs.** Drafts and open runs, oldest first with their age, plus a Resume banner for an unsaved form.
+- **Run detail.** It autosaves edits and recomputes derived values.
+  - Results: derived values are marked and read-only until Edit; typed values win; "Use derived" goes back.
+  - Also: the measurement list, inputs, sample, conditions, photos, notes, values from removed fields, and times.
+  - Actions: Measure, Mark complete or Reopen, Mark open, Duplicate as new run, Delete with Undo.
+- **Measurement entry.**
+  - Defaults:
+    - the last-used metrology tool;
+    - Pre until a pre measurement exists, then Post;
+    - the same sites as the last measurement.
+  - Kind, material and unit (Å and µm converted to nm on save).
+  - Site presets: Center, Center + 4 edge, 5-point, 9-point and Custom.
+  - One stepper per point, with Enter moving to the next.
+  - Live mean, range and uniformity.
+  - Saving recomputes derived outputs and reports the new primary output.
+- **Tool events.** Tool, type, Major (defaulted by type), date and time (default now) and notes. Edit, and delete with Undo.
+- **Derived-value core.** Tests cover Section 11 Case 6 and the edge cases (missing pre, zero, negative or missing time, empty points, zero mean, mask not etched, unit conversion, manual overrides, stale values).
+
 ## M1: Shell
 
 - Repo skeleton, `package.json` (scripts only, no dependencies), `.gitignore`, `jsconfig.json` for editor type checks.

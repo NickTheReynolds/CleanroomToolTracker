@@ -126,7 +126,8 @@
   text-decoration: none;
   touch-action: manipulation;
 }
-.tile-title { font-weight: 700; font-size: 1.04rem; }
+.tile-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 1.04rem; }
+.big-value { font-size: 1.45rem; font-weight: 750; }
 .tile-sub { font-size: 0.86rem; color: var(--text-2); }
 .tile[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
 

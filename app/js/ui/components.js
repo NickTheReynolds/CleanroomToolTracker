@@ -85,7 +85,7 @@ export function toast(message, o = {}) {
       onClick: () => { close(); o.action?.fn(); },
     }) : null,
     button('', { kind: 'ghost', icon: 'close', ariaLabel: 'Dismiss', class: 'toast-close', onClick: close }));
-  while (box.children.length >= 3) box.firstElementChild?.remove();
+  while (box.children.length >= 2) box.firstElementChild?.remove();
   box.append(el);
   const timeout = o.timeout ?? (o.kind === 'error' ? 8000 : UI.UNDO_MS);
   if (timeout > 0) timer = setTimeout(close, timeout);
