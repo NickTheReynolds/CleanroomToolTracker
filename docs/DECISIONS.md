@@ -233,6 +233,7 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 77. **No tool photos: the app never contacts the LNF wiki by itself.**
     - Version 1.2 showed each tool's photo from the LNF wiki. It shipped 12, and loaded the rest from the wiki when the wiki was reachable.
     - Version 1.3 removes the photos. The LNF wiki has had security problems, and the app should add nothing to its traffic. A tool's card shows its category icon instead.
+    - Version 1.4.1 ships the photos inside the app instead (decision 110). The app still never contacts the wiki.
     - To see a photo, tap **?**: the tool's wiki page opens in the browser, where UMich's own sign-in or network rules apply.
     - Wiki information (tools, recipes, links) reaches the app only through releases. It is read by hand, with the project owner's agreement.
     - The browser tests cannot reach the wiki: `scripts/cdp.mjs` makes its host unresolvable, and the smoke test fails if a page even tries.
@@ -323,3 +324,15 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 107. **"Log this step" joins a project only for the run it starts.** The link is stored with the person's first change, so a form opened and left untouched keeps no project. The address loses `?project=&step=` once applied, so Back, Forward or a reload cannot bring back a link the person removed. A form already in the project moves to the step asked for.
 108. **A recipe keeps the run's own steps unless it brings its own.** A recipe with one step (or none) fills the main step and leaves the run's other steps alone; a multi-step recipe replaces them, and Undo restores them. Lookup's "Log this run" takes the steps of the Lookup's LNF recipe, or the last run's when it used the same recipe, never another recipe's.
 109. **Sheets close when the screen changes.** A sheet (a dialog from the bottom) closes when the app moves to another screen, for example after "Log this step" in a plan step's sheet, so it never stays over a screen it does not belong to.
+
+## Tool photos (version 1.4.1)
+
+110. **Tool photos come with the app, at the project owner's request.** This brings photos back without undoing decision 77, because the app still never contacts the wiki.
+    - **How they were fetched.** `npm run photos` (`scripts/tool-photos.mjs`) asked the live wiki once, by hand, with the owner's agreement, on 2026-10-22. It made one request a second: 6 API queries and 117 downloads, and the wiki refused none.
+    - **Which photo.** The wiki names most tool photos after the scheduler number (`10020.jpg`). A page without one counts only if it shows a single photo; icons never count.
+    - **What ships.** 123 of the 127 tools have a photo (117 files, 2.5 MB). They are shrunk to 480 px JPEGs in `app/img/tools/`. Four tools have none on the wiki.
+    - **If the wiki refuses.** The script stops at the first refusal: no retries, and no other routes such as the Internet Archive.
+    - **Certificates.** The wiki's server leaves out its intermediate certificate. The script is given that public certificate (`NODE_EXTRA_CA_CERTS`); certificate checks stay on.
+    - **Where they show.** The tool card on Log run and Run detail shows a thumbnail that opens larger. The tool's page shows the photo at the top.
+    - **Credit and license.** Each larger view says "Photo: LNF wiki, © University of Michigan." The photos are not covered by the app's license.
+    - **Updates.** Every photo's name carries a hash of its bytes, so a changed photo gets a new name. A service worker update copies the photos from the previous version's cache instead of downloading 2.5 MB again.

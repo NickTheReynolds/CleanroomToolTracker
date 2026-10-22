@@ -184,7 +184,8 @@ Run this on an iPhone (Safari) and an Android phone (Chrome) against the HTTPS a
 - **Tests.** `npm test` runs `scripts/check-line-limits.mjs` (no file over 1000 lines) and `node --test`. The tests include every core module and the Section 11 worked example.
 - **Version.** `npm run bump` updates `app/version.js` and the service worker cache name before a release.
 - **Icons.** `npm run icons` regenerates the PNG icons without any image library.
-- **The LNF wiki.** The app never contacts the wiki by itself: its links open in the browser when tapped. Wiki information (tools, recipes, links) reaches the app only in a release. The browser tests make the wiki unreachable, and the smoke test fails if a page even tries to contact it.
+- **The LNF wiki.** The app never contacts the wiki by itself: its links open in the browser when tapped. Wiki information (tools, recipes, links, tool photos) reaches the app only in a release. The browser tests make the wiki unreachable, and the smoke test fails if a page even tries to contact it.
+- **Tool photos.** `npm run photos` fetches the photo of any tool that lacks one from the live wiki: one request a second, run by hand, and it stops if the wiki refuses. If Node cannot verify the wiki's certificate, see DECISIONS.md 110.
 - **Type checking (optional, not in CI).** Every JS file has `// @ts-check` and JSDoc types, so editors flag type errors. For a full check run `npx -p typescript tsc -p jsconfig.json`. This downloads TypeScript temporarily and adds nothing to the project.
 - **No dependencies.** The app and all tooling use only the browser and Node built-ins.
 - **Node version.** Use Node 22 or newer. Node 20 reached end of life in April 2026. Everything still runs on Node 20.14; the smoke test turns on Node 20's experimental WebSocket flag by itself.
@@ -209,3 +210,5 @@ In plain words, anyone may use, copy, share and change the app, including inside
 So nobody can take the app private, rebrand it as a closed product, or wrap it in a service without sharing back.
 
 LNF Run Log is an independent project. It is not made, endorsed or supported by the University of Michigan or the Lurie Nanofabrication Facility; "LNF" only names the facility whose tools it was built for.
+
+The tool photos in `app/img/tools/` come from the LNF wiki and belong to the University of Michigan. They are not covered by the AGPL.

@@ -21,6 +21,7 @@ import { launch, BLOCKED_HOSTS } from './cdp.mjs';
 import { makeServer } from '../serve.mjs';
 import { LNF_TOOLS } from '../app/js/data/seed-lnf.js';
 import { RECIPES } from '../app/js/data/lnf-recipes-etch.js';
+import { TOOL_PHOTOS } from '../app/js/data/tool-photos.js';
 
 /** The seeded ICP etcher the test logs a run on, and its first gas line. */
 const ICP = LNF_TOOLS.find((t) => t[3] === 'icp-etch') || LNF_TOOLS[0];
@@ -200,6 +201,21 @@ async function main() {
     await page.evaluate(`location.hash = '#/tool/${ICP[0]}'`);
     await page.waitFor(`[...document.querySelectorAll('.section-title')].some((h) => h.textContent.startsWith('LNF recipes'))`);
     await checkLabels('tool-detail');
+  });
+  await step('tool photos come with the app and show on the tool card and the tool\'s page', async () => {
+    if (!TOOL_PHOTOS[ICP[0]]) throw new Error(`${TOOL_NAME} has no photo in app/js/data/tool-photos.js`);
+    const loaded = (/** @type {string} */ sel) => `[...document.querySelectorAll(${JSON.stringify(sel)})]
+      .some((i) => i.complete && i.naturalWidth > 0 && new URL(i.src).origin === location.origin)`;
+    await page.waitFor(loaded('.tool-hero-img'));
+    await snap('tool-photo-page');
+    await page.evaluate(`location.hash = '#/log'`);
+    await page.waitFor(`[...document.querySelectorAll('.tile')].some((x) => x.textContent.includes(${JSON.stringify(TOOL_NAME)}))`);
+    await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
+    await page.waitFor(loaded('.tool-card .tool-photo'));
+    await t(`document.querySelector('.tool-photo-btn').click()`);
+    await page.waitFor(loaded('dialog.sheet .tool-photo-large'));
+    await snap('tool-photo-large');
+    await t(`document.querySelector('dialog.sheet').close()`);
   });
   await step('a project follows its wafers through a run, and moves into a folder', async () => {
     await page.evaluate(`location.hash = '#/project/new'`);

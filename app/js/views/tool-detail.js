@@ -8,7 +8,7 @@
 import { h, append } from '../ui/dom.js';
 import { button, linkButton, section, listRow, badge, emptyState, toast } from '../ui/components.js';
 import { recipeList, fillMessage } from '../ui/recipes.js';
-import { toolCard } from '../ui/tool-card.js';
+import { toolCard, toolPhotoFigure } from '../ui/tool-card.js';
 import { runList, lookups } from '../ui/run-list.js';
 import { lineChart } from '../ui/chart.js';
 import { inputScatter } from '../ui/scatter.js';
@@ -241,9 +241,10 @@ export async function render(ctx) {
   ctx.setTitle(tool.shortName || tool.name);
   ctx.root.classList.add('view-wide');
   append(ctx.root, [
+    toolPhotoFigure(tool),
     toolCard({
       tool, subtitle: CATEGORY_LABELS[tool.category] || tool.category, recipes, template: tpl, templateFor,
-      useLabel: 'Log run with this recipe', onUse, allSteps: true,
+      useLabel: 'Log run with this recipe', onUse, allSteps: true, noPhoto: true,
       starred: (settings.myTools || []).includes(tool.id),
       onStar: async (on) => {
         const mine = new Set((await getSettings()).myTools || []);

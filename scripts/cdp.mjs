@@ -48,8 +48,9 @@ const NO_WEBSOCKET = 'This Node has no global WebSocket. Use Node 22+, or Node 2
 
 /**
  * Hosts a test browser must never reach. Nothing automated may download from
- * the LNF wiki without the owner's say-so (it has had security problems), and
- * the app's tool card would otherwise load tool photos from it in every test.
+ * the LNF wiki without the owner's say-so (it has had security problems): the
+ * app ships its tool photos, and scripts/tool-photos.mjs, run by hand,
+ * downloads them with Node, never through this browser.
  */
 export const BLOCKED_HOSTS = Object.freeze(['lnf-wiki.eecs.umich.edu']);
 const RULES = BLOCKED_HOSTS.map((host) => `MAP ${host} ~NOTFOUND`).join(', ');

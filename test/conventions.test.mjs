@@ -123,7 +123,12 @@ test('nothing in the app loads from the LNF wiki: only the data names its addres
     assert.ok(!src.includes('WIKI_HOST'), `${rel} uses WIKI_HOST`);
     assert.ok(rel.startsWith('app/js/data/') || !src.includes('lnf-wiki.eecs.umich.edu'), `${rel} names the wiki's address`);
   }
-  assert.ok(!existsSync(join(ROOT, 'app', 'img', 'tools')), 'the app ships no tool photos (DECISIONS.md 77)');
+  // Tool photos come with the app (DECISIONS.md 110): the list names files in app/img/tools, never an address.
+  const { TOOL_PHOTOS } = await import('../app/js/data/tool-photos.js');
+  for (const file of Object.values(TOOL_PHOTOS)) {
+    assert.match(file, /^[A-Za-z0-9.-]+-[0-9a-f]{8}\.jpg$/, file);
+    assert.ok(existsSync(join(ROOT, 'app', 'img', 'tools', file)), `app/img/tools/${file} is missing`);
+  }
 });
 
 test('only the sync client talks to GitHub (the one third-party host, used only when Sync runs)', async () => {

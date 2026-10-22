@@ -2,6 +2,18 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.4.1: Tool photos
+
+- **Each tool's photo from the LNF wiki comes with the app.**
+  - 123 of the 127 tools have one.
+  - **Log run** and **Run detail** show it on the tool card; tap it to see it larger.
+  - The tool's page shows it at the top.
+  - The four tools without a photo on the wiki keep their category icon.
+- **The app still never contacts the wiki.** The photos were fetched once, by hand, for this release, and they work offline.
+- **Small download.** The photos add 2.5 MB. Later updates reuse them instead of downloading them again.
+- **For maintainers:** `npm run photos` fetches photos for new tools. It stops if the wiki refuses (DECISIONS.md 110).
+- The photos belong to the University of Michigan and are not covered by the app's license.
+
 ## M8: Projects in folders, runs with steps, and the alpha-test fixes
 
 Version 1.4.0.
