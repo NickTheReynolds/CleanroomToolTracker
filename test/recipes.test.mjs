@@ -8,13 +8,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   recipeFill, applyFill, undoFill, valueText, fieldValue, recipeMatches, findRecipe, sortRecipes, recipeFilm,
+  recipeMaterial, hasValues, recipesFor, templateForRecipe,
 } from '../app/js/core/recipes.js';
 import { RECIPES as ETCH } from '../app/js/data/lnf-recipes-etch.js';
 import { RECIPES as DEP } from '../app/js/data/lnf-recipes-dep.js';
 import { RECIPES as OTHER } from '../app/js/data/lnf-recipes-other.js';
-import { LNF_TOOLS } from '../app/js/data/seed-lnf.js';
+import { LNF_TOOLS, LNF_EXTRA_TEMPLATES } from '../app/js/data/seed-lnf.js';
 import { seedForType } from '../app/js/data/seed-types.js';
-import { normText } from '../app/js/core/vocab.js';
+import { normText, PROCESS_TYPES } from '../app/js/core/vocab.js';
 
 /** @typedef {import('../app/js/core/recipes.js').WikiRecipe} WikiRecipe */
 /** @typedef {import('../app/js/core/types.js').Template} Template */
@@ -139,7 +140,12 @@ test('valueText, search, lookup by name, order and film', () => {
 });
 
 const ALL = [...ETCH, ...DEP, ...OTHER];
-const TOOLS = new Map(LNF_TOOLS.map(([id, , name, type, gases]) => [id, { name, ...seedForType(type, gases) }]));
+/** Each seeded tool with its template and any second template (a second chamber). */
+const TOOLS = new Map(LNF_TOOLS.map(([id, , name, type, gases]) => {
+  const seed = seedForType(type, gases);
+  const extra = LNF_EXTRA_TEMPLATES.filter(([toolId]) => toolId === id).map(([, , t, g]) => seedForType(t, g).template);
+  return [id, { name, ...seed, templates: [seed.template, ...extra].filter((x) => !!x) }];
+}));
 
 test('data/recipes.js loads exactly the lnf-recipes-*.js modules', () => {
   const files = readdirSync(DATA).filter((f) => /^lnf-recipes-.+\.js$/.test(f)).sort();
@@ -174,7 +180,11 @@ test('every shipped recipe is well formed and fits its tool\'s template', () => 
     assert.ok(Array.isArray(r.steps), `${where}: steps`);
     if (!r.steps.length) assert.equal(r.main, -1, `${where}: main without steps`);
     else assert.ok(Number.isInteger(r.main) && r.main >= 0 && r.main < r.steps.length, `${where}: main ${r.main}`);
-    const fields = new Map((tool.template ? tool.template.fields : []).map((f) => [f.key, f]));
+    // A recipe with a process type belongs with the tool's template of that type (a second chamber).
+    if (r.process !== undefined) assert.ok(PROCESS_TYPES.includes(r.process), `${where}: process ${r.process}`);
+    const template = r.process ? tool.templates.find((t) => t.processType === r.process) : tool.template;
+    assert.ok(!r.process || template, `${where}: ${tool.name} has no ${r.process} template`);
+    const fields = new Map((template ? template.fields : []).map((f) => [f.key, f]));
     for (const s of r.steps) {
       assert.equal(typeof s.name, 'string', `${where}: step name`);
       const keys = new Set();
@@ -201,4 +211,46 @@ test('every shipped recipe is well formed and fits its tool\'s template', () => 
       assert.ok(typeof x === 'number' && Number.isFinite(x), `${where}: expect.${k}`);
     }
   }
+});
+
+test('a recipe sets the material only when its film names one listed material', () => {
+  const materials = ['Si', 'SiO2 (thermal)', 'SiO2 (PECVD)', 'SiNx (PECVD)', 'Positive resist', 'Au'];
+  const r = (/** @type {string[]} */ films) => poly({ films });
+  assert.equal(recipeMaterial(r(['Si']), materials), 'Si');
+  assert.equal(recipeMaterial(r(['sio2 (pecvd)']), materials), 'SiO2 (PECVD)', 'case and spacing ignored');
+  assert.equal(recipeMaterial(r(['SiNx']), materials), 'SiNx (PECVD)', 'the only listed SiNx');
+  assert.equal(recipeMaterial(r(['SiO2']), materials), null, 'several SiO2 films: ambiguous');
+  assert.equal(recipeMaterial(r(['Photoresist']), materials), null, 'not in the list');
+  assert.equal(recipeMaterial(r(['Si', 'Au']), materials), null, 'several films');
+  assert.equal(recipeMaterial(r([]), materials), null);
+});
+
+test('recipes the wiki only names sort after the ones with parameters', () => {
+  const named = poly({ name: 'BARC_1', steps: [], main: -1 });
+  const sorted = sortRecipes([named, poly({ name: 'LNF_Poly' }), poly({ name: 'Bell_Poly', steps: [], main: -1 }), poly({ name: 'LNF_Al2O3' })]);
+  assert.deepEqual(sorted.map((x) => x.name), ['LNF_Al2O3', 'LNF_Poly', 'BARC_1', 'Bell_Poly']);
+  assert.equal(hasValues(poly()), true);
+  assert.equal(hasValues(named), false);
+});
+
+test('a tool with two kinds of template shows each its own recipes', () => {
+  const rie = /** @type {Template} */ ({ ...icpTemplate(), id: 'rie', processType: 'etch' });
+  const pecvd = /** @type {Template} */ ({ ...icpTemplate(), id: 'pecvd', processType: 'deposition' });
+  const etch = poly({ name: 'm_si_o_1', process: 'etch' });
+  const dep = poly({ name: 'L_nit200', process: 'deposition' });
+  const plain = poly({ name: 'house recipe' });
+  assert.deepEqual(recipesFor([etch, dep, plain], rie, [rie, pecvd]), [etch, plain]);
+  assert.deepEqual(recipesFor([etch, dep, plain], pecvd, [rie, pecvd]), [dep, plain], 'a recipe without a type shows with every template');
+  assert.deepEqual(recipesFor([etch, dep], rie, [rie]), [etch, dep], 'one kind of template: every recipe');
+  assert.equal(templateForRecipe(dep, [rie, pecvd], 'rie'), pecvd);
+  assert.equal(templateForRecipe(etch, [rie, pecvd], 'rie'), rie);
+  assert.equal(templateForRecipe(dep, [rie], 'rie'), rie, 'no deposition template: the default one');
+  // Making the PECVD template the default changes nothing about where a typed recipe goes.
+  assert.equal(templateForRecipe(etch, [rie, pecvd], 'pecvd'), rie);
+  assert.equal(templateForRecipe(dep, [rie, pecvd], 'pecvd'), pecvd);
+  assert.equal(templateForRecipe(plain, [rie, pecvd], 'pecvd'), pecvd, 'without a type: the default template');
+  const p790 = ALL.filter((x) => x.tool === '38ec44e8-16bf-46b6-b492-a7993291dc7f');
+  assert.equal(p790.filter((x) => x.process === 'deposition').length, 7, 'the Plasmatherm 790 PECVD recipes');
+  assert.equal(p790.filter((x) => x.process === 'etch').length, 4, 'and its RIE recipes');
+  assert.equal(p790.length, 11, 'every Plasmatherm 790 recipe names its type');
 });

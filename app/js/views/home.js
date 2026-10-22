@@ -1,16 +1,18 @@
 // @ts-check
 /**
- * Home: a greeting with this week's count, four big buttons, the latest
- * runs, a backup reminder and install help.
+ * Home: a greeting with this week's count, four big buttons, the active
+ * projects with their next step, the latest runs, a backup reminder and
+ * install help.
  */
 import { h, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { button, linkButton, section, emptyState, toast, errorText } from '../ui/components.js';
 import { refresh } from '../router.js';
 import { runList, lookups } from '../ui/run-list.js';
+import { projectRow } from '../ui/project-card.js';
 import { canInstall, promptInstall, onInstallChange, isIos, isStandalone } from '../ui/pwa.js';
 import {
-  openRuns, recentRuns, listRuns, listTools, listTemplates, getSettings, saveSettings,
+  openRuns, recentRuns, listRuns, listTools, listTemplates, getSettings, saveSettings, listProjects,
 } from '../data/repo.js';
 import { DEFAULTS, UI } from '../config.js';
 import { ageDays, formatDay, formatAgo, toMs } from '../core/time.js';
@@ -105,12 +107,16 @@ function iosHint(dismiss) {
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
   ctx.setTitle('LNF Run Log');
-  const [open, recent, runs, tools, templates, settings] = await Promise.all([
+  const [open, recent, runs, tools, templates, settings, allProjects] = await Promise.all([
     openRuns(), recentRuns(UI.RECENT_RUNS_HOME), listRuns(), listTools({ includeArchived: true }), listTemplates(), getSettings(),
+    listProjects(),
   ]);
   const weekAgo = Date.now() - 7 * 86400000;
   const week = runs.filter((r) => toMs(r.startedAt) >= weekAgo).length;
-  const L = lookups(tools, templates);
+  // Run rows name every project a run is in; the Active projects section lists only the active ones.
+  const L = lookups(tools, templates, allProjects);
+  const projects = allProjects.filter((p) => p.status === 'active');
+  const shownProjects = projects.slice(0, UI.HOME_PROJECTS);
 
   const installSlot = h('div');
   const showInstall = () => {
@@ -144,8 +150,10 @@ export async function render(ctx) {
       homeButton('Tool event', '#/event', 'wrench')),
     h('div', { class: 'home-secondary' },
       linkButton('Quick capture', '#/capture', { icon: 'bolt' }),
-      linkButton('History', '#/history', { icon: 'history' })),
+      linkButton(projects.length ? `Projects (${projects.length})` : 'Projects', '#/projects', { icon: 'project' })),
     settings.sync && settings.sync.repo ? syncRow(settings.sync) : null,
+    shownProjects.length ? section('Active projects', h('div', { class: 'list' }, shownProjects.map((p) => projectRow(p, runs, L.tools))),
+      projects.length > shownProjects.length ? h('div', { class: 'row-end' }, linkButton(`All ${projects.length} active projects`, '#/projects')) : null) : null,
     section('Recent runs', recent.length
       ? runList(recent, L)
       : emptyState('No runs yet. Tap Log run to record your first one.')),

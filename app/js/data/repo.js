@@ -15,6 +15,8 @@ import { normText } from '../core/vocab.js';
 
 export * from './records.js';
 export * from './runs.js';
+export * from './projects.js';
+export * from './folders.js';
 
 /** @typedef {import('../core/types.js').Tool} Tool */
 /** @typedef {import('../core/types.js').Template} Template */
@@ -59,8 +61,9 @@ export async function ensureSeeded() {
 
 /**
  * Bring a database seeded by an older app version up to the current seed:
- * add missing LNF tools and templates, merge new materials, archive example
- * tools nobody used. Runs once per device, in one transaction.
+ * add missing LNF tools and templates and, coming from the example seed,
+ * merge the LNF materials and archive example tools nobody used. Runs once
+ * per device, in one transaction.
  */
 async function upgradeSeed() {
   const meta = await getOne('meta', 'seedVersion');
@@ -70,7 +73,7 @@ async function upgradeSeed() {
   const [tools, templates, runs, events, settings] = await Promise.all([
     getAll('tools'), getAll('templates'), getAll('runs'), getAll('events'), getSettings(),
   ]);
-  const plan = planSeedUpgrade({ tools, templates, runs, events, materials: settings.materials });
+  const plan = planSeedUpgrade({ tools, templates, runs, events, materials: settings.materials }, current);
   const archived = plan.archiveIds.map((id) => prepareUpdate('tools', { ...tools.find((t) => t.id === id), active: false }, settings));
   await withTx(['tools', 'templates', 'meta'], 'readwrite', (tx) => {
     for (const t of [...plan.tools, ...archived]) tx.objectStore('tools').put(t);

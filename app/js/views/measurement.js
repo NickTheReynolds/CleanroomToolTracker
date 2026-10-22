@@ -1,16 +1,17 @@
 // @ts-check
 /**
- * Measurement entry: metrology tool, kind, phase, material and unit, a site
- * preset with one stepper per point, and live mean / range / uniformity.
- * Saving converts to the stored unit and recomputes the run's derived
- * outputs.
+ * Measurement entry: metrology tool (the likely one for the kind, chosen
+ * already), kind, phase, material and unit, a site preset with one stepper
+ * per point or values pasted in one go, and live mean / range /
+ * uniformity. Saving converts to the stored unit and recomputes the run's
+ * derived outputs.
  */
 import { h, append, fill, uid } from '../ui/dom.js';
 import {
-  button, section, segmented, emptyState, linkButton, toast, confirmDialog, errorText, labelRow, helpSection,
+  button, section, segmented, emptyState, linkButton, toast, confirmDialog, errorText, labelRow, helpSection, sheet,
 } from '../ui/components.js';
 import { numberStepper, textInput } from '../ui/fields.js';
-import { toolTiles, materialPicker } from '../ui/pickers.js';
+import { toolTiles, materialPicker, mineOf } from '../ui/pickers.js';
 import { dateTimeField } from '../ui/run-form.js';
 import { createAutosave } from '../ui/autosave.js';
 import { navigate } from '../router.js';
@@ -18,11 +19,16 @@ import {
   getMeasurement, getRun, getTool, getTemplate, listTools, listMeasurements, allMeasurements, saveMeasurement,
   deleteMeasurement, restoreMeasurement, getDraft, saveDraft, clearDraft, getSettings, getRecord,
 } from '../data/repo.js';
+import { LNF_TOOLS } from '../data/seed-lnf.js';
 import { pointStats, toCanonical, unitsFor } from '../core/derive.js';
-import { fmtNum, fmtValue } from '../core/format.js';
+import { defaultMetrologyTool, fillPoints } from '../core/metrology.js';
+import { fmtNum, fmtValue, parseNumberList } from '../core/format.js';
 import { MEASUREMENT_KINDS, KIND_LABELS } from '../core/vocab.js';
 import { HELP } from '../core/app-help.js';
 import { toMs } from '../core/time.js';
+
+/** Each LNF tool's equipment type, by tool id. */
+const LNF_TYPE = new Map(LNF_TOOLS.map(([id, , , type]) => [id, type]));
 
 /** Site presets (spec Section 7). */
 export const PRESETS = Object.freeze({
@@ -46,6 +52,7 @@ const STEP_BY_UNIT = { nm: 1, 'Å': 10, 'µm': 0.01, 'Ω/sq': 0.1, MPa: 1, '': 0
  * @property {{site: string, value: number | null}[]} points
  * @property {string} takenAt
  * @property {string} notes
+ * @property {boolean} [toolPicked] the person chose the metrology tool, so a change of kind keeps it
  */
 
 /**
@@ -87,20 +94,23 @@ export async function render(ctx) {
   /** @type {MeasureState | null} */
   const draft = await getDraft(draftKey);
   const latest = [...runMs].sort((a, b) => toMs(b.takenAt) - toMs(a.takenAt))[0];
+  const mine = mineOf(settings.myTools, lastUsed);
+  /** The likely metrology tool for a kind (see defaultMetrologyTool). */
+  const toolFor = (/** @type {string} */ kind) => defaultMetrologyTool(kind, everyMs, metrology, (id) => LNF_TYPE.get(id), mine);
   /** @type {MeasureState} */
   let state = draft || (existing ? {
     metrologyToolId: existing.metrologyToolId, kind: existing.kind, phase: existing.phase, material: existing.material,
     unit: existing.unit, preset: presetFor(existing.points.map((p) => p.site)),
     points: existing.points.map((p) => ({ site: p.site, value: p.value })), takenAt: existing.takenAt, notes: existing.notes,
+    toolPicked: true,
   } : (() => {
     const kind = latest ? latest.kind : 'thickness';
     const hasPre = runMs.some((m) => m.phase === 'pre');
     const sites = latest ? latest.points.map((p) => p.site) : PRESETS.five.sites;
-    const toolId = [...lastUsed.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || metrology[0]?.id || null;
     return {
-      metrologyToolId: toolId, kind, phase: hasPre ? 'post' : 'pre', material: run.material,
+      metrologyToolId: toolFor(kind), kind, phase: hasPre ? 'post' : 'pre', material: run.material,
       unit: (unitsFor(kind) || [''])[0], preset: presetFor(sites), points: sites.map((site) => ({ site, value: null })),
-      takenAt: new Date().toISOString(), notes: '',
+      takenAt: new Date().toISOString(), notes: '', toolPicked: false,
     };
   })());
   const autosave = createAutosave(() => saveDraft(draftKey, state));
@@ -167,12 +177,82 @@ export async function render(ctx) {
     }
   };
 
+  // The metrology tool: one line with Change once chosen, the tool tiles while choosing.
+  const toolBox = h('div');
+  let choosing = false;
+  const drawTool = () => {
+    const t = metrology.find((x) => x.id === state.metrologyToolId);
+    if (t && !choosing) {
+      fill(toolBox, h('div', { class: 'card spread' },
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, t.name),
+          state.toolPicked ? null : h('span', { class: 'row-sub' }, `Suggested for ${String(KIND_LABELS[state.kind] || state.kind).toLowerCase()}.`)),
+        button('Change', { kind: 'ghost', onClick: () => { choosing = true; drawTool(); } })));
+      return;
+    }
+    fill(toolBox, metrology.length
+      ? toolTiles({
+        tools: metrology, lastUsed, mine, selectedId: state.metrologyToolId,
+        onPick: (x) => { change({ metrologyToolId: x.id, toolPicked: true }); choosing = false; drawTool(); },
+      })
+      : emptyState('No metrology tools yet.', linkButton('Add one', '#/settings/tool/new')));
+  };
+  drawTool();
+
+  // Values pasted from the metrology tool's software or a spreadsheet fill the sites.
+  const pasteValues = () => {
+    const id = uid('paste');
+    const area = /** @type {HTMLTextAreaElement} */ (h('textarea', {
+      id, class: 'input', rows: 6, autocomplete: 'off', spellcheck: 'false', placeholder: 'e.g. 1002.4  998.1  1004.0  1001.2  999.7',
+    }));
+    const preview = h('p', { class: 'field-note', role: 'status' }, 'No numbers yet.');
+    /** @type {{site: string | null, value: number}[]} */
+    let parsed = [];
+    const use = button('Use these values', {
+      kind: 'primary', icon: 'check', big: true, disabled: true,
+      onClick: () => {
+        const res = fillPoints(state.points, parsed);
+        change({ points: res.points, preset: res.added ? 'custom' : state.preset });
+        s.close();
+        drawSites();
+        drawPoints();
+        drawStats();
+        toast(`${parsed.length} value${parsed.length === 1 ? '' : 's'} filled in${res.byName ? ' by site name' : ''}${res.added ? `; ${res.added} site${res.added === 1 ? '' : 's'} added` : ''}.`);
+      },
+    });
+    area.addEventListener('input', () => {
+      parsed = parseNumberList(area.value);
+      const shown = parsed.slice(0, 8).map((v) => `${v.site ? `${v.site} ` : ''}${String(v.value)}`).join(', ');
+      preview.textContent = parsed.length ? `${parsed.length} value${parsed.length === 1 ? '' : 's'}: ${shown}${parsed.length > 8 ? ', …' : ''}` : 'No numbers yet.';
+      use.disabled = !parsed.length;
+    });
+    const s = sheet('Paste values', [
+      h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, `Values in ${state.unit || 'the unit above'}`), 'Pasted values', HELP.pasteValues), area),
+      preview,
+      h('p', { class: 'muted small' }, `Paste a column, a row or “site = value” pairs. Values fill the sites in order (${state.points.map((p) => p.site).join(', ')}); extra values add sites.`),
+      h('div', { class: 'sheet-actions' }, use),
+    ]);
+    area.focus();
+  };
+
+  // The site preset, redrawn when a paste adds sites (which makes it Custom).
+  const sitesBox = h('div');
+  const drawSites = () => fill(sitesBox, segmented({
+    label: 'Sites', options: Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label })), value: state.preset, compact: true,
+    help: HELP.measureSites,
+    onChange: (v) => {
+      const preset = v || 'custom';
+      const sites = preset === 'custom' ? state.points.map((p, i) => String(i + 1)) : PRESETS[/** @type {keyof typeof PRESETS} */ (preset)].sites;
+      const points = sites.map((site, i) => ({ site, value: state.points[i] ? state.points[i].value : null }));
+      change({ preset, points });
+      drawPoints();
+      drawStats();
+    },
+  }));
+
   const materials = [...new Set([run.material, run.maskMaterial, ...settings.materials].filter(Boolean))];
   append(ctx.root, [
     h('p', { class: 'muted' }, `${tool ? tool.shortName || tool.name : 'Run'}${template ? ` · ${template.name}` : ''}${run.material ? ` · ${run.material}` : ''}`),
-    helpSection('Metrology tool', HELP.measureTool, metrology.length
-      ? toolTiles({ tools: metrology, lastUsed, selectedId: state.metrologyToolId, onPick: (t) => change({ metrologyToolId: t.id }) })
-      : emptyState('No metrology tools yet.', linkButton('Add one', '#/settings/tool/new'))),
+    helpSection('Metrology tool', HELP.measureTool, toolBox),
     segmented({
       label: 'Phase', options: [{ value: 'pre', label: 'Pre (before run)' }, { value: 'post', label: 'Post (after run)' }],
       value: state.phase, onChange: (v) => change({ phase: v === 'post' ? 'post' : 'pre' }), help: HELP.measurePhase,
@@ -182,7 +262,9 @@ export async function render(ctx) {
       help: HELP.measureKind,
       onChange: (v) => {
         const kind = v || 'thickness';
-        change({ kind, unit: (unitsFor(kind) || [state.unit])[0] });
+        // A suggested tool follows the kind (a stress tool for stress); a chosen one stays.
+        change({ kind, unit: (unitsFor(kind) || [state.unit])[0], ...(state.toolPicked ? {} : { metrologyToolId: toolFor(kind) }) });
+        drawTool();
         drawUnit();
         drawPoints();
         drawStats();
@@ -193,19 +275,10 @@ export async function render(ctx) {
       onChange: (v) => change({ material: v }),
     }),
     unitBox,
-    segmented({
-      label: 'Sites', options: Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label })), value: state.preset, compact: true,
-      help: HELP.measureSites,
-      onChange: (v) => {
-        const preset = v || 'custom';
-        const sites = preset === 'custom' ? state.points.map((p, i) => String(i + 1)) : PRESETS[/** @type {keyof typeof PRESETS} */ (preset)].sites;
-        const points = sites.map((site, i) => ({ site, value: state.points[i] ? state.points[i].value : null }));
-        change({ preset, points });
-        drawPoints();
-        drawStats();
-      },
-    }),
-    helpSection('Points', HELP.measurePoints, pointsBox, stats, h('p', { class: 'field-note' }, 'Empty points are skipped. Enter moves to the next point.')),
+    sitesBox,
+    helpSection('Points', HELP.measurePoints,
+      h('div', { class: 'row-end' }, button('Paste values', { kind: 'ghost', icon: 'copy', onClick: pasteValues })),
+      pointsBox, stats, h('p', { class: 'field-note' }, 'Empty points are skipped. Enter moves to the next point.')),
     section('Notes', h('div', { class: 'field' },
       h('label', { class: 'visually-hidden', for: 'measure-notes' }, 'Measurement notes'),
       textInput({ id: 'measure-notes', value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el)),
@@ -213,6 +286,7 @@ export async function render(ctx) {
       h('div', { class: 'stack' }, dateTimeField('Measured at', state.takenAt, (iso) => change({ takenAt: iso }), HELP.measuredAt))),
   ]);
   drawUnit();
+  drawSites();
   drawPoints();
   drawStats();
 

@@ -1,7 +1,8 @@
 // @ts-check
 /**
- * Settings: name and device, links to tools and materials, lookup tuning,
- * data and devices, theme, version and updates.
+ * Settings: name and device, links to my tools, tools and materials, data
+ * and devices, theme, lookup tuning (under Advanced), version, updates and
+ * the source code.
  */
 import { h, uid, debounce, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -135,6 +136,13 @@ export async function render(ctx) {
     section('Tools and materials',
       h('div', { class: 'list' },
         listRow({
+          title: 'My tools', lead: icon('star'),
+          subtitle: (settings.myTools || []).length
+            ? `${(settings.myTools || []).length} chosen. Tool pickers show these first.`
+            : 'Choose the tools you use, so tool pickers show them first.',
+          href: '#/settings/my-tools',
+        }),
+        listRow({
           title: 'Tools and templates', lead: icon('wrench'),
           subtitle: `${tools.filter((t) => t.active).length} active tools. Add, rename, archive, edit templates.`,
           href: '#/settings/tools',
@@ -144,7 +152,6 @@ export async function render(ctx) {
           subtitle: `${settings.materials.length} in the material and substrate pickers. Search, add, remove.`,
           href: '#/settings/materials',
         }))),
-    section('Lookup tuning', tuningEditor(settings)),
     section('Data and devices',
       h('div', { class: 'list' },
         listRow({
@@ -174,6 +181,10 @@ export async function render(ctx) {
           await saveSettings({ theme });
         },
       })),
+    section('Advanced',
+      h('details', { class: 'more' }, h('summary', null, 'Lookup tuning'),
+        h('p', { class: 'muted small' }, 'How Lookup weighs older runs and tool events, and how many close runs it averages. The defaults suit most tools.'),
+        tuningEditor(settings))),
     section('About', aboutBlock()),
   ]);
   const mine = pending;

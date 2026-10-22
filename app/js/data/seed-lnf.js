@@ -142,6 +142,19 @@ export const LNF_TOOLS = Object.freeze([
 ]);
 
 /**
+ * Second templates for tools that run two kinds of process, as
+ * [toolId, templateId, type, gases, template name]. The Plasmatherm 790 has
+ * an RIE chamber (its first template) and a PECVD chamber. Ids are fixed,
+ * like the others, so devices that seed separately merge cleanly (seed
+ * version 3 adds them to older databases).
+ * @type {ReadonlyArray<[string, string, string, string[], string]>}
+ */
+export const LNF_EXTRA_TEMPLATES = Object.freeze([
+  ['38ec44e8-16bf-46b6-b492-a7993291dc7f', '6119e6b6-53b2-4b07-822f-3d00980c5cb0', 'pecvd', ['SiH4', 'NH3', 'N2O', 'N2', 'He'],
+    'PECVD film (right chamber)'],
+]);
+
+/**
  * Every material the LNF wiki lists as supported (the Capabilities, facility
  * description, PVD films, LPCVD and thermal oxidation pages and the approved
  * materials sheet), plus bulk lithium niobate. The wiki's spellings of one

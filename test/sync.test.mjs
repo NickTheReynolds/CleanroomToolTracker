@@ -175,6 +175,24 @@ test('two devices converge: additions, edits and deletions travel; unchanged fil
   assert.match(describeResult(quiet), /1 other device · nothing new/);
 });
 
+test('files read by an app version that synced fewer stores are read once more', async () => {
+  const gh = fakeGitHub();
+  const project = normalizeRecord('projects', {
+    id: 'P', createdAt: T(1), updatedAt: T(1), deleted: false, deviceId: 'aaa', author: 'A', name: 'Batch 3', startedAt: T(1),
+  });
+  const a = device('aaa', { runs: [rec('runs', 'r1', T(2), 'aaa')], projects: [project], folders: [] });
+  await sync(gh, a);
+  // B synced A's file on 1.3, which merged no projects, and kept its sha as read.
+  const b = device('bbb', { projects: [], folders: [] });
+  b.settings.sync = { ...b.settings.sync, seen: { aaa: [...gh.files.values()][0].sha } };
+  const upgraded = await sync(gh, b);
+  assert.equal(upgraded.read, 1, 'the file is read again');
+  assert.deepEqual(b.db.projects.map((p) => p.id), ['P']);
+  assert.equal(b.settings.sync.seenStores, SYNC_STORES.join(','));
+  const again = await sync(gh, b);
+  assert.equal(again.read, 0, 'after that, unchanged files are skipped as before');
+});
+
 test('an equal updatedAt goes to the higher device id on every device', async () => {
   const gh = fakeGitHub();
   const a = device('aaa', { runs: [rec('runs', 'r1', T(4), 'aaa', { notes: 'from aaa' })] });
@@ -223,4 +241,31 @@ test('the snapshot carries records and materials but never the token or photos',
   assert.deepEqual(validateSnapshot({ ...snap, format: 'other' }), ['not an LNF Run Log sync file']);
   const plan = planMerge({ runs: [] }, snap, []);
   assert.equal(plan.counts.runs.added, 1);
+});
+
+test('projects and their folders sync; a snapshot from an older version without them still merges', () => {
+  const project = normalizeRecord('projects', {
+    id: 'P', createdAt: T(1), updatedAt: T(2), deleted: false, deviceId: 'bbb', author: 'Ana', name: 'Batch 3', startedAt: T(1),
+    wafers: [{ id: 'w1', label: 'W1' }],
+  });
+  const folder = normalizeRecord('folders', { id: 'F', createdAt: T(1), updatedAt: T(1), deleted: false, deviceId: 'bbb', author: 'Ana', name: 'Thesis' });
+  const snap = buildSnapshot({
+    records: { runs: [rec('runs', 'r1', T(1), 'bbb')], projects: [{ ...project, folderId: 'F' }], folders: [folder] }, materials: [],
+    deviceId: 'bbb', deviceName: 'PC', author: 'Ana', appVersion: '1.4.0', now: T(9),
+  });
+  assert.ok(SYNC_STORES.includes('projects') && SYNC_STORES.includes('folders'));
+  assert.deepEqual(validateSnapshot(snap), []);
+  const plan = planMerge({ runs: [], projects: [], folders: [] }, snap, []);
+  assert.equal(plan.counts.projects.added, 1);
+  assert.equal(plan.counts.folders.added, 1);
+  assert.equal(plan.put.projects[0].folderId, 'F');
+  assert.deepEqual(plan.put.projects[0].wafers, [{ id: 'w1', label: 'W1', status: 'active', notes: '' }]);
+  // A device on an app version from before projects writes no projects list.
+  const old = { ...snap, stores: { ...snap.stores } };
+  delete old.stores.projects;
+  delete old.stores.folders;
+  assert.deepEqual(validateSnapshot(old), []);
+  const merged = planMerge({ runs: [], projects: [project], folders: [folder] }, old, []);
+  assert.equal(merged.put.projects.length + merged.put.folders.length, 0, 'nothing is removed');
+  assert.deepEqual(validateSnapshot({ ...snap, stores: { ...snap.stores, projects: 'x' } }), ['no projects list']);
 });

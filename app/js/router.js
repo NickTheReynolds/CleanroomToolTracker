@@ -46,6 +46,12 @@ export const ROUTES = [
   { pattern: '/settings/sync', load: () => import('./views/settings-sync.js'), parent: '/settings' },
   { pattern: '/install', load: () => import('./views/install.js'), parent: '/settings' },
   { pattern: '/template/:id', load: () => import('./views/template-editor.js'), parent: '/settings/tools' },
+  { pattern: '/settings/my-tools', load: () => import('./views/my-tools.js'), parent: '/settings' },
+  { pattern: '/projects', load: () => import('./views/projects.js'), parent: '/' },
+  { pattern: '/folder/:id', load: () => import('./views/projects.js'), parent: '/projects' },
+  { pattern: '/project/new', load: () => import('./views/project-edit.js'), parent: '/projects' },
+  { pattern: '/project/:id', load: () => import('./views/project-detail.js'), parent: '/projects' },
+  { pattern: '/project/:id/edit', load: () => import('./views/project-edit.js'), parent: '/projects' },
 ];
 
 /**
@@ -95,16 +101,41 @@ export function matchRoute(path, routes = ROUTES) {
 }
 
 let replacing = false;
+/** In-app history of paths, so Back knows whether an earlier page exists. */
+const stack = /** @type {string[]} */ ([]);
+
+/**
+ * Note the screen the app now shows (main.js calls it on every route).
+ * @param {string} path
+ * @param {boolean} replaced the history entry was replaced, not added
+ */
+export function track(path, replaced) {
+  if (replaced && stack.length) stack[stack.length - 1] = path;
+  else if (stack.length >= 2 && stack[stack.length - 2] === path) stack.pop();
+  else if (stack[stack.length - 1] !== path) stack.push(path);
+}
+
+/** @returns {boolean} whether an earlier in-app page exists, for the Back button */
+export function canGoBack() {
+  return stack.length > 1;
+}
 
 /**
  * Go to a route. `replace` swaps the current history entry (used after a
- * save so Back does not return to the finished form).
+ * save so Back does not return to the finished form). When that target is
+ * the page just before this one (Save or Cancel on a form opened from it),
+ * the app goes back instead: a replaced entry would leave two copies of
+ * that page in a row, and the first Back would seem to do nothing.
  * @param {string} path e.g. "/run/abc"
  * @param {{replace?: boolean}} [opts]
  */
 export function navigate(path, opts = {}) {
   const hash = `#${path}`;
   if (window.location.hash === hash) return;
+  if (opts.replace && stack.length >= 2 && stack[stack.length - 2] === parseHash(hash).path) {
+    window.history.back();
+    return;
+  }
   replacing = !!opts.replace;
   if (opts.replace) window.location.replace(hash);
   else window.location.hash = hash;

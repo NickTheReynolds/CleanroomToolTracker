@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  computeDerived, applyDerived, pointStats, pickMeasurement, toCanonical, unitsFor, DERIVED_FUNCTIONS,
+  computeDerived, applyDerived, pointStats, pickMeasurement, toCanonical, unitsFor, DERIVED_FUNCTIONS, missingTimeField, waitingFor,
 } from '../app/js/core/derive.js';
 import { template, derivedRun, measurement } from './fixtures.mjs';
 
@@ -171,4 +171,25 @@ test('unit table converts Å and µm to nm on entry and nothing else', () => {
   assert.throws(() => toCanonical('thickness', 'mm', 1));
   assert.deepEqual(unitsFor('thickness'), ['nm', 'Å', 'µm']);
   assert.equal(unitsFor('other'), null);
+});
+
+test('what an unfinished run waits for, and the time field a rate needs', () => {
+  const pre = measurement('m1', 'pre', [1000]);
+  const post = measurement('m2', 'post', [575]);
+  const open = { ...derivedRun, status: /** @type {const} */ ('open'), results: {} };
+  const noTime = { ...open, params: { ...open.params, time: null } };
+  assert.equal(missingTimeField(/** @type {any} */ (noTime), template, [pre, post]), 'time');
+  assert.equal(waitingFor(/** @type {any} */ (noTime), template, [pre, post]), 'needs time');
+  assert.equal(missingTimeField(/** @type {any} */ ({ ...noTime, params: { ...noTime.params, time: 0 } }), template, [pre, post]), 'time');
+  assert.equal(missingTimeField(/** @type {any} */ (open), template, [pre, post]), null, 'the time is there');
+  assert.equal(missingTimeField(/** @type {any} */ (noTime), template, [pre]), null, 'the post measurement is missing first');
+  assert.equal(waitingFor(/** @type {any} */ (noTime), template, [pre]), 'needs post measurement');
+  assert.equal(waitingFor(/** @type {any} */ (open), template, []), 'needs pre and post measurements');
+  assert.equal(waitingFor(/** @type {any} */ ({ ...open, results: { etchRate: 85 } }), template, []), 'ready to mark complete');
+  assert.equal(waitingFor(/** @type {any} */ ({ ...open, status: 'draft' }), template, []), 'needs its inputs');
+  // A reason that is not "needs …" still reads after "This run".
+  assert.match(waitingFor(/** @type {any} */ ({ ...noTime, params: { ...noTime.params, time: 0 } }), template, [pre, post]),
+    /^cannot work out Etch rate: time must be greater than 0/);
+  assert.equal(waitingFor(/** @type {any} */ (open), null, []), 'needs a template');
+  assert.equal(missingTimeField(/** @type {any} */ (noTime), null, [pre, post]), null);
 });

@@ -16,7 +16,9 @@ export const SYNC_FORMAT = 'lnf-runlog-sync';
 export const SYNC_DIR = 'lnf-runlog-sync/devices';
 export const SYNC_EXT = '.lnfsync';
 /** Stores that sync. Photos are too large and stay on the device that took them. */
-export const SYNC_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events']);
+export const SYNC_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders']);
+/** Stores a snapshot may lack: devices on an app version from before they existed write none. */
+const OPTIONAL_STORES = Object.freeze(['projects', 'folders']);
 
 /**
  * @param {string} deviceId
@@ -68,7 +70,10 @@ export function validateSnapshot(snap) {
   if (snap.version > SCHEMA_VERSION) return [`written by a newer app version (format ${snap.version}); update this app`];
   if (typeof snap.deviceId !== 'string' || !snap.deviceId) return ['no device id'];
   if (!snap.stores || typeof snap.stores !== 'object') return ['no records'];
-  for (const s of SYNC_STORES) if (!Array.isArray(snap.stores[s])) return [`no ${s} list`];
+  for (const s of SYNC_STORES) {
+    const missing = snap.stores[s] === undefined && OPTIONAL_STORES.includes(s);
+    if (!missing && !Array.isArray(snap.stores[s])) return [`no ${s} list`];
+  }
   return [];
 }
 

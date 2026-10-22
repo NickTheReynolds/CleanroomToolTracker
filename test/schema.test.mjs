@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateField, validateTemplateBody, validateRecord, normalizeRecord, validateBackupEnvelope,
-  migrateRecords, SCHEMA_VERSION, MIGRATIONS, MAX_REQUIRED_FIELDS,
+  migrateRecords, SCHEMA_VERSION, MIGRATIONS, MAX_REQUIRED_FIELDS, DB_LAYOUT, DB_VERSION, DATA_STORES,
 } from '../app/js/data/schema.js';
 import { seedRecords, SEED_TOOLS, SEED_MATERIALS, SEED_TIME } from '../app/js/data/seed-tools.js';
 import { isUuid } from '../app/js/core/ids.js';
@@ -142,4 +142,15 @@ test('migrations are ordered, start at 1 and end at the schema version', () => {
   assert.equal(versions[versions.length - 1], SCHEMA_VERSION);
   const recs = [{ id: 'a' }];
   assert.deepEqual(migrateRecords('runs', recs, SCHEMA_VERSION), recs);
+});
+
+test('the database layout is ordered, ends at DB_VERSION, and holds every data store', () => {
+  const versions = DB_LAYOUT.map((m) => m.version);
+  assert.deepEqual(versions, [...versions].sort((a, b) => a - b));
+  assert.equal(versions[0], 1);
+  assert.equal(versions[versions.length - 1], DB_VERSION);
+  const stores = DB_LAYOUT.flatMap((m) => Object.keys(m.stores));
+  for (const s of [...DATA_STORES, 'meta']) assert.ok(stores.includes(s), `${s} is never created`);
+  assert.equal(new Set(stores).size, stores.length, 'a store is created twice');
+  assert.ok(SCHEMA_VERSION <= DB_VERSION);
 });

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedForType, knownTypes, gasKey, gasFields } from '../app/js/data/seed-types.js';
 import { lnfSeedRecords, seedMaterials, planSeedUpgrade, mergeMaterialLists } from '../app/js/data/seed-upgrade.js';
-import { LNF_TOOLS, LNF_MATERIALS, LNF_MATERIAL_WORDS } from '../app/js/data/seed-lnf.js';
+import { LNF_TOOLS, LNF_MATERIALS, LNF_MATERIAL_WORDS, LNF_EXTRA_TEMPLATES } from '../app/js/data/seed-lnf.js';
 import { seedRecords, SEED_MATERIALS, SEED_TIME } from '../app/js/data/seed-tools.js';
 import { validateRecord, validateTemplateBody, SEED_VERSION } from '../app/js/data/schema.js';
 import { isUuid } from '../app/js/core/ids.js';
@@ -55,6 +55,21 @@ test('the LNF seed: valid records, stable UUIDs, unique names, a template per pr
   for (const row of LNF_TOOLS) assert.equal(row.length, 5);
 });
 
+test('a tool with two chambers gets a second template: the Plasmatherm 790 PECVD side', () => {
+  const { tools, templates } = lnfSeedRecords();
+  for (const [toolId, templateId, , , name] of LNF_EXTRA_TEMPLATES) {
+    const tool = tools.find((t) => t.id === toolId);
+    assert.ok(tool, `${name}: unknown tool`);
+    const own = templates.filter((t) => t.toolId === toolId);
+    assert.equal(own.length, 2, `${tool.name} has its first template and the extra one`);
+    const extra = own.find((t) => t.id === templateId);
+    assert.ok(extra && extra.name === name && extra.processType !== own.find((t) => t.id !== templateId)?.processType);
+    assert.equal(tool.defaultTemplateId === templateId, false, 'the first template stays the default');
+  }
+  const pecvd = templates.find((t) => t.id === '6119e6b6-53b2-4b07-822f-3d00980c5cb0');
+  assert.deepEqual(pecvd?.fields.filter((f) => f.chemistry).map((f) => f.key), ['sih4', 'nh3', 'n2o', 'n2', 'he']);
+});
+
 test('materials: LNF list plus the generic list, bulk lithium niobate included, no duplicates', () => {
   const m = seedMaterials();
   assert.ok(m.includes('LiNbO3 (bulk)'));
@@ -93,8 +108,25 @@ test('upgrading an example-seeded database adds the LNF set without overwriting 
   assert.ok(!plan.archiveIds.includes(renamedTool.id), 'renamed example tool kept');
   assert.equal(plan.materials[0], 'Custom film');
   assert.ok(plan.materials.includes('LiNbO3 (bulk)'));
-  assert.equal(SEED_VERSION, 2);
+  assert.equal(SEED_VERSION, 3);
   const again = planSeedUpgrade({ ...existing, tools: [...existing.tools, ...plan.tools], templates: [...existing.templates, ...plan.templates] });
   assert.deepEqual(again.tools, []);
   assert.deepEqual(again.templates, []);
+});
+
+test('upgrading a version-2 database adds only the second chamber template', () => {
+  const lnf = lnfSeedRecords();
+  const extraIds = new Set(LNF_EXTRA_TEMPLATES.map((x) => x[1]));
+  const v2 = { tools: lnf.tools, templates: lnf.templates.filter((t) => !extraIds.has(t.id)), runs: [], events: [], materials: seedMaterials() };
+  const plan = planSeedUpgrade(v2);
+  assert.deepEqual(plan.tools, []);
+  assert.deepEqual(plan.templates.map((t) => t.id), [...extraIds]);
+  // A template the person deleted stays deleted: its tombstone counts as present.
+  const deleted = planSeedUpgrade({ ...v2, templates: [...v2.templates, { ...plan.templates[0], deleted: true }] }, 2);
+  assert.deepEqual(deleted.templates, []);
+  // Materials the person removed stay removed: only the step from seed 1 merges the LNF list.
+  const trimmed = planSeedUpgrade({ ...v2, materials: ['Si', 'SiO2 (thermal)', 'My film'] }, 2);
+  assert.deepEqual(trimmed.materials, ['Si', 'SiO2 (thermal)', 'My film']);
+  assert.deepEqual(trimmed.archiveIds, []);
+  assert.ok(planSeedUpgrade({ ...v2, materials: ['Si'] }, 1).materials.length > 50, 'from seed 1 the LNF materials arrive');
 });

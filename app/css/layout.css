@@ -1,0 +1,132 @@
+/* Projects and their folders, checklists, the run timer, run steps and the
+   wide-screen layouts (History table, Results side by side, two-column
+   forms). */
+
+/* Projects */
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text);
+  text-decoration: none;
+}
+.project-card:hover { border-color: var(--border-strong); }
+.project-name { display: inline-flex; align-items: center; gap: 8px; font-size: 1.08rem; font-weight: 750; min-width: 0; overflow-wrap: anywhere; }
+.project-name > svg { flex: none; color: var(--brand); }
+.project-title { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.progress {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.progress-fill { display: block; height: 100%; background: var(--brand); border-radius: 999px; min-width: 0; }
+.next-step { border-left: 6px solid var(--brand); }
+.next-step-title { font-size: 1.12rem; }
+.traveler-no {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--text);
+  font-weight: 750;
+  font-size: 0.9rem;
+}
+.project-links .card { padding: 12px 14px; }
+.project-open { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-weight: 750; text-decoration: none; }
+.project-open > svg:first-child { color: var(--brand); }
+.project-open:hover { text-decoration: underline; }
+.pre-line { white-space: pre-line; overflow-wrap: anywhere; }
+.wafer-line { display: flex; gap: 8px; align-items: center; }
+.wafer-line > .input:first-child { flex: 1; min-width: 0; }
+.wafer-line > .wafer-status { flex: none; width: auto; max-width: 48%; }
+.add-wafers { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* A long badge (what a run waits for, a project's name) wraps inside its row instead of running out of it */
+.row-badges .badge { white-space: normal; }
+.badge .icon { flex: none; }
+
+/* Folders */
+.crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 0.95rem; color: var(--text-2); }
+.crumbs a { display: inline-flex; align-items: center; gap: 4px; color: var(--brand); font-weight: 650; text-decoration: none; padding: 6px 0; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs [aria-current="page"] { color: var(--text); font-weight: 700; overflow-wrap: anywhere; }
+.crumb-sep { color: var(--text-2); }
+.row-end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.folder-list .row[disabled] { opacity: 1; cursor: default; background: var(--surface-2); }
+.folder-list .row[disabled] .row-title { font-weight: 800; }
+/* A Clear link beside a long label stays whole */
+.field-head > .link-btn { flex: none; white-space: nowrap; }
+.field-error { margin: 0; color: var(--danger); font-weight: 600; font-size: 0.9rem; }
+.field-error:empty { display: none; }
+
+/* Checklist rows (My tools, choosing projects) */
+.check-box {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid var(--border-strong);
+  border-radius: 8px;
+  color: transparent;
+}
+[aria-checked="true"] > .check-box { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+
+/* Tool card: the name opens the tool's page; the star marks it as one of my tools */
+.tool-card-link { display: inline-flex; align-items: center; gap: 2px; color: var(--text); text-decoration: none; }
+.tool-card-link:hover { text-decoration: underline; }
+.tool-card-link > svg { flex: none; color: var(--text-2); }
+.tool-card-star { flex: none; color: var(--text-2); }
+.tool-card-star[aria-pressed="true"] { color: var(--brand); }
+.tool-card-star[aria-pressed="true"] path { fill: currentColor; }
+
+/* Run timer */
+.timer-card .timer { flex-wrap: wrap; }
+.timer-card .timer-clock { flex: 1 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.timer-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.timer-card.timer-over .timer-clock { color: var(--warn); }
+
+/* Gas lines not in use, behind one row of chips */
+.gas-add { display: flex; flex-direction: column; gap: 6px; }
+.gas-add .pick-btn { min-height: 40px; padding: 4px 12px; }
+
+/* A sheet's main action stays in reach at the bottom */
+.sheet-actions {
+  position: sticky;
+  bottom: -20px;
+  margin: 0 -20px -20px;
+  padding: 12px 20px calc(16px + var(--safe-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+/* Lookup results: the summary and the chart side by side on wide screens */
+.results-top { display: flex; flex-direction: column; gap: 16px; }
+.results-top:empty { display: none; }
+
+/* History as a table on wide screens */
+.history-table { display: none; width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.history-table th, .history-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.history-table th { font-size: 0.86rem; color: var(--text-2); background: var(--surface-2); }
+.history-table th button { all: unset; cursor: pointer; font-weight: 700; display: inline-flex; gap: 4px; align-items: center; }
+.history-table th button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.history-table tbody tr:hover { background: var(--surface-2); }
+.history-table a { color: var(--text); font-weight: 650; text-decoration: none; }
+.history-table .num { text-align: right; white-space: nowrap; }
+
+@media (min-width: 900px) {
+  main:has(> .view-wide) { max-width: 1120px; }
+  .view-wide .history-table { display: table; }
+  .view-wide .history-list { display: none; }
+  .results-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; align-items: start; }
+  .fields > .field-text, .fields > .picker-field, .fields > details, .fields > .gas-add { grid-column: 1 / -1; }
+  /* Its own rule: a browser without :has() drops only this one. */
+  .fields > .field:has(textarea) { grid-column: 1 / -1; }
+}

@@ -17,6 +17,16 @@ export const EVENT_TYPES = Object.freeze(['pm', 'clean', 'seasoning', 'targetCha
 export const MAJOR_BY_DEFAULT = Object.freeze(['pm', 'clean', 'targetChange']);
 export const FIELD_TYPES = Object.freeze(['number', 'text', 'select', 'bool', 'duration']);
 export const FIELD_ROLES = Object.freeze(['input', 'output', 'context']);
+/** A project: active (wafers in process), paused, or done (finished). */
+export const PROJECT_STATUSES = Object.freeze(['active', 'paused', 'done']);
+/** A wafer of a project: still in process, done (finished its process), or scrapped (broken or lost). */
+export const WAFER_STATUSES = Object.freeze(['active', 'done', 'scrapped']);
+
+/** @type {Readonly<Record<string, string>>} */
+export const PROJECT_STATUS_LABELS = Object.freeze({ active: 'Active', paused: 'Paused', done: 'Finished' });
+
+/** @type {Readonly<Record<string, string>>} */
+export const WAFER_STATUS_LABELS = Object.freeze({ active: 'In process', done: 'Done', scrapped: 'Scrapped' });
 
 /** @type {Readonly<Record<string, string>>} */
 export const CATEGORY_LABELS = Object.freeze({

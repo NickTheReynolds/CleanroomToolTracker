@@ -23,6 +23,7 @@ The caller passes `now`. Every age and every "since" test is measured against it
 - **Query value.** A query param counts only when it is set and has the field's type: a number for numeric fields, a boolean for `bool`, and a string for `text` and `select`. A value of the wrong type is ignored.
 - **Equal** (categorical). Booleans compare strictly. Text and select values compare with `normText`: Unicode NFKC, trimmed, inner spaces collapsed, lower case. So "SiO₂" equals "sio2", and "Résist" equals " résist " but not "Resist".
 - **Deleted records.** Deleted runs and deleted events are ignored. A deleted tool or template counts as not found.
+- **Run steps.** A run with several steps (a breakthrough, the main etch, an over-etch) is compared by its main step, whose values are the run's `params`. The other steps are kept with the run and never matched. A run's projects play no part in Lookup.
 
 ## Step 0: candidates
 
@@ -175,6 +176,14 @@ It is reported as:
 - `minutes` = T / R and `seconds` = minutes × 60, with `mmss` from `formatMmSs` (5.882 min shows as "5:53");
 - `rangeMin` = T / max and `rangeMax` = T / min, in minutes, over the top-`TOP_K` outputs that are above 0;
 - `verb`: "etch" for process type etch, "deposit" for deposition, otherwise "run".
+
+The range comes from the closest runs alone, so it need not contain the headline's time: an exact match, or an estimate extrapolated beyond your inputs, can fall outside it. The results card then says "The closest runs alone would take X; this estimate is beyond them" instead of calling it a range around the estimate (`ui/lookup-card.js`).
+
+### On the Results screen
+
+- The headline's subtitle names how many runs the range comes from: "range … in the closest 5 of 12 runs".
+- The chart of the result over time joins only exact matches with a line (a trend of the same settings), and draws runs beyond the closest `TOP_K` fainter.
+- Under the matches, the result is plotted against each numeric input that took at least two values in complete runs of the template, with a least-squares line; runs outside the closest `TOP_K` are fainter, and runs that do not pass the match rules faintest. It is a picture of the data, not part of the estimate.
 
 ### Confidence
 

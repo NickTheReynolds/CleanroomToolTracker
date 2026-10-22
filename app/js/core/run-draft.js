@@ -4,17 +4,23 @@
  * run, required-field checks and turning a form state into run fields.
  */
 import { toMs } from './time.js';
+import { isSet, compactValues } from './values.js';
+import { copySteps, tidySteps } from './run-steps.js';
+
+export { isSet, compactValues };
 
 /** @typedef {import('./types.js').Run} Run */
 /** @typedef {import('./types.js').Template} Template */
 /** @typedef {import('./types.js').FieldValue} FieldValue */
+/** @typedef {import('./types.js').RunStep} RunStep */
+/** @typedef {import('./types.js').ProjectLink} ProjectLink */
 
 /**
  * @typedef {Object} RunDraft
  * @property {string} runId id the run will get (photos attach to it before saving)
  * @property {string} toolId
  * @property {string | null} templateId
- * @property {Record<string, FieldValue>} params
+ * @property {Record<string, FieldValue>} params the main step's values
  * @property {Record<string, FieldValue>} results
  * @property {string} material
  * @property {string} substrate
@@ -27,20 +33,13 @@ import { toMs } from './time.js';
  * @property {string} startedAt
  * @property {string | null} endedAt
  * @property {string | null} timerStartedAt
+ * @property {number | null} [timerTarget] seconds a running countdown counts down from; null counts up
+ * @property {boolean} [timerRan] the timer ran and was stopped in this form
+ * @property {RunStep[]} [steps] the steps of a run with several; empty for one step
+ * @property {ProjectLink[]} [projects] the projects the run belongs to
  * @property {{runId: string, startedAt: string} | null} copiedFrom
  * @property {boolean} touched the person changed something (prefill does not count)
  */
-
-/**
- * @param {FieldValue | undefined} v
- * @returns {boolean} true for a value worth storing
- */
-export function isSet(v) {
-  if (v === null || v === undefined) return false;
-  if (typeof v === 'string') return v.trim() !== '';
-  if (typeof v === 'number') return Number.isFinite(v);
-  return typeof v === 'boolean';
-}
 
 /**
  * @param {{runId: string, toolId: string, templateId: string | null, now: string}} o
@@ -64,6 +63,10 @@ export function blankDraft(o) {
     startedAt: o.now,
     endedAt: null,
     timerStartedAt: null,
+    timerTarget: null,
+    timerRan: false,
+    steps: [],
+    projects: [],
     copiedFrom: null,
     touched: false,
   };
@@ -79,8 +82,8 @@ export function fieldsWithRole(t, roles) {
 }
 
 /**
- * Copy a previous run's inputs, context values and sample details into a
- * form (outputs, notes and photos are not copied).
+ * Copy a previous run's inputs, context values, steps and sample details
+ * into a form (outputs, notes, photos and projects are not copied).
  * @param {RunDraft} draft
  * @param {Run} run
  * @param {Template} template
@@ -96,6 +99,7 @@ export function prefillFrom(draft, run, template) {
   return {
     ...draft,
     params,
+    steps: copySteps(run.steps || [], template),
     material: run.material || '',
     substrate: run.substrate || '',
     maskMaterial: run.maskMaterial || '',
@@ -116,6 +120,7 @@ export function clearPrefill(draft) {
   return {
     ...draft,
     params: {},
+    steps: [],
     material: '',
     substrate: '',
     maskMaterial: '',
@@ -165,20 +170,6 @@ export function parseTags(text) {
 }
 
 /**
- * Keep only set values.
- * @param {Record<string, FieldValue>} values
- * @returns {Record<string, FieldValue>}
- */
-export function compactValues(values) {
-  /** @type {Record<string, FieldValue>} */
-  const out = {};
-  for (const [k, v] of Object.entries(values || {})) {
-    if (isSet(v)) out[k] = typeof v === 'string' ? v.trim() : v;
-  }
-  return out;
-}
-
-/**
  * Run fields (not yet stamped with id metadata) from a form state.
  * @param {RunDraft} d
  * @param {'draft' | 'open' | 'complete'} status
@@ -204,6 +195,8 @@ export function draftToRun(d, status, now = new Date().toISOString()) {
     notes: d.notes.trim(),
     tags: parseTags(d.tags),
     photoIds: [...d.photoIds],
+    steps: tidySteps(d.steps || []),
+    projects: (d.projects || []).map((l) => ({ projectId: l.projectId, waferIds: [...(l.waferIds || [])], stepId: l.stepId || null })),
   };
 }
 

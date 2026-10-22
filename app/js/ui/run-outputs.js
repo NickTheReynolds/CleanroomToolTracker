@@ -5,13 +5,14 @@
  */
 import { h, uid } from './dom.js';
 import { icon } from './icons.js';
-import { button, badge, listRow, emptyState, helpToggle } from './components.js';
-import { numberStepper, renderField } from './fields.js';
-import { computeDerived, pointStats, DERIVED_INFO } from '../core/derive.js';
+import { button, badge, listRow, emptyState, helpToggle, labelRow } from './components.js';
+import { numberStepper, renderField, durationInput, signedField } from './fields.js';
+import { computeDerived, pointStats, missingTimeField, DERIVED_INFO } from '../core/derive.js';
 import { fmtValue, fmtNum } from '../core/format.js';
 import { formatDateTime } from '../core/time.js';
 import { KIND_LABELS, PHASE_LABELS } from '../core/vocab.js';
 import { fieldHelp } from '../core/field-help.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/types.js').Template} Template */
@@ -19,18 +20,63 @@ import { fieldHelp } from '../core/field-help.js';
 /** @typedef {import('../core/types.js').FieldValue} FieldValue */
 
 /**
+ * The run's time, asked for where the rate needs it: the measurements are
+ * in, and only the time is missing.
+ * @param {Template} t
+ * @param {string} key the time field
+ * @param {(seconds: number | null) => void} onTime
+ * @returns {HTMLElement}
+ */
+function timeCard(t, key, onTime) {
+  const f = t.fields.find((x) => x.key === key);
+  const id = uid('runtime');
+  const rates = (t.derived || []).filter((d) => DERIVED_INFO[d.fn]?.usesTime)
+    .map((d) => t.fields.find((x) => x.key === d.output)?.label).filter(Boolean).join(' and ');
+  return h('div', { class: 'card stack needs-time' },
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, `${f ? f.label : 'Time'} of the run (mm:ss)`), 'Run time', HELP.runTime),
+      durationInput({ id, label: f ? f.label : 'time', value: null, step: f && f.step ? f.step : 10, onChange: onTime }).el,
+      h('p', { class: 'field-note warn' }, `The measurements are in: ${rates || 'the rate'} only needs the run’s time.`)));
+}
+
+/**
+ * The results while a run has none: what they come from and what they are
+ * waiting for, with a way to type them in by hand.
+ * @param {Template} t
+ * @param {Record<string, string>} missing reasons from computeDerived
+ * @param {() => void} onExpand
+ * @returns {HTMLElement}
+ */
+function waitingCard(t, missing, onExpand) {
+  const outputs = t.fields.filter((f) => f.role === 'output');
+  const main = outputs.find((f) => f.key === t.primaryOutput) || outputs[0];
+  const why = main && missing[main.key] ? `${main.label}: ${missing[main.key]}.` : '';
+  const derived = (t.derived || []).length > 0;
+  return h('div', { class: 'card stack' },
+    h('p', null, derived ? 'Worked out from the measurements: ' : 'To fill in: ', outputs.map((f) => f.label).join(', '), '.'),
+    why ? h('p', { class: 'muted small' }, why) : null,
+    h('div', { class: 'row-wrap' }, button('Type a result by hand', { icon: 'edit', onClick: onExpand })));
+}
+
+/**
  * One row per output field.
  * - Derived values are read-only and marked; "Edit" turns them into a manual value.
  * - Manual values are editable; "Use derived" removes them when a derived value exists.
  * - Empty outputs with a derivation say what is missing.
+ * - While no output has a value, one card says what the results wait for (unless `expanded`).
+ * - When a rate waits only for the run's time, a time box comes first.
  * @param {{run: Run, template: Template, measurements: Measurement[],
- *   onManual: (key: string, v: FieldValue) => void, onUseDerived: (key: string) => void}} o
+ *   onManual: (key: string, v: FieldValue) => void, onUseDerived: (key: string) => void,
+ *   expanded?: boolean, onExpand?: () => void, onTime?: (key: string, seconds: number | null) => void}} o
  * @returns {HTMLElement}
  */
 export function outputsList(o) {
   const outputs = o.template.fields.filter((f) => f.role === 'output');
   if (!outputs.length) return emptyState('This template has no output fields.');
   const { values, missing } = computeDerived(o.run, o.template, o.measurements);
+  const timeKey = o.onTime ? missingTimeField(o.run, o.template, o.measurements) : null;
+  const time = timeKey && o.onTime ? timeCard(o.template, timeKey, (s) => o.onTime?.(timeKey, s)) : null;
+  const anySet = outputs.some((f) => o.run.results && o.run.results[f.key] !== undefined && o.run.results[f.key] !== null && o.run.results[f.key] !== '');
+  if (!anySet && !o.expanded && o.onExpand) return h('div', { class: 'stack' }, time, waitingCard(o.template, missing, o.onExpand));
   const rows = outputs.map((f) => {
     const spec = (o.template.derived || []).find((d) => d.output === f.key);
     const v = o.run.results ? o.run.results[f.key] : undefined;
@@ -58,7 +104,7 @@ export function outputsList(o) {
       return h('div', { class: 'card stack' }, renderField(f, v, (nv) => o.onManual(f.key, nv), { template: o.template }), note);
     }
     const field = h('div', { class: 'field' }, numberStepper({
-      id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max,
+      id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max, signed: signedField(f),
       onChange: (nv) => o.onManual(f.key, nv),
     }).el);
     return h('div', { class: 'card stack' }, head, help.note, field, note,
@@ -66,7 +112,7 @@ export function outputsList(o) {
         icon: 'undo', onClick: () => o.onUseDerived(f.key),
       }) : null);
   });
-  return h('div', { class: 'stack' }, rows);
+  return h('div', { class: 'stack' }, time, rows);
 }
 
 /**

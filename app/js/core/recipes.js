@@ -46,6 +46,9 @@ import { normText } from './vocab.js';
  * @property {string} url the source address
  * @property {string} date YYYY-MM-DD of the copy the recipe was read from
  * @property {string} [caveat] why to check this recipe before relying on it (sources disagree or are unclear)
+ * @property {string} [process] the process type of the template it belongs with, on a tool with
+ *   templates of two kinds (the Plasmatherm 790's PECVD recipes: "deposition"); by default the
+ *   process type of the tool's default template
  */
 
 /**
@@ -168,12 +171,76 @@ export function undoFill(params, before, values) {
 }
 
 /**
- * The material a recipe sets: its film when it names exactly one.
+ * The recipe's film, when it names exactly one.
  * @param {WikiRecipe} recipe
  * @returns {string | null}
  */
 export function recipeFilm(recipe) {
   return recipe.films.length === 1 ? recipe.films[0] : null;
+}
+
+/**
+ * The material a recipe may set: the listed material its one film names,
+ * when the match is unambiguous. That is the same name (case, spacing and
+ * Unicode forms ignored), or the only listed material whose name is the
+ * film's plus a process in brackets ("SiNx" -> "SiNx (PECVD)" when that is
+ * the only SiNx). Otherwise null: "SiO2" could be thermal, PECVD or LTO
+ * oxide, and a name outside the list would split runs of one material
+ * under two names, so Lookup's Same material rule would miss them.
+ * @param {WikiRecipe} recipe
+ * @param {readonly string[]} materials the materials list
+ * @returns {string | null}
+ */
+export function recipeMaterial(recipe, materials) {
+  const film = recipeFilm(recipe);
+  if (!film) return null;
+  const want = normText(film);
+  const exact = materials.find((m) => normText(m) === want);
+  if (exact) return exact;
+  const family = materials.filter((m) => normText(m).replace(/\s*\([^)]*\)$/, '') === want);
+  return family.length === 1 ? family[0] : null;
+}
+
+/**
+ * @param {WikiRecipe} r
+ * @returns {boolean} true when the recipe gives parameters (some only give a name)
+ */
+export function hasValues(r) {
+  const step = r.main >= 0 ? r.steps[r.main] : null;
+  return !!step && step.values.length > 0;
+}
+
+/**
+ * The recipes that belong with a template. A tool with templates of one
+ * kind shows every recipe with each. On a tool with two kinds (an RIE and a
+ * PECVD chamber) a recipe that names its process type shows with the
+ * templates of that type, and one that does not shows with every template.
+ * Which template is the tool's default never matters, since a person can
+ * change it.
+ * @param {WikiRecipe[]} recipes the tool's recipes
+ * @param {Template} template
+ * @param {readonly Template[]} toolTemplates the tool's templates
+ * @returns {WikiRecipe[]}
+ */
+export function recipesFor(recipes, template, toolTemplates) {
+  const kinds = new Set(toolTemplates.map((t) => t.processType));
+  if (kinds.size <= 1) return recipes;
+  return recipes.filter((r) => !r.process || r.process === template.processType);
+}
+
+/**
+ * The template a recipe fills when it starts a run: the tool's default
+ * template when the recipe names no process type or the default is of its
+ * type, else the tool's first template of the recipe's type.
+ * @param {WikiRecipe} recipe
+ * @param {readonly Template[]} toolTemplates
+ * @param {string | null | undefined} defaultTemplateId
+ * @returns {Template | null}
+ */
+export function templateForRecipe(recipe, toolTemplates, defaultTemplateId) {
+  const def = toolTemplates.find((t) => t.id === defaultTemplateId) || toolTemplates[0] || null;
+  if (!recipe.process || !def || def.processType === recipe.process) return def;
+  return toolTemplates.find((t) => t.processType === recipe.process) || def;
 }
 
 /** @param {string} s @returns {string[]} */
@@ -208,10 +275,12 @@ export function findRecipe(recipes, name) {
 }
 
 /**
- * Recipes in display order: by name, numbers in natural order.
+ * Recipes in display order: those with parameters first, then the ones the
+ * wiki only names; by name within each, numbers in natural order.
  * @param {WikiRecipe[]} recipes
  * @returns {WikiRecipe[]}
  */
 export function sortRecipes(recipes) {
-  return [...recipes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  return [...recipes].sort((a, b) => Number(!hasValues(a)) - Number(!hasValues(b))
+    || a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
 }

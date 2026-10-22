@@ -44,7 +44,7 @@ The app carries its own copy of `app/`. After changing the web app, build again 
 
 ## Where your data lives
 
-- Runs, tools, templates, measurements, events and photos are stored by WebKit in IndexedDB, under **`~/Library/WebKit/local.lnfrunlog.desktop/`**. WebKit decides the folders inside it, and they change between macOS versions, so do not edit them.
+- Runs, tools, templates, measurements, events, projects and photos are stored by WebKit in IndexedDB, under **`~/Library/WebKit/local.lnfrunlog.desktop/`**. WebKit decides the folders inside it, and they change between macOS versions, so do not edit them.
 - Small extras live in `~/Library/Caches/local.lnfrunlog.desktop/`, `~/Library/HTTPStorages/local.lnfrunlog.desktop/` and `~/Library/Preferences/local.lnfrunlog.desktop.plist`. The last one holds the window's size and position.
 - **This data is separate** from Safari, Chrome, Edge and any copy of LNF Run Log installed from the web address; each keeps its own. To move runs between them, or to another device, use **Settings → Backup, import and storage**: **Export backup** in one, **Import backup** in the other. Import merges and never deletes.
 - **Export backup → Download** saves `lnf-runlog-backup-YYYY-MM-DD.json` in your Downloads folder and shows it in Finder. The first time, macOS asks whether LNF Run Log may use the Downloads folder: click **Allow**.

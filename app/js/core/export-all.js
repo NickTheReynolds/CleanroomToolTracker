@@ -9,8 +9,13 @@
 import { pointStats } from './derive.js';
 import { fmtNum, fmtValue } from './format.js';
 import { formatMmSs, toMs } from './time.js';
-import { CATEGORY_LABELS, STATUS_LABELS, KIND_LABELS, PHASE_LABELS, EVENT_LABELS, normText } from './vocab.js';
+import {
+  CATEGORY_LABELS, STATUS_LABELS, KIND_LABELS, PHASE_LABELS, EVENT_LABELS, PROJECT_STATUS_LABELS, normText,
+} from './vocab.js';
 import { toCsv } from './csv.js';
+import { projectsText, projectRuns, stepStates, progress } from './projects.js';
+import { folderTree, pathText } from './folders.js';
+import { stepsText } from './run-steps.js';
 
 /** @typedef {import('./xlsx.js').XlsxSheet} XlsxSheet */
 /** @typedef {import('./xlsx.js').XlsxCell} XlsxCell */
@@ -24,6 +29,8 @@ import { toCsv } from './csv.js';
  * @property {any[]} runs
  * @property {any[]} measurements
  * @property {any[]} events
+ * @property {any[]} [projects]
+ * @property {any[]} [folders] project folders
  */
 
 /** @param {unknown} v @returns {any[]} */
@@ -80,7 +87,14 @@ function prepare(input) {
   }
   const events = liveSorted(input.events, 'at');
   const name = (/** @type {string} */ id) => { const t = tools.get(id); return t ? String(t.name || '') : ''; };
-  return { tools, templates, runs, byRun, events, name };
+  const projectList = liveSorted(input.projects, 'startedAt');
+  const projects = new Map(projectList.map((p) => [p.id, p]));
+  /** @param {any} r @returns {string} the run's projects, with wafers and step */
+  const inProjects = (r) => projectsText(r, projects);
+  const tree = folderTree(list(input.folders));
+  /** @param {any} p @returns {string} the project's folder path, '' at the top level */
+  const folderOf = (p) => pathText(tree, p.folderId, ' / ');
+  return { tools, templates, runs, byRun, events, name, projectList, inProjects, folderOf };
 }
 
 /**
@@ -140,7 +154,7 @@ export function allRunsTable(input, asDates = false) {
   const mKeys = [...new Set(P.runs.flatMap((r) => [...measurementMeans(P.byRun.get(r.id) || [], r).keys()]))].sort();
   const when = (/** @type {any} */ at) => (asDates && Number.isFinite(toMs(at)) ? { date: toMs(at) } : localStamp(at));
   const header = ['date', 'tool', 'category', 'template', 'status', 'recipe', 'material', 'substrate', 'mask', 'target_nm', 'tags', 'notes',
-    ...pKeys.map((k) => `p.${k}`), ...rKeys.map((k) => `r.${k}`), ...mKeys, 'measurements', 'started', 'ended', 'author', 'id'];
+    'projects', 'steps', ...pKeys.map((k) => `p.${k}`), ...rKeys.map((k) => `r.${k}`), ...mKeys, 'measurements', 'started', 'ended', 'author', 'id'];
   const rows = P.runs.map((r) => {
     const tool = P.tools.get(r.toolId);
     const tpl = P.templates.get(r.templateId);
@@ -149,7 +163,7 @@ export function allRunsTable(input, asDates = false) {
     return [
       when(r.startedAt), P.name(r.toolId), tool ? CATEGORY_LABELS[tool.category] || tool.category : '', tpl ? tpl.name : '',
       STATUS_LABELS[r.status] || r.status, r.recipe, r.material, r.substrate, r.maskMaterial, r.targetThickness,
-      tagText(r.tags), r.notes,
+      tagText(r.tags), r.notes, P.inProjects(r), stepsText(r, tpl),
       ...pKeys.map((k) => cell(r.params && r.params[k])), ...rKeys.map((k) => cell(r.results && r.results[k])),
       ...mKeys.map((k) => means.get(k) ?? null), ms.map((m) => measurementText(m, P.name(m.metrologyToolId))).join('; '),
       asDates ? when(r.startedAt) : r.startedAt, asDates ? when(r.endedAt) : r.endedAt, r.author, r.id,
@@ -236,6 +250,18 @@ export function allSheets(input) {
     rows: [['Date', 'Tool', 'Event', 'Major', 'Notes'], ...P.events.map((e) => [date(e.at), P.name(e.toolId), EVENT_LABELS[e.type] || e.type, !!e.major, e.notes])],
     widths: [16, 22, 16, 7, 50],
   });
+  if (P.projectList.length) {
+    sheets.push({
+      name: 'Projects',
+      rows: [['Project', 'Folder', 'Status', 'Started', 'Finished', 'Wafers', 'Steps done', 'Runs', 'Goal', 'Notes'], ...P.projectList.map((p) => {
+        const runs = projectRuns(P.runs, p.id);
+        const prog = progress(stepStates(p, runs));
+        return [p.name, P.folderOf(p), PROJECT_STATUS_LABELS[p.status] || p.status, date(p.startedAt), date(p.endedAt), list(p.wafers).length,
+          prog.total ? `${prog.done} of ${prog.total}` : '', runs.length, p.goal, p.notes];
+      })],
+      widths: [26, 20, 10, 16, 16, 8, 12, 6, 40, 40],
+    });
+  }
   return sheets;
 }
 
@@ -246,7 +272,7 @@ export function allSheets(input) {
  * @param {string[]} roles
  * @returns {string}
  */
-function fieldText(run, tpl, roles) {
+export function fieldText(run, tpl, roles) {
   const src = roles.includes('output') ? run.results : run.params;
   const derived = new Set(Array.isArray(run.derivedKeys) ? run.derivedKeys : []);
   /** @type {string[]} */
@@ -307,10 +333,11 @@ export function reportBlocks(input, o) {
       const sample = [r.material && `material ${r.material}`, r.substrate && `substrate ${r.substrate}`, r.maskMaterial && `mask ${r.maskMaterial}`,
         typeof r.targetThickness === 'number' ? `target ${fmtNum(r.targetThickness)} nm` : ''].filter(Boolean).join('; ');
       const rows = [
-        ['Template', tpl && r.recipe ? tpl.name : ''], ['Inputs', fieldText(r, tpl, ['input'])], ['Conditions', fieldText(r, tpl, ['context'])],
+        ['Template', tpl && r.recipe ? tpl.name : ''], ['Inputs', fieldText(r, tpl, ['input'])], ['Steps', stepsText(r, tpl)],
+        ['Conditions', fieldText(r, tpl, ['context'])],
         ['Results', fieldText(r, tpl, ['output'])], ['Other values', otherText(r, tpl)], ['Sample', sample],
         ['Measurements', (P.byRun.get(r.id) || []).map((m) => measurementText(m, P.name(m.metrologyToolId))).join('; ')],
-        ['Notes', r.notes || ''], ['Tags', tagText(r.tags)],
+        ['Projects', P.inProjects(r)], ['Notes', r.notes || ''], ['Tags', tagText(r.tags)],
       ];
       for (const [label, text] of rows) if (text) out.push({ kind: 'kv', label, text });
     }

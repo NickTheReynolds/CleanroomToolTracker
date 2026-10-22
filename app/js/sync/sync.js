@@ -20,6 +20,8 @@ import {
  * @property {string} repo "owner/name"
  * @property {string} token
  * @property {Record<string, string>} [seen] device id -> blob sha already merged
+ * @property {string} [seenStores] the stores (SYNC_STORES, comma-separated) that `seen` covers; when an app
+ *   version syncs more stores, the cache is dropped so every file is read once more for them
  * @property {string} [lastSyncAt]
  * @property {SyncResult} [lastResult]
  */
@@ -71,7 +73,9 @@ export async function runSync(deps) {
   say('Checking the repository…');
   await checkRepo(gh);
   const s = await store.settings();
-  const seen = { ...(s.sync.seen || {}) };
+  // Files read by a version that synced fewer stores (1.3 had no projects or folders) must be read again.
+  const scope = SYNC_STORES.join(',');
+  const seen = s.sync.seenStores === scope ? { ...(s.sync.seen || {}) } : {};
   say('Reading the other devices…');
   const files = (await gh.list(SYNC_DIR)).filter((f) => f.type === 'file' && deviceIdOf(f.name));
   const own = files.find((f) => deviceIdOf(f.name) === s.deviceId);
@@ -131,7 +135,7 @@ export async function runSync(deps) {
     await gh.put(syncPath(fresh.deviceId), bytes, message, again ? again.sha : undefined);
   }
   result.at = at;
-  await store.saveSync({ ...fresh.sync, seen, lastSyncAt: at, lastResult: result });
+  await store.saveSync({ ...fresh.sync, seen, seenStores: scope, lastSyncAt: at, lastResult: result });
   return result;
 }
 

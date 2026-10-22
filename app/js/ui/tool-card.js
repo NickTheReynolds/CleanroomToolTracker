@@ -39,8 +39,13 @@ const docKind = (url) => (/spreadsheets/.test(url) ? 'Google Sheet' : /presentat
  * @property {string} [subtitle] a line under the name, such as the template
  * @property {WikiRecipe[]} [recipes] the tool's LNF recipes, offered in the "?" sheet
  * @property {Template | null} [template] marks what a recipe fills
+ * @property {(r: WikiRecipe) => Template | null} [templateFor] the template each recipe fills, when it depends on the recipe
  * @property {string} [useLabel] the recipe sheet's Use button
  * @property {(r: WikiRecipe, step: number) => void} [onUse]
+ * @property {boolean} [allSteps] Use fills every step of a multi-step recipe
+ * @property {boolean} [link] the name opens the tool's page (events, charts, recipes)
+ * @property {boolean} [starred] the tool is one of My tools
+ * @property {(on: boolean) => void} [onStar] shows a star that adds the tool to My tools or takes it off
  */
 
 /**
@@ -63,7 +68,8 @@ export function openWikiSheet(o) {
       onClick: () => {
         s.close();
         openRecipeSheet({
-          title: `${o.tool.shortName || o.tool.name} recipes`, recipes, template: o.template || null,
+          title: `${o.tool.shortName || o.tool.name} recipes`, recipes, template: o.template || null, templateFor: o.templateFor,
+          allSteps: o.allSteps,
           useLabel: o.useLabel || 'Use recipe', onUse: /** @type {(r: WikiRecipe, step: number) => void} */ (o.onUse),
         });
       },
@@ -73,17 +79,33 @@ export function openWikiSheet(o) {
 }
 
 /**
- * The tool's header card: its category icon and name; "?" opens the wiki sheet.
+ * The tool's header card: its category icon and name. With `link` the name
+ * opens the tool's page (events, charts, recipes); the star adds the tool
+ * to My tools; "?" opens the wiki sheet.
  * @param {ToolCardOpts} o
  * @returns {HTMLElement}
  */
 export function toolCard(o) {
   const help = TOOL_WIKI[o.tool.id] || (o.recipes && o.recipes.length);
+  let starred = !!o.starred;
+  /** @type {HTMLElement | null} */
+  const star = o.onStar ? h('button', {
+    type: 'button', class: 'btn btn-ghost btn-icon tool-card-star', 'aria-pressed': String(starred),
+    'aria-label': `${o.tool.name} is one of my tools`,
+    onClick: () => {
+      starred = !starred;
+      star?.setAttribute('aria-pressed', String(starred));
+      o.onStar?.(starred);
+    },
+  }, icon('star')) : null;
   return h('div', { class: 'tool-card', dataset: { category: o.tool.category } },
     h('span', { class: 'tool-card-icon', dataset: { category: o.tool.category } }, categoryIcon(o.tool.category, { size: 28 })),
     h('span', { class: 'tool-card-text' },
-      h('span', { class: 'tool-card-name' }, o.tool.name),
+      o.link
+        ? h('a', { class: 'tool-card-name tool-card-link', href: `#/tool/${encodeURIComponent(o.tool.id)}` }, o.tool.name, icon('chevron', { size: 18 }))
+        : h('span', { class: 'tool-card-name' }, o.tool.name),
       o.subtitle ? h('span', { class: 'tool-card-sub' }, o.subtitle) : null),
+    star,
     help ? button('', {
       kind: 'ghost', icon: 'help', class: 'tool-card-help', ariaLabel: `${o.tool.name} on the LNF wiki`, onClick: () => openWikiSheet(o),
     }) : null);

@@ -6,7 +6,7 @@ import { uuid, uuidFromBytes, isUuid } from '../app/js/core/ids.js';
 import {
   ageDays, formatDay, formatMmSs, parseDuration, splitMinSec, toLocalInput, fromLocalInput, formatAge, formatAgo, isIsoDate, toMs,
 } from '../app/js/core/time.js';
-import { fmtNum, fmtSigned, withUnit, fmtRange, parseNumber, stepValue } from '../app/js/core/format.js';
+import { fmtNum, fmtSigned, withUnit, fmtRange, parseNumber, parseNumberList, stepValue } from '../app/js/core/format.js';
 import { normText } from '../app/js/core/vocab.js';
 import { DEFAULTS, withTuning } from '../app/js/config.js';
 
@@ -127,4 +127,39 @@ test('withTuning overrides only the tunable constants within range', () => {
   assert.equal(bad.EVENT_PENALTY, DEFAULTS.EVENT_PENALTY);
   assert.equal(bad.TOP_K, DEFAULTS.TOP_K);
   assert.deepEqual(withTuning(null), { ...DEFAULTS });
+});
+
+test('parseNumberList: values pasted from a tool or a spreadsheet', () => {
+  const vals = (/** @type {string} */ t) => parseNumberList(t).map((p) => p.value);
+  assert.deepEqual(vals('1002\n998.5\n1004'), [1002, 998.5, 1004]);
+  assert.deepEqual(vals('1002\t998\t1004'), [1002, 998, 1004]);
+  assert.deepEqual(vals('1002 998 1004 nm'), [1002, 998, 1004], 'units are skipped');
+  assert.deepEqual(vals('1002,5 998,3'), [1002.5, 998.3], 'decimal commas between spaced values');
+  assert.deepEqual(vals('1002,998,1004'), [1002, 998, 1004], 'only commas between values: they separate');
+  assert.deepEqual(vals('1002.5,998.3'), [1002.5, 998.3]);
+  assert.deepEqual(vals('−12.5; 3e2'), [-12.5, 300]);
+  assert.deepEqual(parseNumberList('C=1002; N = 998; Center: 1001'), [
+    { site: 'C', value: 1002 }, { site: 'N', value: 998 }, { site: 'Center', value: 1001 }]);
+  assert.deepEqual(parseNumberList('Site\tThickness (nm)\n1\t1002.3\n2\t998.1\n3\t1004.2'), [
+    { site: '1', value: 1002.3 }, { site: '2', value: 998.1 }, { site: '3', value: 1004.2 }], 'a site-number column');
+  assert.deepEqual(parseNumberList(''), []);
+  assert.deepEqual(parseNumberList('no numbers here'), []);
+});
+
+test('parseNumberList: CSV lines, decimal-comma columns, and digits inside words or dates', () => {
+  const vals = (/** @type {string} */ t) => parseNumberList(t).map((p) => p.value);
+  assert.deepEqual(parseNumberList('Site,Thickness\n1,1002.3\n2,998.1\n3,1004.2'), [
+    { site: '1', value: 1002.3 }, { site: '2', value: 998.1 }, { site: '3', value: 1004.2 }], 'a two-column CSV export');
+  assert.deepEqual(vals('1002,998,1004\n1001,999,1003'), [1002, 998, 1004, 1001, 999, 1003], 'CSV rows');
+  assert.deepEqual(vals('1002,5\n'), [1002.5], 'one decimal-comma value with a trailing new line');
+  assert.deepEqual(vals('1002,5\n998,3'), [1002.5, 998.3], 'a column of decimal-comma values');
+  assert.deepEqual(parseNumberList('1;1002,3\n2;998,1'), [{ site: '1', value: 1002.3 }, { site: '2', value: 998.1 }], 'semicolon CSV');
+  assert.deepEqual(vals('SiO2 (nm)\n1002\n998\n1004'), [1002, 998, 1004], 'a formula in the header');
+  assert.deepEqual(vals('Si3N4 thickness\n1002 998'), [1002, 998]);
+  assert.deepEqual(vals('W-1\t1002\nW-2\t998'), [1002, 998], 'wafer labels with numbers');
+  assert.deepEqual(vals('Date: 2026-10-21\n1002 998'), [1002, 998], 'a date line');
+  assert.deepEqual(vals('C=-5 N=+3.5 1e-3'), [-5, 3.5, 0.001], 'signs and exponents still read');
+  assert.deepEqual(parseNumberList('Site,Thickness\n1,1002\n2,998\n3,1004'), [
+    { site: '1', value: 1002 }, { site: '2', value: 998 }, { site: '3', value: 1004 }], 'whole-number CSV rows under a header');
+  assert.deepEqual(vals(',1002\n,998'), [1002, 998], 'an empty first cell');
 });

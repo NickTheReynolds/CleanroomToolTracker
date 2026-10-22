@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseHash, matchRoute, ROUTES } from '../app/js/router.js';
+import { parseHash, matchRoute, ROUTES, track, canGoBack, navigate } from '../app/js/router.js';
 
 const APP_JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'js');
 
@@ -41,4 +41,37 @@ test('every route points to an existing view module with a render export', () =>
     assert.match(readFileSync(file, 'utf8'), /export async function render\(/, `${m[1]} has no render()`);
     if (r.parent) assert.ok(matchRoute(r.parent), `${r.pattern}: parent ${r.parent} is not a route`);
   }
+});
+
+test('project routes: "new" opens the editor, an id the project page', () => {
+  assert.equal(matchRoute('/project/new')?.route.pattern, '/project/new');
+  assert.equal(matchRoute('/project/abc')?.route.pattern, '/project/:id');
+  assert.equal(matchRoute('/project/abc')?.params.id, 'abc');
+  assert.equal(matchRoute('/project/abc/edit')?.route.pattern, '/project/:id/edit');
+  assert.equal(matchRoute('/settings/my-tools')?.route.pattern, '/settings/my-tools');
+});
+
+test('Save or Cancel back to the page before goes back instead of stacking a copy of it', () => {
+  // Home -> Projects -> a project -> its editor.
+  for (const p of ['/', '/projects', '/project/x', '/project/x/edit']) track(p, false);
+  assert.equal(canGoBack(), true);
+  const calls = [];
+  const win = {
+    location: { hash: '#/project/x/edit', replace: (/** @type {string} */ h) => calls.push(`replace ${h}`) },
+    history: { back: () => calls.push('back') },
+  };
+  const saved = /** @type {any} */ (globalThis).window;
+  /** @type {any} */ (globalThis).window = win;
+  try {
+    navigate('/project/x', { replace: true });
+    assert.deepEqual(calls, ['back'], 'the editor returns to the project page by going back');
+    navigate('/projects', { replace: true });
+    assert.deepEqual(calls, ['back', 'replace #/projects'], 'another page still replaces the entry');
+  } finally {
+    /** @type {any} */ (globalThis).window = saved;
+  }
+  track('/project/x', false);
+  track('/projects', false);
+  track('/', false);
+  assert.equal(canGoBack(), false, 'back on the first page leaves Back to the route parent');
 });

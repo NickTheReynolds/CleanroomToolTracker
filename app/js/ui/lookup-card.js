@@ -20,27 +20,44 @@ const CONFIDENCE = {
 };
 
 /**
+ * The suggested time with its range. The range comes from the closest runs'
+ * rates; an estimate adjusted beyond them (extrapolated) can fall outside
+ * it, and then the card says so instead of showing a range that seems not
+ * to contain its own value.
+ * @param {NonNullable<Summary['suggestedTime']>} t
+ * @returns {HTMLElement}
+ */
+function suggestedTime(t) {
+  const lo = t.rangeMin;
+  const hi = t.rangeMax;
+  const range = typeof lo === 'number' && typeof hi === 'number' ? `${formatMmSs(lo * 60)}–${formatMmSs(hi * 60)}` : '';
+  const outside = !!range && (t.minutes < /** @type {number} */ (lo) - 1e-9 || t.minutes > /** @type {number} */ (hi) + 1e-9);
+  return h('div', { class: 'suggest' }, icon('timer'),
+    h('div', { class: 'stack suggest-text' },
+      h('span', null, h('strong', null, `Suggested time ${t.mmss}`), h('span', { class: 'muted' }, ` for ${fmtNum(t.target)} nm`)),
+      range ? h('span', { class: 'muted small' }, outside
+        ? `The closest runs alone would take ${range}; this estimate is beyond them.`
+        : `Range from the closest runs: ${range}.`) : null));
+}
+
+/**
  * @param {Summary} s
  * @returns {HTMLElement}
  */
 export function summaryCard(s) {
   const conf = CONFIDENCE[s.confidence.level] || CONFIDENCE.medium;
   const head = s.headline;
+  const avg = s.average;
   return h('div', { class: 'card summary-card stack' },
     h('div', { class: 'spread' }, h('span', { class: 'label' }, s.outputLabel),
       badge(conf.text, /** @type {any} */ (conf.kind), conf.icon)),
     head ? h('div', null,
       h('div', { class: 'headline' }, fmtValue(head.value, s.unit)),
       h('p', { class: 'muted' }, [head.label,
-        s.average && s.average.n > 1 ? `range ${fmtRange(s.average.min, s.average.max, s.unit)} over ${s.average.n} runs` : null,
+        avg && avg.n > 1 ? `range ${fmtRange(avg.min, avg.max, s.unit)} in the ${avg.n < s.n ? `closest ${avg.n} of ${s.n}` : avg.n} runs` : null,
       ].filter(Boolean).join(' · '))) : null,
     s.warnings.length ? h('div', { class: 'stack' }, s.warnings.map((w) => h('p', { class: 'warn-line' }, icon('alert', { size: 18 }), h('span', null, w)))) : null,
-    s.suggestedTime ? h('div', { class: 'suggest' }, icon('timer'),
-      h('div', null,
-        h('strong', null, `Suggested time ${s.suggestedTime.mmss}`),
-        h('span', { class: 'muted small' }, ` for ${fmtNum(s.suggestedTime.target)} nm`,
-          typeof s.suggestedTime.rangeMin === 'number' && typeof s.suggestedTime.rangeMax === 'number'
-            ? ` (range ${formatMmSs(s.suggestedTime.rangeMin * 60)}–${formatMmSs(s.suggestedTime.rangeMax * 60)})` : ''))) : null,
+    s.suggestedTime ? suggestedTime(s.suggestedTime) : null,
     s.sentences.length ? h('ul', { class: 'sentences' }, s.sentences.map((t) => h('li', null, t))) : null,
     s.confidence.reasons.length ? h('details', { class: 'more' }, h('summary', null, 'Why this confidence?'),
       h('ul', { class: 'sentences' }, s.confidence.reasons.map((r) => h('li', null, r)))) : null);

@@ -70,7 +70,7 @@ Silently: `"%LOCALAPPDATA%\Programs\LNF Run Log\Uninstall LNF Run Log.exe" /S`. 
 
 ## Where your data lives
 
-- Runs, tools, templates, measurements, events, photos and settings are in WebView2's IndexedDB under **`%LOCALAPPDATA%\LNF Run Log\WebView2`**. The same folder holds `window.txt` (the window's size, position and maximized state). WebView2 decides the folders inside it, so do not edit them.
+- Runs, tools, templates, measurements, events, projects, photos and settings are in WebView2's IndexedDB under **`%LOCALAPPDATA%\LNF Run Log\WebView2`**. The same folder holds `window.txt` (the window's size, position and maximized state). WebView2 decides the folders inside it, so do not edit them.
 - **This data is separate** from Edge, Chrome, any copy of LNF Run Log installed from the web address, other Windows accounts and other PCs; each keeps its own. To move runs between them, use **Settings → Backup, import and storage**: **Export backup** in one, **Import backup** in the other. Import merges and never deletes.
 - **Export backup → Download** saves `lnf-runlog-backup-YYYY-MM-DD.json` to your Downloads folder and shows it in the app's downloads panel.
 - Do not put the data folder in OneDrive or Synology Drive: syncing a live database can corrupt it. Backups are the way to move data.

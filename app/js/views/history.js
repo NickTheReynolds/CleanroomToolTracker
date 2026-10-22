@@ -1,33 +1,36 @@
 // @ts-check
 /**
- * History: every run (draft, open and complete), newest first, filtered by
- * tool, template, material, status, a local date range and keywords in the
- * notes, recipe and tags. The filters autosave, so they survive a reload;
- * "#/history?tool=<id>" starts from that tool alone. Tapping a row opens
- * the run.
+ * History: every run (draft, open and complete), newest first. Search looks
+ * in the notes, recipe and tags; the filters (tool, project, status,
+ * template, material and a local date range) fold into one line that says
+ * which are set. The filters autosave, so they survive a reload;
+ * "#/history?tool=<id>" or "?project=<id>" starts from that alone. On a
+ * wide screen the runs show as a table that sorts by any column.
  */
 import { h, append, fill, uid, debounce } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import { button, linkButton, emptyState, segmented, labelRow } from '../ui/components.js';
 import { runList, runRow, lookups } from '../ui/run-list.js';
+import { runTable, runTableRow, sortRuns, DEFAULT_SORT } from '../ui/run-table.js';
 import { createAutosave } from '../ui/autosave.js';
-import { listRuns, listTools, listTemplates, getDraft, saveDraft } from '../data/repo.js';
+import { listRuns, listTools, listTemplates, getDraft, saveDraft, listProjects, listFolders } from '../data/repo.js';
 import { filterRuns, distinctMaterials, normalizeFilters, hasFilters, EMPTY_FILTERS } from '../core/search.js';
+import { folderTree, pathText } from '../core/folders.js';
 import { RUN_STATUSES, STATUS_LABELS, normText } from '../core/vocab.js';
 import { UI } from '../config.js';
 import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/search.js').RunFilters} RunFilters */
 /** @typedef {import('../ui/run-list.js').Lookups} Lookups */
+/** @typedef {import('../ui/run-table.js').RunSort} RunSort */
 /** @typedef {import('../core/types.js').Run} Run */
 
 const DRAFT = 'history';
-/** The less-used filters, kept behind "More filters". */
-const MORE = /** @type {(keyof RunFilters)[]} */ (['templateId', 'material', 'from', 'to']);
 const STATUS_OPTIONS = [{ value: '', label: 'All' }, ...RUN_STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }))];
 
 /**
  * Saved or preset filters with anything that no longer applies dropped: a
- * deleted tool, a template of another tool, a material no run uses.
+ * deleted tool or project, a template of another tool, a material no run uses.
  * @param {Partial<RunFilters> | null} raw
  * @param {Lookups} L
  * @param {string[]} materials
@@ -39,8 +42,28 @@ function usable(raw, L, materials) {
   const tpl = L.templates.get(f.templateId);
   if (!tpl || tpl.toolId !== f.toolId) f.templateId = '';
   if (!RUN_STATUSES.includes(f.status)) f.status = '';
+  if (!L.projects.has(f.projectId)) f.projectId = '';
   f.material = materials.find((m) => normText(m) === normText(f.material)) || '';
   return f;
+}
+
+/**
+ * The filters that are set, in a few words: "ICP-2, Open, from 2026-10-01".
+ * @param {RunFilters} f
+ * @param {Lookups} L
+ * @returns {string}
+ */
+function setText(f, L) {
+  const tool = L.tools.get(f.toolId);
+  return [
+    tool ? tool.shortName || tool.name : '',
+    L.projects.get(f.projectId)?.name || '',
+    f.status ? STATUS_LABELS[f.status] : '',
+    L.templates.get(f.templateId)?.name || '',
+    f.material,
+    f.from ? `from ${f.from}` : '',
+    f.to ? `to ${f.to}` : '',
+  ].filter(Boolean).join(', ');
 }
 
 /**
@@ -80,27 +103,35 @@ function dateField(label, value, onChange, help) {
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
   ctx.setTitle('History');
-  const [runs, tools, templates, saved] = await Promise.all([
-    listRuns(), listTools({ includeArchived: true }), listTemplates(), getDraft(DRAFT),
+  const [runs, tools, templates, saved, projects, folders] = await Promise.all([
+    listRuns(), listTools({ includeArchived: true }), listTemplates(), getDraft(DRAFT), listProjects(), listFolders(),
   ]);
   if (!runs.length) {
     append(ctx.root, [emptyState('No runs yet. Every run you log appears here, newest first.',
       linkButton('Log a run', '#/log', { kind: 'primary', icon: 'plus' }))]);
     return;
   }
-  const L = lookups(tools, templates);
+  ctx.root.classList.add('view-wide');
+  const L = lookups(tools, templates, projects);
   const materials = distinctMaterials(runs);
-  const preset = ctx.query.get('tool');
-  let filters = usable(preset ? { toolId: preset } : saved, L, materials);
+  const tree = folderTree(folders);
+  const projectOptions = projects
+    .map((p) => /** @type {[string, string]} */ ([p.id, [pathText(tree, p.folderId), p.name].filter(Boolean).join(' › ')]))
+    .sort((a, b) => a[1].localeCompare(b[1], undefined, { numeric: true, sensitivity: 'base' }));
+  const presetTool = ctx.query.get('tool');
+  const presetProject = ctx.query.get('project');
+  let filters = usable(presetTool || presetProject ? { toolId: presetTool || '', projectId: presetProject || '' } : saved, L, materials);
   const autosave = createAutosave(() => saveDraft(DRAFT, filters));
-  if (preset) {
+  if (presetTool || presetProject) {
     autosave.schedule();
     // A reload should show the person's later changes, not re-apply the preset.
     try { history.replaceState(history.state, '', '#/history'); } catch { /* the preset stays in the URL */ }
   }
+  /** @type {RunSort} */
+  let sort = { ...DEFAULT_SORT };
 
   const filtersBox = h('div', { class: 'stack' });
-  const moreState = h('span', { class: 'more-state' });
+  const setState = h('span', { class: 'more-state' });
   const countEl = h('p', { class: 'muted small history-count', role: 'status', tabindex: '-1' });
   const listBox = h('div');
   const moreBox = h('div', { class: 'history-more' });
@@ -112,29 +143,40 @@ export async function render(ctx) {
     const n = matches.length;
     const head = hasFilters(filters)
       ? `${n} of ${runs.length} run${runs.length === 1 ? '' : 's'} match.`
-      : `${n} run${n === 1 ? '' : 's'}, newest first.`;
+      : `${n} run${n === 1 ? '' : 's'}${sort.key === DEFAULT_SORT.key && sort.dir === DEFAULT_SORT.dir ? ', newest first' : ''}.`;
     return shown < n ? `${head} Showing ${shown}.` : head;
   };
   const showMore = () => {
-    const list = listBox.querySelector('.list');
-    if (!list) return;
-    const rows = matches.slice(shown, shown + UI.HISTORY_PAGE).map((r) => runRow(r, L));
-    shown += rows.length;
+    const list = listBox.querySelector('.history-list .list');
+    const body = listBox.querySelector('.history-table tbody');
+    if (!list || !body) return;
+    const next = matches.slice(shown, shown + UI.HISTORY_PAGE);
+    shown += next.length;
+    const rows = next.map((r) => runRow(r, L));
+    const trs = next.map((r) => runTableRow(r, L));
     append(list, rows);
+    append(body, trs);
     countEl.textContent = countText();
     drawMore();
-    if (rows.length) rows[0].focus();
+    // Focus the first new run in whichever form is shown: the list on a phone, the table on a wide screen.
+    const first = rows[0] && rows[0].offsetParent ? rows[0] : /** @type {HTMLElement | null} */ (trs[0] ? trs[0].querySelector('a') : null);
+    first?.focus();
   };
   const drawMore = () => {
     const left = matches.length - shown;
     fill(moreBox, left > 0 ? button(`Show more (${left} left)`, { icon: 'down', onClick: showMore }) : null);
   };
   const drawResults = () => {
-    matches = filterRuns(runs, filters, L);
+    matches = sortRuns(filterRuns(runs, filters, L), sort, L);
     shown = Math.min(UI.HISTORY_PAGE, matches.length);
     countEl.textContent = countText();
+    const page = matches.slice(0, shown);
     fill(listBox, matches.length
-      ? runList(matches.slice(0, shown), L)
+      ? [h('div', { class: 'history-list' }, runList(page, L)), runTable(page, L, sort, (key) => {
+        sort = sort.key === key ? { key, dir: /** @type {1 | -1} */ (-sort.dir) } : { key, dir: key === 'startedAt' || key === 'result' ? -1 : 1 };
+        drawResults();
+        /** @type {HTMLElement | null} */ (listBox.querySelector(`.history-table th[aria-sort="${sort.dir === 1 ? 'ascending' : 'descending'}"] button`))?.focus();
+      })]
       : emptyState('No runs match these filters.', button('Clear filters', { onClick: () => clearAll() })));
     drawMore();
   };
@@ -142,8 +184,8 @@ export async function render(ctx) {
 
   const clearBtn = button('Clear filters', { kind: 'ghost', icon: 'close', onClick: () => clearAll() });
   const updateChrome = () => {
-    const n = MORE.filter((k) => filters[k]).length;
-    moreState.textContent = n ? ` · ${n} set` : '';
+    const text = setText(filters, L);
+    setState.textContent = text ? `: ${text}` : '';
     clearBtn.hidden = !hasFilters(filters);
   };
   /**
@@ -182,28 +224,32 @@ export async function render(ctx) {
         filters.toolId ? { help: HELP.historyTemplate } : { disabled: true, note: 'Choose a tool first.', help: HELP.historyTemplate }));
     };
     drawTemplate();
+    const set = Object.keys(EMPTY_FILTERS).some((k) => k !== 'q' && filters[/** @type {keyof RunFilters} */ (k)]);
     fill(filtersBox,
       h('div', { class: 'field' },
         labelRow(h('label', { class: 'label', for: qId }, 'Search notes, recipe and tags'), 'Search', HELP.historySearch), q),
-      selectField('Tool',
-        /** @type {[string, string][]} */ ([['', 'All tools'], ...tools.map((t) => [t.id, t.active ? t.name : `${t.name} (archived)`])]),
-        filters.toolId, (v) => {
-          change({ toolId: v, templateId: '' });
-          drawTemplate();
-        }, { help: HELP.historyTool }),
-      h('div', { class: 'history-status' }, segmented({
-        label: 'Status', options: STATUS_OPTIONS, value: filters.status, help: HELP.historyStatus,
-        onChange: (v) => change({ status: v || '' }),
-      })),
-      h('details', { class: 'more', open: MORE.some((k) => filters[k]) },
-        h('summary', null, 'More filters', moreState),
+      h('details', { class: 'more history-filters', open: set || undefined },
+        h('summary', null, icon('filter', { size: 18 }), 'Filters', setState),
         h('div', { class: 'fields' },
+          selectField('Tool',
+            /** @type {[string, string][]} */ ([['', 'All tools'], ...tools.map((t) => [t.id, t.active ? t.name : `${t.name} (archived)`])]),
+            filters.toolId, (v) => {
+              change({ toolId: v, templateId: '' });
+              drawTemplate();
+            }, { help: HELP.historyTool }),
+          projectOptions.length ? selectField('Project', /** @type {[string, string][]} */ ([['', 'Any project'], ...projectOptions]),
+            filters.projectId, (v) => change({ projectId: v }), { help: HELP.historyProject }) : null,
+          h('div', { class: 'history-status' }, segmented({
+            label: 'Status', options: STATUS_OPTIONS, value: filters.status, help: HELP.historyStatus,
+            onChange: (v) => change({ status: v || '' }),
+          })),
           templateSlot,
           selectField('Material', /** @type {[string, string][]} */ ([['', 'Any material'], ...materials.map((m) => [m, m])]),
             filters.material, (v) => change({ material: v }), { help: HELP.historyMaterial }),
           h('div', { class: 'filter-dates' },
             dateField('From', filters.from, (v) => change({ from: v }), HELP.historyFrom),
-            dateField('To', filters.to, (v) => change({ to: v }), HELP.historyTo)))));
+            dateField('To', filters.to, (v) => change({ to: v }), HELP.historyTo)))),
+      h('div', { class: 'row-end' }, clearBtn));
   };
 
   const clearAll = () => {
@@ -219,11 +265,8 @@ export async function render(ctx) {
   buildControls();
   updateChrome();
   drawResults();
-  const headId = uid('hh');
   append(ctx.root, [
-    h('section', { class: 'section', 'aria-labelledby': headId },
-      h('div', { class: 'filter-head' }, h('h2', { class: 'section-title', id: headId }, 'Filters'), clearBtn),
-      filtersBox),
+    h('section', { class: 'section', 'aria-label': 'Search and filters' }, filtersBox),
     h('section', { class: 'section', 'aria-label': 'Runs' }, countEl, listBox, moreBox),
     h('div', { class: 'row-wrap' }, linkButton('Export everything (Excel, CSV or PDF)', '#/settings/data', { icon: 'download' })),
   ]);

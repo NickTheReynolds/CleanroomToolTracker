@@ -2,15 +2,14 @@
 /**
  * Form sections shared by Log run and Run detail: the recipe (with the
  * tool's LNF recipes), sample details (material pickers, target thickness),
- * notes and tags, the run timer and the start time.
+ * notes and tags, and the start time. The run timer is in timer.js.
  */
 import { h, uid } from './dom.js';
 import { button, labelRow } from './components.js';
 import { textInput, numberStepper } from './fields.js';
 import { materialPicker } from './pickers.js';
 import { recipeButton } from './recipes.js';
-import { formatMmSs, formatClock, toLocalInput, fromLocalInput } from '../core/time.js';
-import { elapsedSeconds } from '../core/run-draft.js';
+import { toLocalInput, fromLocalInput } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
@@ -34,17 +33,19 @@ import { HELP } from '../core/app-help.js';
 
 /**
  * The recipe name, with the tool's LNF recipes one tap away. Using one
- * fills its parameters (the caller applies them).
+ * fills its parameters (the caller applies them; with allSteps, every step
+ * of a multi-step recipe).
  * @param {{value: string, onChange: (v: string) => void, recipes: WikiRecipe[], template: Template | null,
- *   title: string, useLabel?: string, roles?: string[], onUse: (r: WikiRecipe, step: number) => void}} o
+ *   title: string, useLabel?: string, roles?: string[], onUse: (r: WikiRecipe, step: number) => void, allSteps?: boolean}} o
  * @returns {HTMLElement}
  */
 export function recipeField(o) {
   const id = uid('recipe');
   const pick = recipeButton({
     title: o.title, recipes: o.recipes, template: o.template, useLabel: o.useLabel || 'Use recipe', roles: o.roles, onUse: o.onUse,
+    allSteps: o.allSteps,
   });
-  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, 'Recipe'), 'Recipe', pick ? HELP.recipe : HELP.recipeName),
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, 'Recipe name'), 'Recipe', pick ? HELP.recipe : HELP.recipeName),
     textInput({ id, value: o.value, autocapitalize: 'off', onChange: (v) => o.onChange(v || '') }).el,
     pick ? h('div', { class: 'row-wrap' }, pick) : null,
     pick ? h('p', { class: 'field-note' }, 'Choosing an LNF recipe fills in its parameters. You can still change any value.') : null);
@@ -71,7 +72,7 @@ export function sampleFields(s, o) {
       onChange: (v) => o.onChange({ material: v }), onAddNew: o.onAddMaterial, help: HELP.material,
     }),
     materialPicker({
-      label: 'Substrate', value: s.substrate, options: o.lists.substrate,
+      label: 'Substrate', value: s.substrate, options: o.lists.substrate, collapse: true,
       onChange: (v) => o.onChange({ substrate: v }), onAddNew: o.onAddMaterial, show: 4, help: HELP.substrate,
     }),
     o.showMask || s.maskMaterial ? mask : h('details', { class: 'more' }, h('summary', null, 'Mask material'), mask),
@@ -105,58 +106,6 @@ export function notesFields(s, onChange) {
       labelRow(h('label', { class: 'label', for: tagsId }, 'Tags', h('span', { class: 'unit' }, ' (comma-separated)')), 'Tags', HELP.tags),
       textInput({ id: tagsId, value: s.tags, autocapitalize: 'off', onChange: (v) => onChange({ tags: v || '' }) }).el),
   ];
-}
-
-/**
- * The optional run timer. Start records the start time; Stop reports the
- * elapsed seconds (the caller fills the template's duration field). The
- * clock is computed from the stored start, so it survives a locked phone.
- * @param {{timerStartedAt: string | null, lastSeconds: number | null, onStart: () => void,
- *   onStop: (seconds: number) => void}} o
- * @returns {{el: HTMLElement, dispose: () => void}}
- */
-export function timerCard(o) {
-  let startedAt = o.timerStartedAt;
-  let last = o.lastSeconds;
-  const clock = h('span', { class: 'timer-clock', role: 'timer', 'aria-live': 'off' });
-  const note = h('p', { class: 'field-note' });
-  const slot = h('div');
-  /** @type {ReturnType<typeof setInterval> | undefined} */
-  let tick;
-  const draw = () => {
-    clearInterval(tick);
-    if (startedAt) {
-      const update = () => { clock.textContent = formatMmSs(elapsedSeconds(startedAt, Date.now())); };
-      update();
-      tick = setInterval(update, 1000);
-      note.textContent = `Started ${formatClock(startedAt)}. Stop fills the time field.`;
-      slot.replaceChildren(button('Stop', {
-        kind: 'danger', icon: 'stop', big: true,
-        onClick: () => {
-          const secs = elapsedSeconds(startedAt, Date.now());
-          startedAt = null;
-          last = secs;
-          o.onStop(secs);
-          draw();
-        },
-      }));
-    } else {
-      clock.textContent = formatMmSs(last ?? 0);
-      note.textContent = last ? 'Timer stopped. Start again to time a new run.' : 'Optional: time the run on the tool.';
-      slot.replaceChildren(button('Start', {
-        kind: 'primary', icon: 'play', big: true,
-        onClick: () => {
-          startedAt = new Date().toISOString();
-          o.onStart();
-          draw();
-        },
-      }));
-    }
-  };
-  draw();
-  const el = h('div', { class: 'card stack' },
-    h('div', { class: 'timer' }, h('span', { class: 'visually-hidden' }, 'Run timer'), clock, slot), note);
-  return { el, dispose: () => clearInterval(tick) };
 }
 
 /**

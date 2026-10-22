@@ -12,7 +12,7 @@ import { aboutField, lookupUse, fieldHelp, KNOWN_KEYS } from '../app/js/core/fie
 import { HELP, TUNING_HELP } from '../app/js/core/app-help.js';
 import { TUNABLE } from '../app/js/config.js';
 import { DERIVED_INFO } from '../app/js/core/derive.js';
-import { LNF_TOOLS } from '../app/js/data/seed-lnf.js';
+import { LNF_TOOLS, LNF_EXTRA_TEMPLATES } from '../app/js/data/seed-lnf.js';
 import { seedForType, knownTypes, gasKey } from '../app/js/data/seed-types.js';
 import { SEED_TEMPLATES } from '../app/js/data/seed-templates.js';
 
@@ -27,6 +27,10 @@ function seededTemplates() {
   for (const [, , name, type, gases] of LNF_TOOLS) {
     const s = seedForType(type, gases);
     if (s.template) out.push({ source: name, template: s.template });
+  }
+  for (const [, , type, gases, name] of LNF_EXTRA_TEMPLATES) {
+    const s = seedForType(type, gases);
+    if (s.template) out.push({ source: name, template: { ...s.template, name } });
   }
   for (const type of knownTypes()) {
     const s = seedForType(type, []);

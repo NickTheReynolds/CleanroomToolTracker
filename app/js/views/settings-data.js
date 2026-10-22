@@ -9,36 +9,23 @@
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { button, section, toggle, toast, confirmDialog, sheet, badge, errorText, segmented } from '../ui/components.js';
+import { exportFlow, formatBytes } from '../ui/export-flow.js';
 import { storageStatus, requestPersist } from '../ui/pwa.js';
 import { refresh } from '../router.js';
 import {
-  estimatePhotoBytes, makeBackupFile, makeCsvFiles, makeAllExport, canShareFiles, shareFiles, downloadFile, markExported,
-  importBackupFile, eraseAllData,
+  estimatePhotoBytes, makeBackupFile, makeCsvFiles, makeAllExport, markExported, importBackupFile, eraseAllData,
 } from '../data/backup.js';
 import { getSettings, photoUsage } from '../data/repo.js';
 import { UI } from '../config.js';
 import { HELP } from '../core/app-help.js';
 import { ageDays, formatDateTime } from '../core/time.js';
-import { fmtNum } from '../core/format.js';
 
 /** @typedef {import('../data/backup.js').ImportResult} ImportResult */
 
 const STORE_LABELS = Object.freeze([
   ['tools', 'Tools'], ['templates', 'Templates'], ['runs', 'Runs'], ['measurements', 'Measurements'],
-  ['events', 'Tool events'], ['photos', 'Photos'],
+  ['events', 'Tool events'], ['photos', 'Photos'], ['projects', 'Projects'], ['folders', 'Project folders'],
 ]);
-
-/**
- * @param {number | null | undefined} n bytes
- * @returns {string} "820 KB", "12.3 MB", "1.2 GB" (decimal units)
- */
-function formatBytes(n) {
-  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return 'unknown';
-  if (n < 1000) return `${n} bytes`;
-  if (n < 1e6) return `${fmtNum(n / 1e3)} KB`;
-  if (n < 1e9) return `${fmtNum(n / 1e6)} MB`;
-  return `${fmtNum(n / 1e9)} GB`;
-}
 
 /**
  * @param {number} n
@@ -56,91 +43,6 @@ function lastExportText(at) {
   const now = Date.now();
   const days = Math.floor(ageDays(at, now));
   return `Last backup from this device: ${formatDateTime(at, now)}${days >= 1 ? ` (${plural(days, 'day')} ago)` : ''}.`;
-}
-
-/**
- * Step two of an export: the prepared files with Share… (when the share
- * sheet takes them) and Download buttons. `onSaved` runs after a share
- * that went through, or a download.
- * @param {File[]} files
- * @param {{title: string, shared?: string, onSaved?: () => Promise<void>}} o
- * @returns {HTMLElement}
- */
-function preparedCard(files, o) {
-  const several = files.length > 1;
-  const saved = async (/** @type {string} */ message) => {
-    try {
-      await o.onSaved?.();
-      toast(message);
-    } catch (err) {
-      toast(errorText(err), { kind: 'error' });
-    }
-  };
-  const share = canShareFiles(files) ? button(several ? 'Share all…' : 'Share…', {
-    kind: 'primary', icon: 'share', big: true,
-    onClick: async () => {
-      try {
-        const r = await shareFiles(files, o.title);
-        if (r === 'shared') await saved(o.shared || (several ? 'Files shared.' : 'Backup shared.'));
-        else if (r === 'unsupported') toast('This browser cannot share these files. Use Download.');
-      } catch (err) {
-        toast(`Could not share: ${errorText(err)} Use Download instead.`, { kind: 'error' });
-      }
-    },
-  }) : null;
-  const downloads = files.map((f) => button(several ? `Download ${f.name}` : 'Download', {
-    kind: share ? 'secondary' : 'primary', icon: 'download', big: true,
-    onClick: async () => {
-      try {
-        downloadFile(f);
-      } catch (err) {
-        toast(`Could not download: ${errorText(err)}`, { kind: 'error' });
-        return;
-      }
-      await saved(`Saving ${f.name}. Check your Downloads folder.`);
-    },
-  }));
-  return h('div', { class: 'card stack' },
-    files.map((f) => h('p', { class: 'small' }, h('strong', null, f.name), ` · ${formatBytes(f.size)}`)),
-    share,
-    downloads,
-    share ? null : h('p', { class: 'field-note' }, 'This browser cannot send these files to the share sheet, so download them.'));
-}
-
-/**
- * A Prepare button, a status line and the prepared result.
- * @param {{label: string, kind?: 'primary' | 'secondary', icon: string, busy: () => string,
- *   make: () => Promise<File[]>, ready: (files: File[]) => string, title: string, shared?: string,
- *   onSaved?: () => Promise<void>}} o
- * @returns {{el: HTMLElement, reset: () => void}}
- */
-function exportFlow(o) {
-  const status = h('p', { class: 'field-note', role: 'status' });
-  const result = h('div');
-  const prepare = button(o.label, {
-    kind: o.kind || 'secondary', icon: o.icon, big: true,
-    onClick: async () => {
-      prepare.disabled = true;
-      fill(result);
-      status.textContent = o.busy();
-      try {
-        const files = await o.make();
-        status.textContent = o.ready(files);
-        fill(result, preparedCard(files, o));
-        result.querySelector('button')?.focus();
-      } catch (err) {
-        status.textContent = '';
-        toast(`Could not prepare the export: ${errorText(err)}`, { kind: 'error' });
-      } finally {
-        prepare.disabled = false;
-      }
-    },
-  });
-  const reset = () => {
-    fill(result);
-    status.textContent = '';
-  };
-  return { el: h('div', { class: 'stack' }, prepare, status, result), reset };
 }
 
 /**
@@ -165,7 +67,7 @@ function backupSection(settings, photos, photoEstimate) {
     onSaved: async () => { last.textContent = lastExportText(await markExported()); },
   });
   return section('Backup',
-    h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
+    h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, projects and their folders, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
     last,
     toggle({
       label: 'Include photos', help: HELP.includePhotos,
@@ -291,8 +193,9 @@ function importSection(ctx) {
     try {
       const res = await importBackupFile(file);
       status.textContent = `Imported ${file.name}.`;
-      showImportSummary(file.name, res);
+      // Redraw first: a sheet closes when the screen redraws, and the summary must stay open.
       if (ctx.isCurrent()) refresh();
+      showImportSummary(file.name, res);
     } catch (err) {
       status.textContent = '';
       toast(`Import failed: ${errorText(err)}`, { kind: 'error' });
@@ -350,7 +253,7 @@ function eraseSection() {
     onClick: async () => {
       const ok = await confirmDialog({
         title: 'Erase all data on this device?',
-        message: 'This deletes every tool, template, run, measurement, tool event, photo and setting stored on this device. Backup files you exported are not touched. This cannot be undone.',
+        message: 'This deletes every tool, template, run, measurement, tool event, project, folder, photo and setting stored on this device. Backup files you exported are not touched. This cannot be undone.',
         confirmLabel: 'Erase everything',
         danger: true,
         word: UI.ERASE_WORD,
@@ -369,7 +272,7 @@ function eraseSection() {
     },
   });
   return section('Erase all data',
-    h('p', null, 'Removes everything this app stored on this device; it then starts again with the example tools. Export a backup first.'),
+    h('p', null, 'Removes everything this app stored on this device, projects included; it then starts again with the LNF tool list. Export a backup first.'),
     erase,
     status);
 }

@@ -2,6 +2,50 @@
 
 One entry per milestone (spec Section 16).
 
+## M8: Projects in folders, runs with steps, and the alpha-test fixes
+
+Version 1.4.0.
+
+- **Projects follow wafers from start to finish.** They are optional: runs logged without one work as before.
+  - A project has a name, goal, substrate, start date, notes, its wafers (W1, W2…, each in process, done or scrapped, with a note) and, if you like, a plan of steps, each with a tool, template and recipe.
+  - **Log this step** opens Log run on the step's tool with the project, its wafers in process and the step chosen. Any run can join projects in its **Project** section, with the wafers it processed and the planned step it carries out. One run can carry wafers of several projects, and several projects can run at once.
+  - A step is done when a complete run is linked to it (or you mark it done), in progress while a draft or open run is. The project page shows the progress, the next step, the plan and the **traveler**: every run its wafers went through, in order, for all wafers or one.
+  - **Export the traveler** as PDF or Excel. Home lists your active projects with their next step; History filters by project; run rows show their projects; the backup, sync and every export include projects.
+- **Folders and subfolders.** Projects live in folders, and folders in folders. Create, rename, move and delete folders; deleting one either moves what it holds up a level (renaming a folder whose name is already taken there) or deletes it too, with Undo. **Select** moves or deletes several projects at once. Folders sync, and the tree stays sound when two devices move folders at the same time.
+- **Copy and delete projects.** **Copy project** opens a New project form with the same plan and wafer labels and nothing done yet, for the next batch. Delete has Undo and leaves the runs in place.
+- **Runs with several steps.** **Add a step** for a breakthrough, an over-etch or the layers of a stack, each with its own values. The main step (★) is the one Lookup compares. A multi-step LNF recipe fills every step.
+- **The Plasmatherm 790's second chamber.** A **PECVD film (right chamber)** template (seed version 3), with the wiki's seven P790 deposition recipes and their expected rates, index and stress. Every 790 recipe now names its process, so the RIE form lists only the etch recipes and the PECVD form only the deposition ones, whichever template is the tool's default.
+- **Countdown timer.** **Count down** runs from the time in the form, keeps the screen on, and buzzes and beeps at zero, then counts the overtime. The alarm goes off on any screen of the app, also after a reload. **Stop** fills the main step's time with the time that passed.
+- **Measurements.** **Paste values** fills the sites from the metrology tool's software or a spreadsheet: a column, a row, "site = value" pairs or CSV lines; digits inside words and dates in a header are skipped. The metrology tool starts as the one you used last for that kind of measurement (or one that measures it) and folds to one line with Change.
+- **Result against an input.** Results and Tool detail plot the result against each input that varies across your runs (etch rate against ICP power), with a fitted line.
+- **My tools.** Pick your tools in Settings → My tools or with ☆ on a tool's card. Tool pickers show them, and tools you used in the last two months, first, with all 127 one tap away.
+- **From the alpha test:**
+  - A recipe sets the material only when the form has none and the recipe's film matches one listed material; the message says when it does. Before, a recipe naming "SiO2" moved a run away from "SiO2 (thermal)", and Lookup's Same material rule missed it.
+  - In the material picker, "gold" now offers **Use Au** first, not a new material; **Clear** is a link of its own.
+  - Mark complete warns when the main result is missing, and says why. When only the run's time keeps the rate from being worked out, a time box appears with the results.
+  - Run detail shows what the run needs next first, and an empty Results section is one short card. Open runs say what each run waits for.
+  - Tool event: what happened comes first, with no preset type, and the tool folds to one line once chosen.
+  - "Unsaved run" appears only for a form you changed, and names its tool.
+  - Gas lines a run does not use fold behind one row of buttons.
+  - Name-only recipes are listed last, with a badge; the recipe's Use button stays in reach at the bottom of the sheet.
+  - The ± button appears only on fields that can be negative.
+  - Results: the chart sits under the summary (beside it on a wide screen), joins only exact matches and fades runs beyond the closest few. A suggested time outside its range no longer says "range"; the subtitle says "the closest 5 of 12 runs".
+  - Look up no longer says "same material" when no material is set.
+  - The tool card's name opens the tool's page; Tool detail shows its charts first and its runs' key settings.
+  - History: search on top, filters folded into one line that says which are set, and a sortable table on a wide screen. Forms use two columns there too.
+  - Section titles in sentence case; short screen titles; the app bar shows icons only on narrow phones; "just now" instead of "now ago".
+  - Lookup tuning moved under Settings → Advanced; About links to the source code.
+  - Windows install steps no longer mention npm.
+- **Checked before release.** Seven reviewers read every change and skeptics confirmed each problem they found; all are fixed. Three more reviewers then checked the fixes, and what they found is fixed too. Among them:
+  - Saving the project editor no longer undoes step marks, a pause or a move made since the editor opened, and unsaved edits restored after such a change keep it.
+  - A run's own steps stay when a one-step recipe fills it.
+  - "Log this step" no longer leaves its project link in a form you only looked at.
+  - The 1.3 → 1.4 upgrade no longer brings back materials you removed. Sync reads other devices' files once more, so their projects arrive.
+  - Back works at once after saving or cancelling a form.
+  - The traveler workbook has the conditions, substrate, mask and shared projects that the PDF shows.
+  - Keyboard and screen-reader focus stays put when a form redraws.
+- **Under the hood.** IndexedDB version 3 (projects and folders stores); the record format is still 1, so 1.3 and 1.4 devices keep syncing. New tests cover projects, folders, folder deletion and its Undo, run steps, measurements and pasting, the new data in backups and sync, the router's Back handling, and a smoke-test journey that logs a run into a project and files the project in a folder.
+
 ## M7: An "i" button on every field
 
 Version 1.3.0.

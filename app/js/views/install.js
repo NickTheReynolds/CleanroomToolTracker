@@ -55,14 +55,13 @@ const ANDROID = [
   'Open LNF Run Log from the app drawer or home screen. It is listed under Settings → Apps like any app.',
 ];
 const WINDOWS = [
-  'Run the installer LNF-Run-Log-Setup-<version>.exe (built from this project with npm run build:windows).',
-  'It installs for your Windows account only; no administrator rights are needed.',
-  'Start LNF Run Log from the Start menu or the desktop icon. Run a newer installer to update; your data is kept.',
-  'Or, in Chrome or Edge, open the address and click the install icon in the address bar.',
+  'Open the address in Chrome or Edge and click the install icon at the right of the address bar (or the ⋯ menu → Apps → Install).',
+  'Start LNF Run Log from the Start menu or the desktop icon. It works offline and updates itself when you are online.',
+  'If your lab hands out the desktop installer (LNF-Run-Log-Setup-<version>.exe), you can run that instead: it installs for your Windows account only, without administrator rights, and a newer installer updates it and keeps your data.',
 ];
 const MAC = [
-  'Run the macOS app (LNF Run Log.app, built on a Mac with desktop/macos/build-macos.sh) and drag it to Applications.',
-  'Or, in Safari, open the address and choose File → Add to Dock; in Chrome or Edge, use the install icon in the address bar.',
+  'In Safari, open the address and choose File → Add to Dock; in Chrome or Edge, use the install icon in the address bar.',
+  'If your lab hands out the macOS app (LNF Run Log.app), you can drag that to Applications instead.',
 ];
 const PUBLISH = [
   'In GitHub Desktop, choose File → Add local repository and pick the project folder.',

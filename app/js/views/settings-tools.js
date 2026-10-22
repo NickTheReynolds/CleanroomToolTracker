@@ -40,7 +40,8 @@ async function renderList(ctx) {
     .map((c) => ({ c, list: active.filter((t) => t.category === c) }))
     .filter((g) => g.list.length);
   append(ctx.root, [
-    h('p', { class: 'muted small' }, `${active.length} active tools. Archive the ones you never use: they leave the pickers, and their runs stay.`),
+    h('p', { class: 'muted small' }, `${active.length} active tools. Archive the ones you never use: they leave the pickers, and their runs stay. Or `,
+      h('a', { href: '#/settings/my-tools' }, 'choose your tools'), ', so pickers show those first and keep the rest one tap away.'),
     active.length ? groups.map((g) => section(`${CATEGORY_LABELS[g.c]} (${g.list.length})`, h('div', { class: 'list' }, g.list.map(row))))
       : emptyState('No active tools.'),
     archived.length ? section(`Archived (${archived.length})`, h('div', { class: 'list' }, archived.map(row))) : null,

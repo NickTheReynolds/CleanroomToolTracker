@@ -3,7 +3,8 @@
 /**
  * Browser smoke test (spec Section 15): in headless Chrome or Edge, load the
  * app, log a run, add pre and post measurements, run a lookup, fill a run
- * form from an LNF wiki recipe, export a backup, then stop the server and
+ * form from an LNF wiki recipe, follow a project's wafers through a run and
+ * file the project in a folder, export a backup, then stop the server and
  * reload offline. Uses Node built-ins
  * only; needs a Chromium-based browser (set CHROME_PATH if it is not found)
  * and a global WebSocket (Node 22+, or Node 20 with --experimental-websocket).
@@ -41,6 +42,13 @@ const HELPERS = `window.__t = window.__t || {
   tile(text) { const t = [...document.querySelectorAll('.tile')].find((b) => b.textContent.includes(text)); if (!t) throw new Error('No tile "' + text + '"'); t.click(); return true; },
   type(sel, value) { const el = document.querySelector(sel); if (!el) throw new Error('No input ' + sel); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); return true; },
   field(key, value) { return this.type('.field[data-key="' + key + '"] .stepper-input', String(value)); },
+  labelled(text, value) {
+    const l = [...document.querySelectorAll('#view label, dialog label')].find((x) => x.textContent.trim() === text);
+    if (!l || !l.control) throw new Error('No field "' + text + '"');
+    l.control.value = value;
+    l.control.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  },
   text() { return document.querySelector('#view').innerText; },
 };`;
 
@@ -159,7 +167,7 @@ async function main() {
   });
   await step('run a lookup', async () => {
     await page.evaluate(`location.hash = '#/lookup'`);
-    await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
+    await page.waitFor(`[...document.querySelectorAll('.tile')].some((x) => x.textContent.includes(${JSON.stringify(TOOL_NAME)}))`);
     await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`__t.btn('Find similar runs')`);
     await checkLabels('lookup-form');
@@ -172,7 +180,8 @@ async function main() {
   await step('fill a run form from an LNF wiki recipe', async () => {
     if (!RECIPE) throw new Error(`no LNF recipe that sets the ICP power on ${TOOL_NAME}`);
     await page.evaluate(`location.hash = '#/log'`);
-    await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
+    // Pickers now show the tools used lately first, so wait for this tool's tile.
+    await page.waitFor(`[...document.querySelectorAll('.tile')].some((x) => x.textContent.includes(${JSON.stringify(TOOL_NAME)}))`);
     await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     const open = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('LNF recipes'))`;
     await page.waitFor(`!!${open} && document.querySelector('.field[data-key="icpPower"] .stepper-input').value === '400'`);
@@ -182,15 +191,55 @@ async function main() {
     await t(`[...document.querySelectorAll('dialog.sheet .row')].find((r) => r.querySelector('.row-title').textContent === ${JSON.stringify(RECIPE.name)}).click()`);
     await page.waitFor(`document.querySelector('dialog.sheet .recipe-detail .recipe-fills')`);
     await snap('recipe-detail');
-    await t(`document.querySelector('dialog.sheet .recipe-detail > .btn-primary').click()`);
+    await t(`document.querySelector('dialog.sheet .recipe-detail .sheet-actions .btn-primary').click()`);
     await page.waitFor(`!document.querySelector('dialog.sheet')
       && document.querySelector('.field[data-key="icpPower"] .stepper-input').value === ${JSON.stringify(String(RECIPE_ICP))}`);
-    const name = await t(`[...document.querySelectorAll('#view label')].find((l) => l.textContent === 'Recipe').control.value`);
+    const name = await t(`[...document.querySelectorAll('#view label')].find((l) => l.textContent === 'Recipe name').control.value`);
     if (name !== RECIPE.name) throw new Error(`the recipe field says ${name}`);
     await snap('log-form-recipe');
     await page.evaluate(`location.hash = '#/tool/${ICP[0]}'`);
     await page.waitFor(`[...document.querySelectorAll('.section-title')].some((h) => h.textContent.startsWith('LNF recipes'))`);
     await checkLabels('tool-detail');
+  });
+  await step('a project follows its wafers through a run, and moves into a folder', async () => {
+    await page.evaluate(`location.hash = '#/project/new'`);
+    await page.waitFor(`__t.btn('Add wafers')`);
+    await t(`__t.labelled('Name', 'Smoke batch')`);
+    await t(`__t.click('Add wafers')`);
+    await t(`__t.click('Add step')`);
+    await page.waitFor(`__t.btn('Choose a tool (optional)')`);
+    await t(`__t.labelled('What happens', 'Etch the oxide')`);
+    await t(`__t.click('Choose a tool (optional)')`);
+    await page.waitFor(`document.querySelector('dialog.sheet .tile')`);
+    await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
+    await page.waitFor(`!document.querySelector('dialog.sheet') && __t.btn(${JSON.stringify(TOOL_NAME)})`);
+    await checkLabels('project-edit');
+    await snap('project-edit');
+    await t(`__t.click('Save')`);
+    await page.waitFor(`location.hash.startsWith('#/project/') && __t.btn('Log this step')`);
+    await t(`__t.click('Log this step')`);
+    await page.waitFor(`[...document.querySelectorAll('.project-links .pick-btn[aria-pressed="true"]')].some((b) => b.textContent.includes('Smoke batch'))`);
+    await checkLabels('log-form-project');
+    await t(`__t.click('Save')`);
+    await page.waitFor(`location.hash.startsWith('#/run/') && document.querySelector('.project-open')`);
+    await t(`document.querySelector('.project-open').click()`);
+    await page.waitFor(`document.querySelectorAll('.traveler-no').length === 1 && __t.text().includes('In progress')`);
+    await snap('project-detail');
+    await page.evaluate(`location.hash = '#/projects'`);
+    await page.waitFor(`__t.btn('New folder')`);
+    await t(`__t.click('New folder')`);
+    await page.waitFor(`document.querySelector('dialog.sheet input')`);
+    await t(`__t.labelled('Folder name', 'Smoke folder')`);
+    await t(`__t.click('Create folder')`);
+    await page.waitFor(`!document.querySelector('dialog.sheet') && __t.btn('Select')`);
+    await t(`__t.click('Select')`);
+    await page.waitFor(`document.querySelector('[role="checkbox"]')`);
+    await t(`[...document.querySelectorAll('[role="checkbox"]')].find((b) => b.textContent.includes('Smoke batch')).click()`);
+    await t(`__t.click('Move (1)')`);
+    await page.waitFor(`document.querySelector('dialog.sheet .folder-list')`);
+    await t(`__t.click('Smoke folder')`);
+    await page.waitFor(`[...document.querySelectorAll('a.row')].some((r) => r.textContent.includes('Smoke folder') && r.textContent.includes('1 project (1 active)'))`);
+    await snap('projects-folders');
   });
   await step('export a backup file', async () => {
     await page.evaluate(`location.hash = '#/settings/data'`);
@@ -207,6 +256,10 @@ async function main() {
     const backup = JSON.parse(readFileSync(join(downloads, file), 'utf8'));
     if (backup.format !== 'lnf-runlog' || !backup.runs.some((/** @type {any} */ r) => `#/run/${r.id}` === runHash)) {
       throw new Error('the backup does not contain the logged run');
+    }
+    const folder = (backup.folders || []).find((/** @type {any} */ x) => x.name === 'Smoke folder');
+    if (!folder || !(backup.projects || []).some((/** @type {any} */ p) => p.name === 'Smoke batch' && p.folderId === folder.id)) {
+      throw new Error('the backup does not contain the project in its folder');
     }
     if (!/^lnf-runlog-backup-\d{4}-\d{2}-\d{2}\.json$/.test(file)) throw new Error(`unexpected file name ${file}`);
   });
@@ -244,6 +297,7 @@ async function main() {
       ['#/settings/tools', '.list'], ['#/settings/materials', '.list'], ['#/settings/sync', '.section'],
       ['#/settings/data', '.section'], ['#/install', '.section'], [`#/settings/tool/${ICP[0]}`, '.section'],
       [`#/template/${ICP[1]}`, '.section'], ['#/event', '.tiles'], ['#/capture', '.tiles'],
+      ['#/projects', '.view .list'], ['#/project/new', '.view .field'], ['#/settings/my-tools', '.list'], [`#/tool/${ICP[0]}`, '.section'],
     ]) {
       await page.evaluate(`location.hash = ${JSON.stringify(hash)}`);
       await page.waitFor(`document.querySelector(${JSON.stringify(ready)})`, 10000);
@@ -257,6 +311,8 @@ async function main() {
     await page.waitFor(`document.querySelector('.help-btn[aria-label="About Half-life"]')`, 10000);
     const res = await t(`(() => {
       const b = document.querySelector('.help-btn[aria-label="About Half-life"]');
+      const advanced = b.closest('details'); // Lookup tuning sits under Settings → Advanced
+      if (advanced) advanced.open = true;
       const note = document.getElementById(b.getAttribute('aria-controls'));
       const shut = note.hidden && b.getAttribute('aria-expanded') === 'false';
       b.click();

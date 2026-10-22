@@ -1,6 +1,6 @@
 # Data model
 
-LNF Run Log stores everything in one IndexedDB database named `lnf-runlog` on the device. There are seven object stores. Tool **templates** drive every form and the lookup.
+LNF Run Log stores everything in one IndexedDB database named `lnf-runlog` on the device. There are nine object stores. Tool **templates** drive every form and the lookup.
 
 The code that defines this model:
 
@@ -10,7 +10,7 @@ The code that defines this model:
 
 ## Common fields
 
-Every record in the six data stores (`meta` excluded) has:
+Every record in the eight data stores (`meta` excluded) has:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -27,10 +27,12 @@ Every record in the six data stores (`meta` excluded) has:
 |---|---|---|
 | `tools` | `name`, `shortName`, `category` (etch, deposition, thermal, litho, metrology, other), `kind` (process, metrology), `active`, `defaultTemplateId` (or null), `halfLifeDays` (null means use the setting), `notes` | `category` |
 | `templates` | `toolId`, `name`, `processType` (same values as category), `fields[]`, `derived[]`, `primaryOutput` (an output key, or null) | `toolId` |
-| `runs` | `toolId`, `templateId` (null for an untyped quick capture), `material`, `substrate`, `maskMaterial`, `status` (draft, open, complete), `startedAt`, `endedAt`, `params` {key: value}, `results` {key: value}, `derivedKeys[]`, `targetThickness` (nm or null), `recipe`, `notes`, `tags[]`, `photoIds[]` | `toolId`, `toolTemplate` = [toolId, templateId], `startedAt`, `status` |
+| `runs` | `toolId`, `templateId` (null for an untyped quick capture), `material`, `substrate`, `maskMaterial`, `status` (draft, open, complete), `startedAt`, `endedAt`, `params` {key: value}, `results` {key: value}, `derivedKeys[]`, `targetThickness` (nm or null), `recipe`, `notes`, `tags[]`, `photoIds[]`, `steps[]` (see Run steps), `projects[]` (see Projects) | `toolId`, `toolTemplate` = [toolId, templateId], `startedAt`, `status` |
 | `measurements` | `runId`, `metrologyToolId`, `kind` (thickness, stepHeight, cd, sheetResistance, refractiveIndex, stress, other), `phase` (pre, post), `material`, `unit`, `points[]` {site, value}, `takenAt`, `notes` | `runId` |
 | `events` | `toolId`, `type` (pm, clean, seasoning, targetChange, gasChange, fault, other), `major`, `at`, `notes` | `toolAt` = [toolId, at] |
 | `photos` | `runId`, `blob` (JPEG), `width`, `height`, `caption`, `takenAt` | `runId` |
+| `projects` | `name`, `goal`, `status` (active, paused, done), `startedAt`, `endedAt`, `substrate`, `notes`, `folderId` (or null), `wafers[]`, `steps[]` (see Projects) | `status` |
+| `folders` | `name`, `parentId` (a folder, or null for the top level) | none |
 | `meta` | keyed by `key`: `schemaVersion`, `settings`, and `draft:<form>` entries | none |
 
 ### Values in `params` and `results`
@@ -48,6 +50,21 @@ A value is a number, text, `true`/`false`, or `null`. Durations are stored in se
 - **Material.** A measurement with a blank material counts as the run's own material.
 - **Several matches.** When several measurements match the same phase, kind and material, the latest by `takenAt` is used.
 
+### Run steps
+
+A run with several steps (a breakthrough, the main etch and an over-etch, or the layers of a stack) lists them in `steps`, in order: `{name, main: true}` for the main step and `{name, params}` for each other step. Exactly one step is the main step, and its values are the run's `params`. So Lookup, the derived results and every export keep reading `params`, and a one-step run simply has `steps: []`. Steps are stored tidy: names trimmed (a blank one becomes "Step n") and empty values dropped (`tidySteps`). Using a multi-step LNF recipe in a run form fills every step; the step chosen in the recipe sheet becomes the main step. A recipe with one step or none fills the main step and keeps the run's other steps. Duplicating a run or prefilling from the last run copies the steps, keeping only the input and condition fields the template knows. Exports write the steps as one text column (`stepsText` in `core/run-steps.js`).
+
+### Projects and folders
+
+A project follows a batch of wafers through a process.
+
+- `wafers[]`: `{id, label, status (active, done, scrapped), notes}`. Ids are UUIDs, so a wafer can be renamed.
+- `steps[]`: the plan, in order: `{id, title, toolId, templateId, recipe, notes, doneAt, skipped}`. `toolId`, `templateId` and `doneAt` may be null. A step is **done** when a complete run is linked to it, or when it was marked done by hand (`doneAt`); **in progress** when a draft or open run is linked to it; **skipped** when marked so. Progress counts done steps out of the steps not skipped.
+- A run joins a project from its own side: `run.projects[]` holds `{projectId, waferIds[], stepId}` links. One run can carry wafers of several projects (a furnace load), and a run without links is a run without a project. A project's traveler is its linked runs, oldest first; a wafer's path is the runs whose link names it.
+- Deleting a project leaves its runs alone; their links to it are ignored. Wafers and steps that runs name cannot be removed from the project, only finished, scrapped or skipped.
+- `folderId` files the project in a folder. Folders hold folders through `parentId`. A folder whose parent was deleted, or a loop of folders that two devices moved into each other at the same time, shows at the top level: in a loop, the folder with the lowest id (`folderTree` in `core/folders.js`), so every device draws the same tree. A project in a deleted folder shows at the top level too.
+- Deleting a folder either moves what it holds up into its parent (a moved folder whose name is taken there becomes "Name (from Deleted)"), or deletes the folder, its folders and its projects (as tombstones, with Undo). `folderDeletePlan` in `core/folders.js` works out the change.
+
 ### Photos
 
 Photos are resized on the device to at most 1600 px on the long edge and stored as JPEG blobs, at quality 0.8 (`PHOTO_MAX_EDGE`, `PHOTO_QUALITY`). Very old Safari versions cannot store blobs in IndexedDB; there the record holds `bytes` (an ArrayBuffer) and `type` instead of `blob`.
@@ -61,7 +78,7 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 | `type` | number, text, select, bool, duration | Duration is stored in seconds and entered as minutes and seconds. |
 | `role` | input, output, context | Inputs drive lookup; outputs are results; context is recorded but never matched. |
 | `required` | bool | Default false. At most 5 per template. Required fields must be filled before a run is saved as open or complete; drafts may leave them empty. |
-| `step`, `min`, `max` | number | Stepper increment and bounds. Duration steps default to 10 s. A number field without `min`, or with `min` < 0, shows a ± button, because phone number pads have no minus key. |
+| `step`, `min`, `max` | number | Stepper increment and bounds. Duration steps default to 10 s. A number field shows a ± button, because phone number pads have no minus key, when it can be negative: its `min` is below 0, or it has no `min` and holds a temperature in °C, a stress, a voltage, a focus, an offset or a bias (`signedField` in `ui/fields.js`). |
 | `options` | string[] | Choices for select fields. |
 | `weight` | number | Distance weight. Default 1; duration fields default to 0. 0 means lookup ignores the field. |
 | `spreadHint` | number | Typical variation, used to normalise distance. |
@@ -92,13 +109,14 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 | `lastExportAt` | Time of the last backup export (drives the Home reminder) | no |
 | `iosHintDismissed`, `persistAsked`, `firstRunAt` | Device housekeeping | no |
 | `publicUrl` | The published HTTPS address, for the install QR code | no |
-| `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, lastSyncAt, lastResult}` | no, and the token never leaves the device |
+| `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, seenStores, lastSyncAt, lastResult}`; `seenStores` names the stores `seen` covers, so a version that syncs more stores reads every file again once | no, and the token never leaves the device |
+| `myTools` | Ids of the tools this person uses; tool pickers show them (and tools used in the last 60 days) first | no |
 
-`meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list. Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade only adds records that are missing, merges new materials, and archives example tools that were never used or edited.
+`meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list, 3 adds a PECVD template for the Plasmatherm 790's second chamber (`LNF_EXTRA_TEMPLATES` in `data/seed-lnf.js`, fixed id). Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade only adds records that are missing (a deleted one stays deleted), merges new materials, and archives example tools that were never used or edited.
 
 ## Drafts (`meta` keys `draft:<form>`)
 
-Every in-progress form autosaves its state about 300 ms after each change, and immediately when the page is hidden. Each form has its own key: `log`, `capture`, `lookup`, `event:<id>`, `measure:<id>`, `tool:<id>` and `template:<id>`. A run being logged gets its id when the form opens, so photos taken before Save are stored at once under that id. Discarding the form removes those photos.
+Every in-progress form autosaves its state about 300 ms after each change, and immediately when the page is hidden. Each form has its own key: `log`, `capture`, `lookup`, `history`, `event:<id>`, `measure:<id>`, `tool:<id>`, `template:<id>`, `project:<id>` (`project:new` for a new one) and `project:copy:<id>` for a copy of project `<id>`. The Log run draft also keeps the timer (`timerStartedAt`, `timerTarget` for a countdown, `timerRan`), and `touched`: only a form someone changed is offered for resuming or kept as a draft run. A run being logged gets its id when the form opens, so photos taken before Save are stored at once under that id. Discarding the form removes those photos.
 
 ## Seed data
 
@@ -128,16 +146,17 @@ Each recipe (`WikiRecipe` in `core/recipes.js`):
 | `notes` | Caveats from the source. |
 | `src`, `url`, `date` | The source (a wiki page, or a sheet, document or PDF a wiki page embeds or links), its address, and the date of the copy read. |
 | `caveat` | Optional: why to check the recipe before relying on it (its sources disagree or are unclear). |
+| `process` | Optional: the process type of the template the recipe fills, on a tool with templates of two types (every Plasmatherm 790 recipe says `etch` or `deposition`). On such a tool a run form lists the recipes of its template's type and those that name none (`recipesFor`), and "Log run with this recipe" opens the matching template (`templateForRecipe`). The tool's default template plays no part. |
 
-**Using a recipe** (`recipeFill` in `core/recipes.js`): the chosen step's values go into the template fields with the same key, when the field exists, has the role being filled and the value suits its type (a number for number and duration fields, one of the options for choice fields). Gas fields the step does not use are cleared when the step gives any gas flow, because a recipe names its whole chemistry; a gas it lists without one number ("ramped") stays as it is. The recipe's name goes into the run's `recipe`, and its film into `material` when it names exactly one. Everything else stays, and Undo (`undoFill`) takes back only what the recipe changed. Lookup fills input fields only, and keeps cleared gases as empty values so Log this run does not bring back the last run's gases.
+**Using a recipe** (`recipeFill` in `core/recipes.js`, `recipeForForm` in `core/run-steps.js`): the chosen step's values go into the template fields with the same key, when the field exists, has the role being filled and the value suits its type (a number for number and duration fields, one of the options for choice fields). Gas fields the step does not use are cleared when the step gives any gas flow, because a recipe names its whole chemistry; a gas it lists without one number ("ramped") stays as it is. In a run form, a recipe with several steps fills every step, and the chosen step becomes the run's main step. The recipe's name goes into the run's `recipe`. Its film goes into `material` only when the form has no material yet and the film names exactly one listed material (`recipeMaterial`): "SiNx" becomes "SiNx (PECVD)" when that is the only SiNx, but "SiO2" (thermal, PECVD or LTO?) sets nothing, so a run never gets a name that Lookup's Same material rule would not match. Everything else stays, and Undo (`undoFill`) takes back only what the recipe changed. Lookup fills input fields only, and keeps cleared gases as empty values so Log this run does not bring back the last run's gases. A recipe that only names itself, with no values, is listed last with the badge "Name only".
 
 `test/recipes.test.mjs` checks every shipped recipe against its tool's seeded template: the keys exist, the values suit the fields, units match and the step indexes are valid.
 
 ## Versions and migrations
 
-- **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes).
-- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup.
-- **`MIGRATIONS`** in `schema.js` is the ordered list of migrations. Each step lists the stores and indexes to create and, optionally, a function that upgrades one record from the previous version. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
+- **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes): 1 is the first layout, 2 added `projects`, 3 added `folders`. `DB_LAYOUT` in `schema.js` lists the stores and indexes each version adds; opening the database creates whatever an older one lacks.
+- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup. It is still 1: run steps, project links, projects and folders only add to the format, every new field has a default, and an older app version keeps the fields it does not know and skips the stores it does not know. So devices on different versions keep syncing, and a backup from this version imports into an older one (without its projects).
+- **`MIGRATIONS`** in `schema.js` is the ordered list of record migrations: a function that upgrades one record from the previous format. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
 
 ## LNF wiki links
 
@@ -152,3 +171,12 @@ Settings → Backup and data writes one file of the live records (no tombstones)
 - **CSV** (`lnf-runlog-all-<date>.csv`): one row per run, oldest first. It has the run's facts, a `p.<key>` column per parameter, an `r.<key>` column per result, `m.<phase>.<kind> [<unit>]` with the mean of the latest such measurement of the run's material (a blank material counts as the run's), `m.<phase>.<kind> <material> [<unit>]` for any other material measured, such as the mask, every measurement in words, and the ISO 8601 start and end. `date` is local time.
 - **Excel** (`.xlsx`, `core/xlsx.js`): the same table as "All runs", then one sheet per tool with labelled columns ("ICP power (W)", durations in seconds), then "Measurements" (one row per measurement, with its points) and "Tool events". Times are Excel dates in local time; the first row is bold, frozen and filterable.
 - **PDF** (`core/pdf.js`): a report, tool by tool and run by run, with inputs, conditions, results, sample, measurements, notes and tags, then the tool's events. It uses the standard Helvetica fonts and WinAnsi text; characters outside it are spelled out ("Ω" becomes "Ohm") or shown as "?".
+
+Every run row also names the run's projects (with its wafers and plan step) and its steps. The workbook gets a "Projects" sheet when there are projects: each project's folder, status, dates, wafers, steps done and runs.
+
+## A project's traveler
+
+The project page exports its traveler (`core/project-report.js`): every run the project's wafers went through, oldest first, with the plan and each wafer's path.
+
+- **PDF** (`lnf-runlog-project-<name>-<date>.pdf`): the project's facts (folder, goal, substrate, wafers, notes), the plan with each step's state, the process record run by run (inputs, results, measurements, wafers, step) and each wafer's path.
+- **Excel** (`.xlsx`): the sheets "Process record", "Plan" and "Wafers".

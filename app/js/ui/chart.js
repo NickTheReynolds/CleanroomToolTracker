@@ -22,6 +22,7 @@ import { fmtNum, withUnit } from '../core/format.js';
  * @property {string} [label] shown after the value in the caption
  * @property {boolean} [hollow] drawn as a ring (e.g. a run from before the last clean)
  * @property {boolean} [highlight] drawn larger, with a halo
+ * @property {number} [fade] 0 (solid) to 1 (faint): how far the point is from what the chart is about
  */
 
 /**
@@ -197,12 +198,14 @@ function placeEventLabels(items) {
 }
 
 /**
- * A line chart of values over time.
+ * A line chart of values over time. `connect` joins the points with a line:
+ * all of them (true, the default), none, or only those it returns true for,
+ * such as runs with the same inputs, so that a line never mixes settings.
  * @param {{points: ChartPoint[], events?: ChartEvent[], unit?: string, yLabel?: string, ariaLabel?: string,
- *   onSelect?: (p: ChartPoint) => void, height?: number}} o
+ *   onSelect?: (p: ChartPoint) => void, height?: number, connect?: boolean | ((p: ChartPoint) => boolean)}} o
  * @returns {HTMLElement} a <figure class="chart">
  */
-export function lineChart({ points, events = [], unit = '', yLabel = '', ariaLabel, onSelect, height = 220 }) {
+export function lineChart({ points, events = [], unit = '', yLabel = '', ariaLabel, onSelect, height = 220, connect = true }) {
   const pts = (Array.isArray(points) ? points : [])
     .filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y))
     .sort((a, b) => a.x - b.x);
@@ -281,11 +284,13 @@ export function lineChart({ points, events = [], unit = '', yLabel = '', ariaLab
   const marks = pts.map((p, i) => {
     const { x, y } = pos[i];
     const r = (p.highlight ? 6 : 4) - (dense ? 1.5 : 0);
+    const faint = typeof p.fade === 'number' && p.fade > 0 ? `; opacity: ${r1(Math.max(0.3, 1 - Math.min(1, p.fade) * 0.7))}` : '';
     const dot = p.hollow
-      ? svg('circle', { cx: x, cy: y, r, style: dense ? PAINT.denseRing : PAINT.ring })
-      : svg('circle', { cx: x, cy: y, r: dense ? r : r + 1, style: dense ? PAINT.denseDot : PAINT.dot });
+      ? svg('circle', { cx: x, cy: y, r, style: (dense ? PAINT.denseRing : PAINT.ring) + faint })
+      : svg('circle', { cx: x, cy: y, r: dense ? r : r + 1, style: (dense ? PAINT.denseDot : PAINT.dot) + faint });
     return p.highlight ? [svg('circle', { cx: x, cy: y, r: r + 4, style: PAINT.halo }), dot] : dot;
   });
+  const joined = connect === true ? pos : connect ? pos.filter((_, i) => connect(pts[i])) : [];
 
   // Summary for assistive technology.
   const name = String(ariaLabel || title || 'Chart').trim().replace(/[.:;,]+$/, '');
@@ -311,7 +316,7 @@ export function lineChart({ points, events = [], unit = '', yLabel = '', ariaLab
   svg('g', { style: PAINT.ink2, 'text-anchor': 'middle' }, xTexts),
   selGuide,
   eventLines,
-  pts.length > 1 ? svg('polyline', { points: pos.map((q) => `${q.x},${q.y}`).join(' '), style: PAINT.line }) : null,
+  joined.length > 1 ? svg('polyline', { points: joined.map((q) => `${q.x},${q.y}`).join(' '), style: PAINT.line }) : null,
   marks,
   eventTexts,
   selRing,

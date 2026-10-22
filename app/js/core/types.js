@@ -48,14 +48,35 @@
  *
  * @typedef {string | number | boolean | null} FieldValue
  *
+ * One step of a run with several steps. The main step (main: true) keeps
+ * its values in the run's params; every other step keeps its own.
+ * @typedef {{name: string, main?: boolean, params?: Record<string, FieldValue>}} RunStep
+ *
+ * A run's link to a project: which of its wafers the run processed and
+ * which planned step it carries out.
+ * @typedef {{projectId: string, waferIds: string[], stepId: string|null}} ProjectLink
+ *
  * @typedef {BaseRecord & {
  *   toolId: string, templateId: string|null, material: string, substrate: string,
  *   maskMaterial?: string, status: 'draft'|'open'|'complete', startedAt: string,
  *   endedAt: string|null, params: Record<string, FieldValue>,
  *   results: Record<string, FieldValue>, derivedKeys: string[],
  *   targetThickness?: number|null, recipe: string, notes: string, tags: string[],
- *   photoIds: string[]
+ *   photoIds: string[], steps: RunStep[], projects: ProjectLink[]
  * }} Run
+ *
+ * @typedef {{id: string, label: string, status: 'active'|'done'|'scrapped', notes: string}} Wafer
+ *
+ * @typedef {{id: string, title: string, toolId: string|null, templateId: string|null, recipe: string,
+ *   notes: string, doneAt: string|null, skipped: boolean}} PlanStep
+ *
+ * @typedef {BaseRecord & {
+ *   name: string, goal: string, status: 'active'|'paused'|'done', startedAt: string, endedAt: string|null,
+ *   substrate: string, notes: string, wafers: Wafer[], steps: PlanStep[], folderId: string|null
+ * }} Project
+ *
+ * A folder of projects; parentId null is the top level.
+ * @typedef {BaseRecord & {name: string, parentId: string|null}} Folder
  *
  * @typedef {{site: string, value: number}} Point
  *

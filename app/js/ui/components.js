@@ -126,7 +126,9 @@ export function confirmDialog(o) {
 }
 
 /**
- * A bottom sheet (modal dialog) holding arbitrary content.
+ * A bottom sheet (modal dialog) holding arbitrary content. It closes when
+ * the app moves to another screen (an in-app link in it, Back, a refresh),
+ * so it never stays open over a screen it does not belong to.
  * @param {string} title
  * @param {Node[]} content
  * @param {{onClose?: () => void}} [o]
@@ -139,7 +141,9 @@ export function sheet(title, content, o = {}) {
       h('h2', { id: tid }, title),
       button('', { kind: 'ghost', icon: 'close', ariaLabel: 'Close', onClick: () => dlg.close() })),
     h('div', { class: 'sheet-body', tabindex: '-1', autofocus: true }, content)));
-  on(dlg, 'close', () => { dlg.remove(); o.onClose?.(); });
+  const leave = () => dlg.close();
+  window.addEventListener('hashchange', leave);
+  on(dlg, 'close', () => { window.removeEventListener('hashchange', leave); dlg.remove(); o.onClose?.(); });
   on(dlg, 'click', (e) => { if (e.target === dlg) dlg.close(); });
   document.body.append(dlg);
   dlg.showModal();

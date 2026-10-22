@@ -13,18 +13,20 @@ Lookup uses no AI and no external services. The same input always gives the same
 
 | Screen | What it does |
 |---|---|
-| Home | Log run, Look up, Open runs (with a count) and Tool event; the latest runs; a backup reminder; install help. |
-| Log run | Tool → template → a form prefilled from your last run with that tool; **?** on the tool's card opens its LNF wiki pages and documents. **LNF recipes** fill the form from one of the tool's wiki recipes. Steppers, material chips, run timer, camera photos, notes (dictation works). Save open, or complete if you already have results. |
-| Quick capture | Tool, photo and note only, saved as a draft to fill in later. |
-| Open runs | Drafts and open runs, oldest first. |
-| Run detail | Results (derived from measurements, or typed in), measurements, inputs, photos and notes. Mark complete, duplicate, delete (with Undo). |
-| Measurement | Metrology tool, pre/post, kind, material and unit, and a site preset (Center, Center + 4 edge, 5-point, 9-point, Custom). Shows live mean, range and uniformity. |
+| Home | Log run, Look up, Open runs (with a count) and Tool event; Quick capture and Projects; your active projects with their next step; the latest runs; a backup reminder; install help. |
+| Log run | Tool (your tools first) → template → a form prefilled from your last run with that tool; tap the tool's name for its page, ☆ to make it one of your tools, **?** for its LNF wiki pages. **LNF recipes** fill the form from one of the tool's wiki recipes, every step of a multi-step recipe included. A run can have several steps. The projects it belongs to, which wafers and which planned step. Gas lines not in use fold away. Run timer with a countdown, camera photos, notes (dictation works). Save open, or complete if you already have results. |
+| Quick capture | Tool, photo and note (and its projects) only, saved as a draft to fill in later. |
+| Open runs | Drafts and open runs, oldest first, each saying what it waits for: a post measurement, its time, results. |
+| Run detail | What the run needs next comes first. Results (derived from measurements, or typed in; the run time asked for in place when only it is missing), measurements, projects, recipe, inputs of each step, photos and notes. Mark complete (with a word when the main result is missing), duplicate, delete (with Undo). |
+| Measurement | Metrology tool (the likely one for the kind already chosen), pre/post, kind, material and unit, and a site preset (Center, Center + 4 edge, 5-point, 9-point, Custom). **Paste values** fills the sites from the tool's software or a spreadsheet. Shows live mean, range and uniformity. |
 | Look up | Planned inputs (all optional, or filled from an LNF recipe), material, target thickness, and the strict chemistry, same material and sibling tools toggles. |
-| Results | Estimate with range and confidence, warnings, trend, suggested time, ranked matches with differences ("ICP power +50 W"), a chart with tool events, what the wiki says an LNF recipe gives, and Log this run. |
-| Tool detail | Tool info, the tool's LNF recipes, event timeline, runs, and a chart of each template's main result over time. |
-| Tool event | PM, clean, seasoning, target or gas change, fault. Major events reduce the weight of earlier runs. |
-| History | Filter by tool, template, material, status and dates; search notes, recipe and tags. Export everything from here too. |
-| Settings | Your name and device, tools and the template editor, materials, lookup tuning, backup, export everything (Excel, CSV or PDF), import, sync, storage, theme, version and updates. |
+| Results | Estimate with range and confidence, warnings, trend, suggested time, a chart with tool events beside it, ranked matches with differences ("ICP power +50 W"), the result against each input that varies, what the wiki says an LNF recipe gives, and Log this run. |
+| Tool detail | Tool info, a chart of each template's main result over time and against each input that varies, event timeline, the tool's LNF recipes, and its runs with their key settings. |
+| Tool event | What happened (PM, clean, seasoning, target or gas change, fault), then the tool. Major events reduce the weight of earlier runs. |
+| History | Search notes, recipe and tags; filter by tool, project, status, template, material and dates. A sortable table on a wide screen. Export everything from here too. |
+| Projects | Projects in folders and subfolders: each with its progress, next step and wafers. Select several to move or delete them; rename, move or delete a folder. |
+| Project | A batch of wafers from start to finish: the plan with each step's state and **Log this step**, the traveler of every run its wafers went through (for all wafers or one), PDF and Excel export, move to a folder, copy for the next batch, pause, finish, delete. |
+| Settings | Your name and device, my tools, tools and the template editor, materials, backup, export everything (Excel, CSV or PDF), import, sync, storage, theme, lookup tuning (under Advanced), version, updates and the source code. |
 | Install on your devices | The app's address as a QR code for phones, and install steps for iPhone, Android, Windows and Mac. |
 
 **Tools and materials.** The app starts with the LNF equipment list from the LNF wiki: 127 tools, grouped as etch, deposition, thermal, lithography, metrology and other, with search in every tool picker. It also has every material the wiki lists as supported, plus bulk lithium niobate, and the material picker searches them ("gold" finds Au). Each tool has a generic template for its type, with the gas lines its wiki page lists, and the recipes the wiki documents for it: 599 recipes for 95 tools. On run screens, **?** gathers the tool's wiki page (with its photo), process page, SOPs and recipes in one place. Adjust a template to how you use the tool, and archive tools you never use, in **Settings → Tools and templates**.
@@ -86,12 +88,16 @@ The installed app opens full screen and works in airplane mode. To check, open i
 
 ## Using it in the cleanroom
 
-- **Big targets.** Every control works with gloved thumbs. Hold **−** or **+** to repeat. Numbers accept a decimal comma. The **±** button flips the sign, since phone number pads have no minus key.
+- **Big targets.** Every control works with gloved thumbs. Hold **−** or **+** to repeat. Numbers accept a decimal comma. On a field that can be negative (a temperature in °C, a stress, a bias), the **±** button flips the sign, since phone number pads have no minus key.
+- **Your tools first.** Tap ☆ on a tool's card, or pick them in **Settings → My tools**. Tool pickers then show your tools and the ones you used in the last two months, with every other tool under **All tools**.
 - **Nothing is lost.** Every form saves itself as you go. If the phone locks or the tab is closed, the next visit resumes it. Photos are stored the moment you take them.
 - **Fast logging.** Log run copies your last run with the same tool and template, so usually you only change what differs.
-- **LNF recipes.** On Log run, tap **LNF recipes** to pick one of the tool's wiki recipes. It fills that recipe's parameters, clears the gases it does not use and names the recipe; **Undo** puts your values back. Each recipe shows its source and date: check it against the tool before you rely on it.
+- **LNF recipes.** On Log run, tap **LNF recipes** to pick one of the tool's wiki recipes. It fills that recipe's parameters (every step of a multi-step recipe), clears the gases it does not use and names the recipe. It sets the material only when the form has none and the recipe's film is unambiguous, and the message says so; **Undo** puts your values back. Each recipe shows its source and date: check it against the tool before you rely on it.
 - **What does this field do?** Tap the **i** beside any label for a short note: what the field is, what raising it usually does, and how Lookup uses it. Lookup tuning, match rules and the template editor have notes too.
-- **Run timer.** The timer is optional: **Start** records the start time, and **Stop** fills the template's time field.
+- **Run timer.** The timer is optional: **Start** counts up; **Count down** runs from the time in the form (the last run's, or Lookup's suggestion) and buzzes and beeps at zero, then counts the overtime. The alarm goes off on any screen of the app, and the screen stays on while it runs. **Stop** fills the time field (the main step's, on a run with steps) with the time that actually passed. On an iPhone the alarm may stay silent when the phone is set to silent, and Safari cannot vibrate: keep an eye on the clock.
+- **Runs with several steps.** **Add a step** for a breakthrough before the main etch, an over-etch after it, or the layers of a stack. Each step keeps its own values; the main step (★) is the one Lookup compares.
+- **Projects.** A project follows a batch of wafers from start to finish: name the wafers, plan the steps if you like, and log runs into it (**Log this step** on the project page opens the right tool, template and recipe). The project keeps a traveler of what every wafer went through, ready to export as PDF or Excel. Projects are optional, several can run at once, one run (a furnace load) can carry wafers of several projects, and folders and subfolders keep many projects in order. **Copy project** starts the next batch with the same plan.
+- **Paste measurements.** On a measurement, **Paste values** takes a column or row of numbers, or "site = value" pairs, from the metrology tool's software or a spreadsheet.
 - **Derived results.** Add a **pre** and a **post** measurement, and the run computes etch or deposition rate, thickness change, uniformity and selectivity. A value you type yourself always wins.
 - **Tool events.** Log PMs, chamber cleans and target changes. Lookup flags runs from before the last major event and gives them less weight.
 
@@ -101,7 +107,7 @@ Browser storage can be cleared: by the system when space runs low, by clearing s
 
 **Settings → Backup, import and storage:**
 
-- **Export backup** writes one JSON file, `lnf-runlog-backup-YYYY-MM-DD.json`, with all tools, templates, runs, measurements, events, the materials list and lookup tuning.
+- **Export backup** writes one JSON file, `lnf-runlog-backup-YYYY-MM-DD.json`, with all tools, templates, runs, measurements, events, projects and their folders, the materials list and lookup tuning.
   - Photos are optional ("Include photos"), and the screen shows how much they add.
   - Where the browser supports sharing files (iPhone and iPad, Android, and Chrome or Edge on Windows and macOS), **Share…** opens the system share sheet so you can save to Files or Drive, or email it. **Download** works everywhere.
 - **Export everything** writes one file with every run, its parameters, results and measurements (the Excel and PDF files also hold the tool events). Choose **Excel** (a workbook: all runs, one sheet per tool with named columns, measurements, tool events), **CSV** (one table, a row per run) or **PDF** (a report to read or print). History has a shortcut to it.

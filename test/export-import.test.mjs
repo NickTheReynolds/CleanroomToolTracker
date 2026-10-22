@@ -7,7 +7,7 @@ import {
   buildBackup, exportableSettings, backupFileName, mergeStore, planImport, mergeMaterials, encodePhoto,
   bytesToBase64, base64ToBytes, csvCell, toCsv, runsCsv, measurementsCsv, eventsCsv, MAX_ERRORS,
 } from '../app/js/data/export-import.js';
-import { SCHEMA_VERSION, DATA_STORES, validateBackupEnvelope } from '../app/js/data/schema.js';
+import { SCHEMA_VERSION, DATA_STORES, validateBackupEnvelope, normalizeRecord } from '../app/js/data/schema.js';
 import { DEFAULT_SETTINGS, DEVICE_SETTINGS } from '../app/js/data/records.js';
 import { seedRecords } from '../app/js/data/seed-tools.js';
 import { tool, template, runs, runA, runB, runC, cleanEvent, measurement } from './fixtures.mjs';
@@ -59,8 +59,11 @@ test('buildBackup writes the envelope, keeps only materials and tuning, and adds
     tools: [tool], templates: [template], runs, measurements: [], events: [cleanEvent], settings, appVersion: '1.2.3', exportedAt: EXPORTED,
   });
   assert.deepEqual(Object.keys(b), [
-    'format', 'version', 'appVersion', 'exportedAt', 'tools', 'templates', 'runs', 'measurements', 'events', 'settings',
+    'format', 'version', 'appVersion', 'exportedAt', 'tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders',
+    'settings',
   ]);
+  assert.deepEqual(b.projects, [], 'no projects given: an empty list');
+  assert.deepEqual(b.folders, [], 'no folders given: an empty list');
   assert.equal(b.format, 'lnf-runlog');
   assert.equal(b.version, SCHEMA_VERSION);
   assert.equal(b.appVersion, '1.2.3');
@@ -189,6 +192,8 @@ test('planImport merges every store and unions the materials list', () => {
     measurements: { added: 1, updated: 0, skipped: 0, invalid: 0 },
     events: { added: 1, updated: 0, skipped: 0, invalid: 0 },
     photos: { added: 1, updated: 0, skipped: 0, invalid: 0 },
+    projects: { added: 0, updated: 0, skipped: 0, invalid: 0 },
+    folders: { added: 0, updated: 0, skipped: 0, invalid: 0 },
   });
   assert.deepEqual(plan.put.runs.map((r) => [r.id, r.notes]), [['A', 'edited on the PC'], ['B', '']]);
   assert.equal(plan.errors.length, 1);
@@ -261,7 +266,7 @@ test('runsCsv: fixed columns, then p. and r. columns across templates; deleted r
   const rows = cells(csv);
   assert.deepEqual(rows[0], [
     'id', 'tool', 'template', 'status', 'startedAt', 'endedAt', 'material', 'substrate', 'maskMaterial', 'recipe',
-    'targetThickness_nm', 'tags', 'notes', 'author', 'createdAt', 'updatedAt',
+    'targetThickness_nm', 'tags', 'notes', 'author', 'createdAt', 'updatedAt', 'projects', 'steps',
     'p.chf3', 'p.icpPower', 'p.o2', 'p.power', 'p.pressure', 'p.time', 'r.depRate', 'r.etchRate',
   ]);
   assert.deepEqual(rows.slice(1).map((r) => r[0]), ['A', 'X', 'B'], 'oldest first; the deleted run is left out');
@@ -343,15 +348,27 @@ test('round trip: backup -> JSON -> import into an empty device reproduces every
       encodePhoto(photo, bytesToBase64(new Uint8Array([0, 1, 2, 250, 255])), 'image/jpeg'),
       encodePhoto({ ...photo, id: 'p-deleted', deleted: true }, null),
     ],
+    projects: [{
+      id: 'P', createdAt: T1, updatedAt: T2, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Résonateurs batch 3', goal: 'Release',
+      status: 'active', startedAt: T1, endedAt: null, substrate: 'Si', notes: 'α', folderId: 'F2',
+      wafers: [{ id: 'w1', label: 'W1', status: 'active', notes: '' }, { id: 'w2', label: 'W2', status: 'scrapped', notes: 'chipped' }],
+      steps: [{ id: 's1', title: 'Etch', toolId: tool.id, templateId: null, recipe: '', notes: '', doneAt: null, skipped: false }],
+    }],
+    folders: [
+      { id: 'F1', createdAt: T1, updatedAt: T1, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Thèse', parentId: null },
+      { id: 'F2', createdAt: T1, updatedAt: T2, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Chapitre 3', parentId: 'F1' },
+      { id: 'F3', createdAt: T1, updatedAt: T3, deleted: true, deviceId: 'dev-b', author: 'Ben', name: 'Old', parentId: null },
+    ],
   };
   const text = JSON.stringify(buildBackup({
     tools: data.tools, templates: data.templates, runs: data.runs, measurements: data.measurements, events: data.events,
-    photos: data.photos, settings, appVersion: '1.0.0', exportedAt: EXPORTED,
+    photos: data.photos, projects: data.projects, folders: data.folders, settings, appVersion: '1.0.0', exportedAt: EXPORTED,
   }));
   const plan = planImport(emptyDb(), JSON.parse(text), []);
   assert.deepEqual(plan.errors, []);
   for (const s of DATA_STORES) {
-    assert.deepEqual(plan.put[s], data[s], `${s} differ after the round trip`);
+    // As stored: records written before a field existed get its empty default (runs: steps, projects).
+    assert.deepEqual(plan.put[s], data[s].map((r) => (s === 'photos' ? r : normalizeRecord(s, r))), `${s} differ after the round trip`);
     assert.deepEqual(plan.counts[s], { added: data[s].length, updated: 0, skipped: 0, invalid: 0 }, s);
   }
   assert.deepEqual(plan.materials, settings.materials);

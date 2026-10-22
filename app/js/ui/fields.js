@@ -7,9 +7,11 @@
  */
 import { h, on, uid } from './dom.js';
 import { icon } from './icons.js';
-import { segmented, helpToggle } from './components.js';
+import { segmented, helpToggle, labelRow } from './components.js';
 import { parseNumber, stepValue } from '../core/format.js';
 import { fieldHelp } from '../core/field-help.js';
+import { isSet } from '../core/values.js';
+import { HELP } from '../core/app-help.js';
 import { splitMinSec } from '../core/time.js';
 import { UI } from '../config.js';
 
@@ -55,15 +57,17 @@ export function holdRepeat(btn, fn) {
 
 /**
  * Numeric input between − and + buttons. Typing works too (decimal comma
- * accepted). An empty value is null.
+ * accepted). An empty value is null. A ± button flips the sign when the
+ * value may be negative (`signed`; by default when there is no minimum or
+ * it is below 0), since phone number pads have no minus key.
  * @param {{id?: string, label: string, value: number | null, step?: number, min?: number, max?: number,
- *   placeholder?: number | null, onChange: (v: number | null) => void}} o
+ *   placeholder?: number | null, signed?: boolean, onChange: (v: number | null) => void}} o
  * @returns {Control & {input: HTMLInputElement}}
  */
 export function numberStepper(o) {
   const step = o.step && o.step > 0 ? o.step : 1;
   let current = o.value ?? null;
-  const allowNegative = o.min === undefined || o.min < 0;
+  const allowNegative = o.signed ?? (o.min === undefined || o.min < 0);
   const input = /** @type {HTMLInputElement} */ (h('input', {
     id: o.id, class: 'input stepper-input', type: 'text', inputmode: 'decimal', autocomplete: 'off',
     enterkeyhint: 'done', value: current === null ? '' : String(current),
@@ -263,7 +267,7 @@ export function renderField(f, value, onChange, opts = {}) {
   let control;
   if (f.type === 'number') {
     control = numberStepper({
-      id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max,
+      id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max, signed: signedField(f),
       placeholder: typeof opts.placeholder === 'number' ? opts.placeholder : null, onChange,
     });
   } else if (f.type === 'duration') {
@@ -290,16 +294,59 @@ export function renderField(f, value, onChange, opts = {}) {
     head, help.note, control.el, opts.note ? h('p', { class: 'field-note' }, opts.note) : null);
 }
 
+/** A template with at least this many gas lines shows only the ones in use, with the rest one tap away. */
+const COLLAPSE_GASES_FROM = 4;
+
 /**
- * Render a list of fields into one container.
+ * Render a list of fields into one container. With `collapseGases`, a
+ * template with several gas lines shows only the gases that have a value;
+ * the others wait behind a row of "+ gas" buttons. Every field is rendered
+ * once and only hidden, so revealing one never loses what was typed.
  * @param {FieldSpec[]} fields
  * @param {Record<string, FieldValue>} values
  * @param {(key: string, v: FieldValue) => void} onChange
- * @param {{clearable?: boolean, notes?: Record<string, string | Node>, template?: TemplateLike | null}} [opts]
+ * @param {{clearable?: boolean, notes?: Record<string, string | Node>, template?: TemplateLike | null,
+ *   collapseGases?: boolean}} [opts]
  * @returns {HTMLElement}
  */
 export function renderFields(fields, values, onChange, opts = {}) {
-  return h('div', { class: 'fields' }, fields.map((f) => renderField(f, values[f.key], (v) => onChange(f.key, v), {
+  const nodes = fields.map((f) => renderField(f, values[f.key], (v) => onChange(f.key, v), {
     clearable: opts.clearable, note: opts.notes ? opts.notes[f.key] : undefined, template: opts.template,
-  })));
+  }));
+  const gases = fields.filter((f) => f.chemistry && f.type === 'number');
+  const unused = opts.collapseGases && gases.length >= COLLAPSE_GASES_FROM
+    ? gases.filter((f) => !f.required && !isSet(values[f.key])) : [];
+  if (!unused.length) return h('div', { class: 'fields' }, nodes);
+  const byKey = new Map(fields.map((f, i) => [f.key, nodes[i]]));
+  for (const f of unused) /** @type {HTMLElement} */ (byKey.get(f.key)).hidden = true;
+  const labelId = uid('gases');
+  const chips = h('div', { class: 'picker', role: 'group', 'aria-labelledby': labelId }, unused.map((f) => {
+    const chip = h('button', {
+      type: 'button', class: 'pick-btn', 'aria-label': `Add the ${f.label} line`,
+      onClick: () => {
+        const node = /** @type {HTMLElement} */ (byKey.get(f.key));
+        node.hidden = false;
+        chip.remove();
+        if (!chips.childElementCount) adder.remove();
+        /** @type {HTMLElement | null} */ (node.querySelector('input'))?.focus();
+      },
+    }, icon('plus', { size: 18 }), f.label);
+    return chip;
+  }));
+  const adder = h('div', { class: 'field gas-add' },
+    labelRow(h('span', { class: 'label', id: labelId }, `Other gas lines (${unused.length} not in use)`), 'Other gas lines', HELP.gasLines), chips);
+  return h('div', { class: 'fields' }, nodes, adder);
+}
+
+/**
+ * Whether a number field takes negative values, so shows a ± button: when
+ * its minimum is below 0, or, without a minimum, when it holds a quantity
+ * that can be negative: a temperature in °C, a stress, a voltage, a focus
+ * or an offset. A rate, thickness or pressure never shows one.
+ * @param {FieldSpec} f
+ * @returns {boolean}
+ */
+export function signedField(f) {
+  if (typeof f.min === 'number') return f.min < 0;
+  return ['°C', 'MPa', 'V'].includes(String(f.unit || '').trim()) || /focus|offset|stress|bias/i.test(f.key);
 }

@@ -8,7 +8,7 @@
 import { h, append, fill } from '../ui/dom.js';
 import { button, linkButton, section, chip, emptyState, toggle, toast, labelRow } from '../ui/components.js';
 import { renderFields, numberStepper } from '../ui/fields.js';
-import { toolTiles, templateTiles, materialPicker } from '../ui/pickers.js';
+import { toolTiles, templateTiles, materialPicker, mineOf } from '../ui/pickers.js';
 import { recipeButton, fillMessage } from '../ui/recipes.js';
 import { createAutosave } from '../ui/autosave.js';
 import { navigate } from '../router.js';
@@ -18,7 +18,7 @@ import {
 } from '../data/repo.js';
 import { recipesForTool } from '../data/recipes.js';
 import { fieldsWithRole, isSet } from '../core/run-draft.js';
-import { recipeFill, undoFill, recipeFilm } from '../core/recipes.js';
+import { recipeFill, undoFill, recipeMaterial, recipesFor } from '../core/recipes.js';
 import { formatDay } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
@@ -34,6 +34,7 @@ import { HELP } from '../core/app-help.js';
  * @property {boolean} includeSiblings
  * @property {{runId: string, startedAt: string} | null} copiedFrom
  * @property {string} [recipe] the LNF recipe that filled the inputs; Log this run keeps it
+ * @property {number} [recipeStep] the recipe step those inputs came from, which becomes the logged run's main step
  */
 
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
@@ -49,7 +50,8 @@ export async function render(ctx) {
 /** @param {import('../router.js').ViewContext} ctx */
 async function pickTool(ctx) {
   ctx.setTitle('Look up');
-  const [tools, templates, runs, draft] = await Promise.all([listTools(), listTemplates(), listRuns(), getDraft(LOOKUP_DRAFT)]);
+  const [tools, templates, runs, draft, settings] = await Promise.all([listTools(), listTemplates(), listRuns(), getDraft(LOOKUP_DRAFT), getSettings()]);
+  const lastUsed = lastUsedByTool(runs);
   const usable = tools.filter((t) => templates.some((x) => x.toolId === t.id && x.fields.some((f) => f.role === 'input')));
   const last = draft ? usable.find((t) => t.id === draft.toolId) : null;
   append(ctx.root, [
@@ -58,7 +60,7 @@ async function pickTool(ctx) {
       linkButton(`Last lookup: ${last.shortName || last.name}`, `#/lookup/${draft.toolId}/${draft.templateId}`, { icon: 'search' }),
       linkButton('Last results', '#/results', { icon: 'chart' })) : null,
     usable.length
-      ? toolTiles({ tools: usable, lastUsed: lastUsedByTool(runs), onPick: (t) => navigate(`/lookup/${t.id}`) })
+      ? toolTiles({ tools: usable, lastUsed, mine: mineOf(settings.myTools, lastUsed), onPick: (t) => navigate(`/lookup/${t.id}`) })
       : emptyState('No tools with input fields yet.', linkButton('Set up tools', '#/settings/tools')),
   ]);
 }
@@ -69,7 +71,7 @@ async function pickTool(ctx) {
  */
 async function pickTemplate(ctx, toolId) {
   const [tool, templates] = await Promise.all([getTool(toolId), listTemplates(toolId)]);
-  ctx.setTitle(tool ? `Look up · ${tool.shortName || tool.name}` : 'Look up');
+  ctx.setTitle('Look up');
   const usable = templates.filter((t) => t.fields.some((f) => f.role === 'input'));
   if (usable.length === 1) {
     navigate(`/lookup/${toolId}/${usable[0].id}`, { replace: true });
@@ -110,15 +112,16 @@ async function freshQuery(toolId, template) {
  * @param {string} templateId
  */
 async function form(ctx, toolId, templateId) {
-  const [tool, template, settings, runs, saved, recipes] = await Promise.all([
-    getTool(toolId), getTemplate(templateId), getSettings(), listRuns(), getDraft(LOOKUP_DRAFT), recipesForTool(toolId),
+  const [tool, template, settings, runs, saved, allRecipes, toolTemplates] = await Promise.all([
+    getTool(toolId), getTemplate(templateId), getSettings(), listRuns(), getDraft(LOOKUP_DRAFT), recipesForTool(toolId), listTemplates(toolId),
   ]);
   if (!tool || !template || template.toolId !== toolId) {
     ctx.setTitle('Look up');
     append(ctx.root, [emptyState('This tool or template no longer exists.', linkButton('Choose a tool', '#/lookup'))]);
     return;
   }
-  ctx.setTitle(`Look up · ${tool.shortName || tool.name}`);
+  ctx.setTitle('Look up');
+  const recipes = recipesFor(allRecipes, template, toolTemplates);
   /** @type {LookupDraft} */
   let q = saved && saved.toolId === toolId && saved.templateId === templateId ? saved : await freshQuery(toolId, template);
   const autosave = createAutosave(() => saveDraft(LOOKUP_DRAFT, q));
@@ -128,18 +131,19 @@ async function form(ctx, toolId, templateId) {
   };
   const inputs = fieldsWithRole(template, ['input']);
   const body = h('div', { class: 'view' });
-  // An LNF recipe fills the planned inputs (inputs only: context is never matched); Undo takes back
-  // only what it changed. Gases it clears stay as null, so Log this run does not bring back the last
-  // run's gases.
+  // An LNF recipe fills the planned inputs (inputs only: context is never matched), and the material
+  // when none is set and the recipe names exactly one listed material. Undo takes back only what it
+  // changed. Gases it clears stay as null, so Log this run does not bring back the last run's gases.
   /** @type {{close: () => void} | null} */
   let undoToast = null;
   const useRecipe = (/** @type {WikiRecipe} */ r, /** @type {number} */ step) => {
-    const before = { recipe: q.recipe || '', params: q.params, material: q.material, copiedFrom: q.copiedFrom };
+    const before = { recipe: q.recipe || '', recipeStep: q.recipeStep, params: q.params, material: q.material, copiedFrom: q.copiedFrom };
     const f = recipeFill(r, template, { step, roles: ['input'] });
-    change({ recipe: r.name, params: { ...q.params, ...f.values }, material: recipeFilm(r) || q.material, copiedFrom: null });
+    const material = q.material ? null : recipeMaterial(r, settings.materials);
+    change({ recipe: r.name, recipeStep: step, params: { ...q.params, ...f.values }, material: material || q.material, copiedFrom: null });
     draw();
     undoToast?.close();
-    undoToast = toast(fillMessage(r, f), {
+    undoToast = toast(`${fillMessage(r, f)}${material ? ` Material set to ${material}.` : ''}`, {
       action: {
         label: 'Undo',
         fn: () => {
@@ -151,21 +155,27 @@ async function form(ctx, toolId, templateId) {
     });
   };
   const draw = () => fill(body,
-    h('p', { class: 'muted' }, `${template.name}. Every field is optional: clear a field to leave it out of the match.`),
+    h('p', { class: 'muted' }, h('strong', null, `${tool.shortName || tool.name} · ${template.name}. `), 'Every field is optional: clear a field to leave it out of the match.'),
     q.copiedFrom ? h('div', null, chip(`Prefilled from ${formatDay(q.copiedFrom.startedAt, Date.now())} run`, {
-      icon: 'copy', actionLabel: 'Clear all', onClick: () => { change({ params: {}, copiedFrom: null, recipe: '' }); draw(); },
+      icon: 'copy', actionLabel: 'Clear all', onClick: () => { change({ params: {}, copiedFrom: null, recipe: '', recipeStep: undefined }); draw(); },
     })) : null,
     section('Planned inputs',
       recipes.length || q.recipe ? h('div', { class: 'row-wrap' },
         recipeButton({
           title: `${tool.shortName || tool.name} recipes`, recipes, template, useLabel: 'Fill planned inputs', roles: ['input'], onUse: useRecipe,
         }),
-        q.recipe ? chip(`Recipe: ${q.recipe}`, { icon: 'book', actionLabel: 'Clear recipe', onClick: () => { change({ recipe: '' }); draw(); } }) : null) : null,
-      renderFields(inputs, q.params, (k, v) => change({ params: { ...q.params, [k]: v } }), { clearable: true, template })),
+        q.recipe ? chip(`Recipe: ${q.recipe}`, { icon: 'book', actionLabel: 'Clear recipe', onClick: () => { change({ recipe: '', recipeStep: undefined }); draw(); } }) : null) : null,
+      renderFields(inputs, q.params, (k, v) => change({ params: { ...q.params, [k]: v } }), { clearable: true, template, collapseGases: true })),
     section('Sample',
       materialPicker({
         label: 'Material', value: q.material, options: materialsByRecency(settings.materials, runs, 'material'),
-        onChange: (v) => change({ material: v }), help: HELP.material,
+        onChange: (v) => {
+          change({ material: v });
+          draw();
+          // The form redrew under the picker: keep focus in it.
+          /** @type {HTMLElement | null} */ (body.querySelector('.picker-field .picker button'))?.focus();
+        },
+        help: HELP.material,
       }),
       h('div', { class: 'field' },
         labelRow(h('label', { class: 'label', for: 'lookup-target' }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),
@@ -181,7 +191,8 @@ async function form(ctx, toolId, templateId) {
         checked: q.strictChemistry, onChange: (v) => change({ strictChemistry: v }),
       }),
       toggle({
-        label: 'Same material', hint: 'Only runs on the same material.', help: HELP.sameMaterial,
+        label: 'Same material', help: HELP.sameMaterial,
+        hint: q.material ? `Only runs on ${q.material}.` : 'No material is set above, so runs on any material count.',
         checked: q.sameMaterial, onChange: (v) => change({ sameMaterial: v }),
       }),
       toggle({

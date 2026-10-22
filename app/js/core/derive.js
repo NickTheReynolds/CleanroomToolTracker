@@ -261,6 +261,55 @@ export function computeDerived(run, template, measurements) {
 }
 
 /**
+ * The duration field a rate is waiting for: the run has the measurements
+ * the rate needs, but its time is empty, not a number or 0.
+ * @param {Run} run
+ * @param {Template | null | undefined} template
+ * @param {Measurement[]} measurements the run's measurements
+ * @returns {string | null} the time field's key; null when no rate waits on the time
+ */
+export function missingTimeField(run, template, measurements) {
+  if (!template) return null;
+  for (const spec of template.derived || []) {
+    if (!DERIVED_INFO[spec.fn] || !DERIVED_INFO[spec.fn].usesTime) continue;
+    const pp = prePost(measurements || [], run, run.material, spec.kind || 'thickness', spec.fn !== 'etchRate');
+    if ('missing' in pp || !('missing' in processSeconds(spec, run, template))) continue;
+    const key = spec.timeField || (template.fields || []).find((f) => f.type === 'duration')?.key;
+    if (key) return key;
+  }
+  return null;
+}
+
+/**
+ * What an unfinished run is waiting for, as words that follow "This run":
+ * "needs post measurement", "needs time", "needs results", "cannot work out
+ * Etch rate: time must be greater than 0" when the main result's formula
+ * has what it needs but cannot use it, or "ready to mark complete" once its
+ * main result (or, without one, any result) has a value.
+ * @param {Run} run
+ * @param {Template | null | undefined} template
+ * @param {Measurement[]} measurements the run's measurements
+ * @returns {string}
+ */
+export function waitingFor(run, template, measurements) {
+  if (!template) return 'needs a template';
+  if (run.status === 'draft') return 'needs its inputs';
+  const results = run.results || {};
+  const outputs = (template.fields || []).filter((f) => f.role === 'output');
+  const has = (/** @type {string} */ k) => results[k] !== undefined && results[k] !== null && results[k] !== '';
+  const main = template.primaryOutput;
+  if (main ? has(main) : outputs.some((f) => has(f.key))) return 'ready to mark complete';
+  const { missing } = computeDerived(run, template, measurements || []);
+  if (main && missing[main]) {
+    const why = missing[main];
+    if (why.startsWith('needs ')) return why.replace(/^needs (\S+)$/, (m, w) => `needs ${w.toLowerCase()}`);
+    const label = outputs.find((f) => f.key === main)?.label || main;
+    return `cannot work out ${label}: ${why}`;
+  }
+  return outputs.length ? 'needs results' : 'ready to mark complete';
+}
+
+/**
  * Recompute derived outputs into a copy of run.results. A value present in
  * results but absent from derivedKeys was entered by hand and wins; derived
  * values that can no longer be computed are removed.

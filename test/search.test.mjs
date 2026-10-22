@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  filterRuns, distinctMaterials, primarySeries, normalizeFilters, hasFilters, EMPTY_FILTERS,
+  filterRuns, distinctMaterials, primarySeries, normalizeFilters, hasFilters, EMPTY_FILTERS, variedInputs, scatterSeries,
 } from '../app/js/core/search.js';
 import { template, runA, runB, runC } from './fixtures.mjs';
 
@@ -233,4 +233,21 @@ test('primarySeries: complete, non-deleted runs of the template with a numeric v
   assert.deepEqual(primarySeries([runA], { ...template, primaryOutput: null }), []);
   assert.deepEqual(primarySeries([runA], null), []);
   assert.deepEqual(primarySeries([], template), []);
+});
+
+test('History filters by project; the inputs worth plotting and their points', () => {
+  const a = run('a', { projects: [{ projectId: 'p1', waferIds: [], stepId: null }] });
+  const b = run('b', { projects: [{ projectId: 'p2', waferIds: [], stepId: null }, { projectId: 'p1', waferIds: ['w'], stepId: null }] });
+  const c = run('c');
+  assert.deepEqual(filterRuns([a, b, c], { projectId: 'p1' }).map((r) => r.id).sort(), ['a', 'b']);
+  assert.deepEqual(filterRuns([a, b, c], { projectId: 'p3' }), []);
+  assert.equal(normalizeFilters({}).projectId, '');
+  assert.ok(hasFilters({ projectId: 'p1' }));
+  const varied = variedInputs(template, [runA, runB, runC]);
+  assert.deepEqual(varied.map((f) => f.key), ['icpPower', 'pressure', 'chf3'], 'o2 is 0 in every run');
+  assert.deepEqual(variedInputs(template, [runA, { ...runB, status: 'open' }, { ...runC, status: 'draft' }]), [],
+    'inputs that vary only in open or draft runs are not offered');
+  assert.deepEqual(variedInputs(template, [runA, { ...runB, deleted: true }]), [], 'nor in deleted runs');
+  const pts = scatterSeries([runA, runB, runC, { ...runA, id: 'x', deleted: true }], 'icpPower', 'etchRate');
+  assert.deepEqual(pts.map((p) => [p.x, p.y]), [[400, 85], [450, 94], [400, 71]]);
 });

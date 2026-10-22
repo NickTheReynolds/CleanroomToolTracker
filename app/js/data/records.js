@@ -23,6 +23,7 @@ import { toMs } from '../core/time.js';
  * @property {string | null} firstRunAt
  * @property {string} publicUrl published HTTPS address, for the install QR code
  * @property {import('../sync/sync.js').SyncConfig | null} sync GitHub sync settings (this device only)
+ * @property {string[]} myTools ids of the tools this person uses; tool pickers show them first
  */
 
 /** @type {Readonly<Settings>} */
@@ -39,12 +40,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   firstRunAt: null,
   publicUrl: '',
   sync: null,
+  myTools: [],
 });
 
 /** Settings that belong to this device or person and stay out of backups. */
 export const DEVICE_SETTINGS = Object.freeze([
   'userName', 'deviceName', 'deviceId', 'theme', 'lastExportAt', 'iosHintDismissed',
-  'persistAsked', 'firstRunAt', 'sync',
+  'persistAsked', 'firstRunAt', 'sync', 'myTools',
 ]);
 
 export class ValidationError extends Error {

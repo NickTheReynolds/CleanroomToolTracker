@@ -4,14 +4,16 @@
  * - 1: generic example tools (seed-tools.js).
  * - 2: the LNF equipment list and materials taken from the public LNF wiki
  *   (seed-lnf.js), each tool with its own copy of its type's template.
+ * - 3: a second template for tools with two kinds of process (the
+ *   Plasmatherm 790's PECVD chamber).
  *
- * Fresh installs get version 2 directly. planSeedUpgrade() works out what an
- * older database needs. It only ever adds records that are missing, never
- * overwrites a record (so renames and template edits survive), and archives
- * example tools that were never used or edited.
+ * Fresh installs get the latest version directly. planSeedUpgrade() works
+ * out what an older database needs. It only ever adds records that are
+ * missing, never overwrites a record (so renames and template edits
+ * survive), and archives example tools that were never used or edited.
  */
 import { seedForType } from './seed-types.js';
-import { LNF_TOOLS, LNF_MATERIALS } from './seed-lnf.js';
+import { LNF_TOOLS, LNF_MATERIALS, LNF_EXTRA_TEMPLATES } from './seed-lnf.js';
 import { SEED_TIME, SEED_AUTHOR, SEED_TOOLS, SEED_MATERIALS } from './seed-tools.js';
 import { normText } from '../core/vocab.js';
 
@@ -33,6 +35,10 @@ export function lnfSeedRecords() {
       defaultTemplateId: template ? templateId : null, halfLifeDays: null,
       notes: 'From the LNF wiki equipment list. Adjust its template to match how you use it.',
     });
+  }
+  for (const [toolId, templateId, type, gases, name] of LNF_EXTRA_TEMPLATES) {
+    const { template } = seedForType(type, gases);
+    if (template) templates.push({ ...base, ...structuredClone(template), name, id: templateId, toolId });
   }
   return { tools, templates };
 }
@@ -63,25 +69,31 @@ export function seedMaterials() {
 }
 
 /**
- * What an older database needs to reach SEED_VERSION.
+ * What an older database needs to reach SEED_VERSION. Missing LNF tools
+ * and templates are added at every step (a tombstone counts as present, so
+ * a deleted one stays deleted). Only the step from seed 1 to 2, which
+ * brought the LNF list, merges the LNF materials and archives unused
+ * example tools: later steps leave the materials list alone, so materials
+ * the person removed stay removed.
  * @param {{tools: any[], templates: any[], runs: any[], events: any[], materials: string[]}} existing
  *   all records, tombstones included, plus the current materials list
+ * @param {number} [from] the database's seed version (meta.seedVersion)
  * @returns {{tools: any[], templates: any[], archiveIds: string[], materials: string[]}}
- *   new tool and template records to add, example tools to archive, and the merged materials list
+ *   new tool and template records to add, example tools to archive, and the materials list
  */
-export function planSeedUpgrade(existing) {
+export function planSeedUpgrade(existing, from = 1) {
   const toolIds = new Set(existing.tools.map((t) => t.id));
   const templateIds = new Set(existing.templates.map((t) => t.id));
   const seed = lnfSeedRecords();
   const used = new Set([...existing.runs.map((r) => r.toolId), ...existing.events.map((e) => e.toolId)]);
   const examples = new Set(SEED_TOOLS.map((t) => t.id));
-  const archiveIds = existing.tools
+  const archiveIds = from >= 2 ? [] : existing.tools
     .filter((t) => examples.has(t.id) && !t.deleted && t.active && t.updatedAt === SEED_TIME && !used.has(t.id))
     .map((t) => t.id);
   return {
     tools: seed.tools.filter((t) => !toolIds.has(t.id)),
     templates: seed.templates.filter((t) => !templateIds.has(t.id)),
     archiveIds,
-    materials: mergeMaterialLists(existing.materials, LNF_MATERIALS),
+    materials: from >= 2 ? [...existing.materials] : mergeMaterialLists(existing.materials, LNF_MATERIALS),
   };
 }

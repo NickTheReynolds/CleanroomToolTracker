@@ -1,9 +1,9 @@
 // @ts-check
 /**
- * Tool detail: the tool's facts, its LNF wiki recipes, its event timeline,
- * one chart per template of the primary output over time (tool events as
- * markers; runs from before the latest major event drawn hollow) and its
- * latest runs.
+ * Tool detail: the tool's facts, one chart per template of the primary
+ * output over time (tool events as markers; runs from before the latest
+ * major event drawn hollow) and against any input that varies, its event
+ * timeline, its LNF recipes and its latest runs.
  */
 import { h, append } from '../ui/dom.js';
 import { button, linkButton, section, listRow, badge, emptyState, toast } from '../ui/components.js';
@@ -11,11 +11,15 @@ import { recipeList, fillMessage } from '../ui/recipes.js';
 import { toolCard } from '../ui/tool-card.js';
 import { runList, lookups } from '../ui/run-list.js';
 import { lineChart } from '../ui/chart.js';
+import { inputScatter } from '../ui/scatter.js';
 import { navigate } from '../router.js';
-import { getTool, listTemplates, listEvents, runsForTool, getSettings, lastRunFor, startLogDraft } from '../data/repo.js';
+import {
+  getTool, listTemplates, listEvents, runsForTool, getSettings, saveSettings, lastRunFor, startLogDraft,
+} from '../data/repo.js';
 import { recipesForTool } from '../data/recipes.js';
 import { blankDraft, prefillFrom } from '../core/run-draft.js';
-import { recipeFill, applyFill, recipeFilm } from '../core/recipes.js';
+import { templateForRecipe } from '../core/recipes.js';
+import { recipeForForm } from '../core/run-steps.js';
 import { uuid } from '../core/ids.js';
 import { primarySeries } from '../core/search.js';
 import { CATEGORY_LABELS, EVENT_LABELS, EVENT_SHORT } from '../core/vocab.js';
@@ -56,22 +60,29 @@ function factsCard(tool, defaultHalfLife) {
 }
 
 /**
- * "Log run with this recipe": a Log run form with the tool's default
- * template, prefilled from the last run, with the recipe's values on top.
+ * "Log run with this recipe": a Log run form with the template the recipe
+ * belongs to (a deposition recipe of a dual-chamber tool opens its PECVD
+ * template), prefilled from the last run, with the recipe on top: every
+ * step's values, and the material when the form has none and the recipe
+ * names exactly one listed material.
  * @param {Tool} tool
- * @param {Template | null} tpl
+ * @param {Template[]} templates the tool's templates
+ * @param {string[]} materials the materials list
  * @returns {(r: WikiRecipe, step: number) => Promise<void>}
  */
-function logWithRecipe(tool, tpl) {
+function logWithRecipe(tool, templates, materials) {
   return async (r, step) => {
+    const tpl = templateForRecipe(r, templates, tool.defaultTemplateId);
     if (!tpl) { navigate(`/log/${tool.id}`); return; }
     let d = blankDraft({ runId: uuid(), toolId: tool.id, templateId: tpl.id, now: new Date().toISOString() });
     const last = await lastRunFor(tool.id, tpl.id);
     if (last) d = prefillFrom(d, last, tpl);
-    const f = recipeFill(r, tpl, { step });
-    d = { ...d, recipe: r.name, params: applyFill(d.params, f.values), material: recipeFilm(r) || d.material };
+    // The last run's steps come along only when it used this recipe, never another recipe's.
+    if (last && (last.recipe || '') !== r.name) d = { ...d, steps: [] };
+    const res = recipeForForm(d, r, tpl, step, materials);
+    d = { ...d, ...res.patch, touched: true };
     if (await startLogDraft(d)) toast('Your other unsaved run was kept in Open runs as a draft.');
-    toast(fillMessage(r, f));
+    toast(`${fillMessage(r, res.fill)}${res.material ? ` Material set to ${res.material}.` : ''}`);
     navigate(`/log/${encodeURIComponent(tool.id)}/${encodeURIComponent(tpl.id)}`);
   };
 }
@@ -81,12 +92,14 @@ function logWithRecipe(tool, tpl) {
  * @param {Tool} tool
  * @param {Template | null} tpl the tool's default template
  * @param {WikiRecipe[]} recipes
+ * @param {(r: WikiRecipe, step: number) => Promise<void>} onUse
+ * @param {(r: WikiRecipe) => Template | null} templateFor the template each recipe opens
  * @returns {HTMLElement | null}
  */
-function recipesSection(tool, tpl, recipes) {
+function recipesSection(tool, tpl, recipes, onUse, templateFor) {
   if (!recipes.length) return null;
   const opts = {
-    title: `${tool.shortName || tool.name} recipes`, recipes, template: tpl, useLabel: 'Log run with this recipe', onUse: logWithRecipe(tool, tpl),
+    title: `${tool.shortName || tool.name} recipes`, recipes, template: tpl, templateFor, useLabel: 'Log run with this recipe', onUse, allSteps: true,
   };
   const list = recipeList({ ...opts, limit: RECIPES_SHOWN });
   const showAll = recipes.length > RECIPES_SHOWN ? button(`Show all ${recipes.length} recipes`, {
@@ -150,12 +163,13 @@ function legend(points, latest, hasMarkers, now) {
 }
 
 /**
- * One chart per template with a primary output, with the tool's events.
+ * Per template with a primary output: its chart over time, with the
+ * tool's events, and against the inputs that vary.
  * @param {Template[]} templates
  * @param {Run[]} runs
  * @param {ToolEvent[]} events newest first
  * @param {number} now
- * @returns {HTMLElement[]}
+ * @returns {import('../ui/dom.js').Child[]}
  */
 function chartSections(templates, runs, events, now) {
   const charted = templates.filter((t) => t.primaryOutput);
@@ -180,7 +194,15 @@ function chartSections(templates, runs, events, now) {
       points, events: markers, unit: (field && field.unit) || '', yLabel: name, ariaLabel: `${name} on ${t.name} over time`,
       onSelect: (p) => { location.hash = `#/run/${encodeURIComponent(String(p.id))}`; },
     });
-    return section(`${t.name}: ${name}`, chart, legend(points, latest, Number(chart.dataset.events) > 0, now));
+    const own = runs.filter((r) => r.templateId === t.id);
+    return [
+      section(`${t.name}: ${name}`, chart, legend(points, latest, Number(chart.dataset.events) > 0, now)),
+      field ? inputScatter({
+        runs: own, template: t, output: field, onSelect: (runId) => navigate(`/run/${runId}`),
+        fade: (runId) => (byId.get(runId) && toMs(/** @type {Run} */ (byId.get(runId)).startedAt) < cut ? 0.5 : 0),
+        note: `Every complete ${t.name} run on this tool. Other settings differ from run to run, so read the line as a hint, not a law. Faded points are runs from before the latest major event. Tap a point to open the run.`,
+      }) : null,
+    ];
   });
 }
 
@@ -196,7 +218,7 @@ function runsSection(toolId, runs, L) {
   if (!n) return section('Recent runs', emptyState('No runs on this tool yet.'));
   return section('Recent runs',
     h('p', { class: 'muted small' }, n > RUNS_SHOWN ? `The latest ${RUNS_SHOWN} of ${n} runs.` : `${n} run${n === 1 ? '' : 's'}, newest first.`),
-    runList(runs.slice(0, RUNS_SHOWN), L),
+    runList(runs.slice(0, RUNS_SHOWN), L, { onTool: true }),
     h('div', { class: 'row-wrap' }, linkButton('All runs in History', `#/history?tool=${encodeURIComponent(toolId)}`, { icon: 'history' })));
 }
 
@@ -214,16 +236,27 @@ export async function render(ctx) {
   ]);
   const L = lookups([tool], templates);
   const tpl = templates.find((t) => t.id === tool.defaultTemplateId) || templates[0] || null;
-  ctx.setTitle(tool.name);
+  const onUse = logWithRecipe(tool, templates, settings.materials);
+  const templateFor = (/** @type {WikiRecipe} */ r) => templateForRecipe(r, templates, tool.defaultTemplateId);
+  ctx.setTitle(tool.shortName || tool.name);
+  ctx.root.classList.add('view-wide');
   append(ctx.root, [
     toolCard({
-      tool, subtitle: CATEGORY_LABELS[tool.category] || tool.category, recipes, template: tpl,
-      useLabel: 'Log run with this recipe', onUse: logWithRecipe(tool, tpl),
+      tool, subtitle: CATEGORY_LABELS[tool.category] || tool.category, recipes, template: tpl, templateFor,
+      useLabel: 'Log run with this recipe', onUse, allSteps: true,
+      starred: (settings.myTools || []).includes(tool.id),
+      onStar: async (on) => {
+        const mine = new Set((await getSettings()).myTools || []);
+        if (on) mine.add(tool.id);
+        else mine.delete(tool.id);
+        await saveSettings({ myTools: [...mine] });
+        toast(on ? `${tool.shortName || tool.name} is now one of your tools.` : `${tool.shortName || tool.name} is no longer one of your tools.`);
+      },
     }),
     factsCard(tool, withTuning(settings.tuning).HALF_LIFE_DAYS),
-    recipesSection(tool, tpl, recipes),
-    eventsSection(id, events, L.now),
     chartSections(templates, runs, events, L.now),
+    eventsSection(id, events, L.now),
+    recipesSection(tool, tpl, recipes, onUse, templateFor),
     runsSection(id, runs, L),
   ]);
   if (tool.active) {

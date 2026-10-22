@@ -3,7 +3,7 @@
  * Thin promise wrapper around IndexedDB: open and upgrade the database and
  * run transactions. Everything else goes through records.js and repo.js.
  */
-import { DB_NAME, DB_VERSION, MIGRATIONS } from './schema.js';
+import { DB_NAME, DB_VERSION, DB_LAYOUT } from './schema.js';
 
 /** @type {Promise<IDBDatabase> | null} */
 let dbPromise = null;
@@ -46,7 +46,7 @@ export function openDb() {
     r.onupgradeneeded = (e) => {
       const db = r.result;
       const tx = /** @type {IDBTransaction} */ (r.transaction);
-      for (const m of MIGRATIONS) {
+      for (const m of DB_LAYOUT) {
         if (m.version <= e.oldVersion || m.version > DB_VERSION) continue;
         for (const [name, def] of Object.entries(m.stores)) {
           const store = db.objectStoreNames.contains(name)

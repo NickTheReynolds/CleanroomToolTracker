@@ -23,11 +23,12 @@ import { isNum } from './stats.js';
  * @property {string} from first local day "YYYY-MM-DD", inclusive
  * @property {string} to last local day "YYYY-MM-DD", inclusive (the whole day)
  * @property {string} q keywords: every whitespace-separated word must appear in the notes, recipe or tags
+ * @property {string} projectId only runs that belong to this project
  */
 
 /** Filters that match every run. */
 export const EMPTY_FILTERS = Object.freeze({
-  toolId: '', templateId: '', material: '', status: '', from: '', to: '', q: '',
+  toolId: '', templateId: '', material: '', status: '', from: '', to: '', q: '', projectId: '',
 });
 
 const KEYS = /** @type {(keyof RunFilters)[]} */ (Object.keys(EMPTY_FILTERS));
@@ -118,6 +119,7 @@ export function filterRuns(runs, filters, lookups) {
     if (f.toolId && r.toolId !== f.toolId) return false;
     if (f.templateId && r.templateId !== f.templateId) return false;
     if (f.status && r.status !== f.status) return false;
+    if (f.projectId && !(Array.isArray(r.projects) && r.projects.some((l) => l && l.projectId === f.projectId))) return false;
     if (material && normText(r.material) !== material) return false;
     if (from !== null || end !== null) {
       const t = toMs(r.startedAt);
@@ -151,6 +153,43 @@ export function distinctMaterials(runs) {
     if (!cur || t > cur.t) seen.set(key, { name, t });
   }
   return [...seen.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v.name);
+}
+
+/**
+ * The numeric inputs of a template that take at least two different values
+ * across these runs' complete, non-deleted ones, most varied first: the
+ * inputs worth plotting a result against.
+ * @param {Template} template
+ * @param {readonly Run[]} runs
+ * @returns {import('./types.js').FieldSpec[]}
+ */
+export function variedInputs(template, runs) {
+  const done = runs.filter((r) => r && !r.deleted && r.status === 'complete');
+  return template.fields.filter((f) => f.role === 'input' && f.type === 'number')
+    .map((f) => ({ f, n: new Set(done.map((r) => (r.params ? r.params[f.key] : undefined)).filter(isNum)).size }))
+    .filter((x) => x.n >= 2)
+    .sort((a, b) => b.n - a.n)
+    .map((x) => x.f);
+}
+
+/**
+ * Points of one result against one input, for complete, non-deleted runs
+ * that have both as numbers.
+ * @param {readonly Run[]} runs
+ * @param {string} xKey input field key
+ * @param {string} yKey output field key
+ * @returns {{x: number, y: number, run: Run}[]}
+ */
+export function scatterSeries(runs, xKey, yKey) {
+  /** @type {{x: number, y: number, run: Run}[]} */
+  const out = [];
+  for (const r of runs) {
+    if (!r || r.deleted || r.status !== 'complete') continue;
+    const x = r.params ? r.params[xKey] : undefined;
+    const y = r.results ? r.results[yKey] : undefined;
+    if (isNum(x) && isNum(y)) out.push({ x, y, run: r });
+  }
+  return out;
 }
 
 /**

@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v1.3.0-dev';
+const CACHE_NAME = 'lnf-runlog-v1.4.0-dev';
 
 const ASSETS = [
   './',
@@ -18,6 +18,7 @@ const ASSETS = [
   'css/components.css',
   'css/forms.css',
   'css/chart.css',
+  'css/layout.css',
   'icons/icon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -46,6 +47,12 @@ const ASSETS = [
   'js/core/export-all.js',
   'js/core/field-help.js',
   'js/core/app-help.js',
+  'js/core/values.js',
+  'js/core/run-steps.js',
+  'js/core/projects.js',
+  'js/core/project-report.js',
+  'js/core/folders.js',
+  'js/core/metrology.js',
   'js/data/db.js',
   'js/data/schema.js',
   'js/data/records.js',
@@ -64,6 +71,8 @@ const ASSETS = [
   'js/data/lnf-recipes-dep.js',
   'js/data/lnf-recipes-other.js',
   'js/data/lnf-wiki.js',
+  'js/data/projects.js',
+  'js/data/folders.js',
   'js/sync/codec.js',
   'js/sync/github.js',
   'js/sync/plan.js',
@@ -87,6 +96,14 @@ const ASSETS = [
   'js/ui/qr.js',
   'js/ui/recipes.js',
   'js/ui/tool-card.js',
+  'js/ui/timer.js',
+  'js/ui/scatter.js',
+  'js/ui/project-picker.js',
+  'js/ui/run-steps.js',
+  'js/ui/export-flow.js',
+  'js/ui/project-card.js',
+  'js/ui/folder-picker.js',
+  'js/ui/run-table.js',
   'js/views/home.js',
   'js/views/settings.js',
   'js/views/settings-tools.js',
@@ -105,6 +122,10 @@ const ASSETS = [
   'js/views/tool-detail.js',
   'js/views/settings-sync.js',
   'js/views/settings-materials.js',
+  'js/views/my-tools.js',
+  'js/views/projects.js',
+  'js/views/project-detail.js',
+  'js/views/project-edit.js',
 ];
 
 /** @type {any} */

@@ -6,30 +6,39 @@
  */
 import {
   TOOL_CATEGORIES, TOOL_KINDS, PROCESS_TYPES, RUN_STATUSES, MEASUREMENT_KINDS, PHASES,
-  EVENT_TYPES, FIELD_TYPES, FIELD_ROLES,
+  EVENT_TYPES, FIELD_TYPES, FIELD_ROLES, PROJECT_STATUSES, WAFER_STATUSES,
 } from '../core/vocab.js';
 import { DERIVED_FUNCTIONS, DERIVED_INFO } from '../core/derive.js';
 import { isIsoDate } from '../core/time.js';
 
 export const DB_NAME = 'lnf-runlog';
-/** IndexedDB structural version (object stores and indexes). */
-export const DB_VERSION = 1;
-/** Record format version, stored in meta and in backups. */
+/**
+ * IndexedDB structural version (object stores and indexes): 2 added the
+ * projects store, 3 the folders that organise projects.
+ */
+export const DB_VERSION = 3;
+/**
+ * Record format version, stored in meta and in backups. Still 1: projects,
+ * their folders and the runs' steps and project links only add to the format, and older
+ * app versions keep fields they do not know and skip stores they do not
+ * know, so devices on different versions keep syncing.
+ */
 export const SCHEMA_VERSION = 1;
-/** Seed data version (meta.seedVersion): 1 = generic examples, 2 = the LNF equipment list. */
-export const SEED_VERSION = 2;
+/**
+ * Seed data version (meta.seedVersion): 1 = generic examples, 2 = the LNF
+ * equipment list, 3 = a PECVD template for the Plasmatherm 790's second chamber.
+ */
+export const SEED_VERSION = 3;
 /** Stores holding user records (meta excluded). */
-export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos']);
+export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos', 'projects', 'folders']);
 export const MAX_REQUIRED_FIELDS = 5;
 
 /**
- * Ordered migrations. `stores` lists object stores and indexes to create
- * when upgrading to `version`; `records` upgrades one record from the
- * previous version (used for older backups and in-place upgrades).
- * @type {ReadonlyArray<{version: number, stores: Record<string, {keyPath: string, indexes: [string, string | string[]][]}>,
- *   records: ((store: string, rec: any) => any) | null}>}
+ * Object stores and indexes, by the DB_VERSION that adds them (db.js
+ * creates them on upgrade).
+ * @type {ReadonlyArray<{version: number, stores: Record<string, {keyPath: string, indexes: [string, string | string[]][]}>}>}
  */
-export const MIGRATIONS = Object.freeze([
+export const DB_LAYOUT = Object.freeze([
   {
     version: 1,
     stores: {
@@ -44,8 +53,28 @@ export const MIGRATIONS = Object.freeze([
       photos: { keyPath: 'id', indexes: [['runId', 'runId']] },
       meta: { keyPath: 'key', indexes: [] },
     },
-    records: null,
   },
+  {
+    version: 2,
+    stores: {
+      projects: { keyPath: 'id', indexes: [['status', 'status']] },
+    },
+  },
+  {
+    version: 3,
+    stores: {
+      folders: { keyPath: 'id', indexes: [] },
+    },
+  },
+]);
+
+/**
+ * Ordered record migrations: `records` upgrades one record written by the
+ * previous SCHEMA_VERSION (used for older backups and in-place upgrades).
+ * @type {ReadonlyArray<{version: number, records: ((store: string, rec: any) => any) | null}>}
+ */
+export const MIGRATIONS = Object.freeze([
+  { version: 1, records: null },
 ]);
 
 /**
@@ -82,17 +111,36 @@ const DEFAULTS = {
   runs: {
     templateId: () => null, material: () => '', substrate: () => '', maskMaterial: () => '', status: () => 'open',
     endedAt: () => null, params: () => ({}), results: () => ({}), derivedKeys: () => [], targetThickness: () => null,
-    recipe: () => '', notes: () => '', tags: () => [], photoIds: () => [],
+    recipe: () => '', notes: () => '', tags: () => [], photoIds: () => [], steps: () => [], projects: () => [],
   },
   measurements: { metrologyToolId: () => null, kind: () => 'thickness', material: () => '', unit: () => '', points: () => [], notes: () => '' },
   events: { major: () => false, notes: () => '', type: () => 'other' },
   photos: { caption: () => '', width: () => 0, height: () => 0, blob: () => null },
+  projects: {
+    goal: () => '', status: () => 'active', endedAt: () => null, substrate: () => '', notes: () => '', wafers: () => [], steps: () => [],
+    folderId: () => null,
+  },
+  folders: { parentId: () => null },
+};
+
+/** Defaults inside the lists a record holds: a run's project links, a project's wafers and plan steps. */
+const NESTED = {
+  /** @param {any} l */
+  link: (l) => (isObj(l) ? { ...l, waferIds: isNullish(l.waferIds) ? [] : l.waferIds, stepId: isNullish(l.stepId) ? null : l.stepId } : l),
+  /** @param {any} w */
+  wafer: (w) => (isObj(w) ? { ...w, status: isNullish(w.status) ? 'active' : w.status, notes: isNullish(w.notes) ? '' : w.notes } : w),
+  /** @param {any} s */
+  step: (s) => (isObj(s) ? {
+    ...s, toolId: s.toolId ?? null, templateId: s.templateId ?? null, recipe: s.recipe ?? '', notes: s.notes ?? '',
+    doneAt: s.doneAt ?? null, skipped: s.skipped ?? false,
+  } : s),
 };
 
 /**
- * Fill missing optional fields with their defaults (a shallow copy).
- * Required fields such as ids and dates are never invented, except that a
- * missing createdAt copies updatedAt.
+ * Fill missing optional fields with their defaults (a shallow copy, with
+ * the entries of a run's project links and a project's wafers and plan
+ * steps completed too). Required fields such as ids and dates are never
+ * invented, except that a missing createdAt copies updatedAt.
  * @param {string} store
  * @param {any} rec
  * @returns {any}
@@ -108,6 +156,11 @@ export function normalizeRecord(store, rec) {
   }
   for (const [k, make] of Object.entries(DEFAULTS[store] || {})) {
     if (out[k] === undefined) out[k] = make();
+  }
+  if (store === 'runs' && Array.isArray(out.projects)) out.projects = out.projects.map(NESTED.link);
+  if (store === 'projects') {
+    if (Array.isArray(out.wafers)) out.wafers = out.wafers.map(NESTED.wafer);
+    if (Array.isArray(out.steps)) out.steps = out.steps.map(NESTED.step);
   }
   return out;
 }
@@ -213,6 +266,40 @@ function checkValues(obj, name, errs) {
   }
 }
 
+/**
+ * A run's steps: a list of {name, params}, exactly one of them the main
+ * step ({name, main: true}, whose values are the run's params), or empty.
+ * @param {any} steps
+ * @param {string[]} errs
+ */
+function checkSteps(steps, errs) {
+  if (!Array.isArray(steps)) { errs.push('steps must be a list'); return; }
+  steps.forEach((s, i) => {
+    if (!isObj(s) || !isStr(s.name)) { errs.push(`steps #${i + 1} must have a name`); return; }
+    if (s.main === true) { if (!isNullish(s.params) && !isObj(s.params)) errs.push(`steps #${i + 1}: params must be an object`); return; }
+    checkValues(s.params, `steps #${i + 1} params`, errs);
+  });
+  if (steps.length && steps.filter((s) => isObj(s) && s.main === true).length !== 1) errs.push('steps must have exactly one main step');
+}
+
+/**
+ * A list of objects with unique ids, each checked by `check`.
+ * @param {any} items
+ * @param {string} what "wafer", "step"
+ * @param {string[]} errs
+ * @param {(item: any) => string[]} check problems of one item ("" for none)
+ */
+function checkList(items, what, errs, check) {
+  if (!Array.isArray(items)) { errs.push(`${what}s must be a list`); return; }
+  const ids = new Set();
+  items.forEach((x, i) => {
+    if (!isObj(x) || !isStr(x.id) || !x.id) { errs.push(`${what} #${i + 1} needs an id`); return; }
+    if (ids.has(x.id)) errs.push(`${what} ${x.id} is listed twice`);
+    ids.add(x.id);
+    for (const e of check(x)) if (e) errs.push(`${what} #${i + 1}: ${e}`);
+  });
+}
+
 /** @type {Record<string, (r: any, errs: string[]) => void>} */
 const CHECKS = {
   tools(r, errs) {
@@ -244,6 +331,37 @@ const CHECKS = {
       if (!Array.isArray(r[k]) || !r[k].every(isStr)) errs.push(`${k} must be a list of text`);
     }
     if (!isNullish(r.targetThickness) && !isNum(r.targetThickness)) errs.push('targetThickness must be a number');
+    checkSteps(r.steps, errs);
+    if (!Array.isArray(r.projects) || !r.projects.every((/** @type {any} */ l) => isObj(l) && isStr(l.projectId) && l.projectId
+      && Array.isArray(l.waferIds) && l.waferIds.every(isStr) && (isNullish(l.stepId) || isStr(l.stepId)))) {
+      errs.push('projects must be a list of {projectId, waferIds, stepId}');
+    }
+  },
+  projects(r, errs) {
+    if (!isStr(r.name) || !r.name.trim()) errs.push('name is required');
+    for (const k of ['goal', 'substrate', 'notes']) if (!isStr(r[k])) errs.push(`${k} must be text`);
+    if (!PROJECT_STATUSES.includes(r.status)) errs.push(`status must be one of ${PROJECT_STATUSES.join(', ')}`);
+    if (!isIsoDate(r.startedAt)) errs.push('startedAt must be a date');
+    if (!isNullish(r.endedAt) && !isIsoDate(r.endedAt)) errs.push('endedAt must be a date');
+    if (!isNullish(r.folderId) && !isStr(r.folderId)) errs.push('folderId must be text');
+    checkList(r.wafers, 'wafer', errs, (w) => [
+      !isStr(w.label) || !w.label.trim() ? 'needs a label' : '',
+      !WAFER_STATUSES.includes(w.status) ? `status must be one of ${WAFER_STATUSES.join(', ')}` : '',
+      !isStr(w.notes) ? 'notes must be text' : '',
+    ]);
+    checkList(r.steps, 'step', errs, (s) => [
+      !isStr(s.title) || !s.title.trim() ? 'needs a title' : '',
+      !isNullish(s.toolId) && !isStr(s.toolId) ? 'toolId must be text' : '',
+      !isNullish(s.templateId) && !isStr(s.templateId) ? 'templateId must be text' : '',
+      !isStr(s.recipe) || !isStr(s.notes) ? 'recipe and notes must be text' : '',
+      !isNullish(s.doneAt) && !isIsoDate(s.doneAt) ? 'doneAt must be a date' : '',
+      !isBool(s.skipped) ? 'skipped must be true or false' : '',
+    ]);
+  },
+  folders(r, errs) {
+    if (!isStr(r.name) || !r.name.trim()) errs.push('name is required');
+    if (!isNullish(r.parentId) && !isStr(r.parentId)) errs.push('parentId must be text');
+    if (r.parentId === r.id) errs.push('a folder cannot be inside itself');
   },
   measurements(r, errs) {
     if (!isStr(r.runId) || !r.runId) errs.push('runId is required');
@@ -308,6 +426,8 @@ export function validateBackupEnvelope(obj) {
     if (!Array.isArray(obj[s])) errs.push(`The backup has no ${s} list.`);
   }
   if (!isNullish(obj.photos) && !Array.isArray(obj.photos)) errs.push('The backup photos entry is not a list.');
+  if (!isNullish(obj.projects) && !Array.isArray(obj.projects)) errs.push('The backup projects entry is not a list.');
+  if (!isNullish(obj.folders) && !Array.isArray(obj.folders)) errs.push('The backup folders entry is not a list.');
   if (!isNullish(obj.settings) && !isObj(obj.settings)) errs.push('The backup settings entry is not an object.');
   return errs;
 }

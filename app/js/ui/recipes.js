@@ -6,8 +6,8 @@
  */
 import { h, fill, uid } from './dom.js';
 import { icon } from './icons.js';
-import { button, sheet, segmented, emptyState, listRow, section, labelRow } from './components.js';
-import { valueText, recipeFill, recipeMatches, sortRecipes } from '../core/recipes.js';
+import { button, sheet, segmented, emptyState, listRow, section, labelRow, badge } from './components.js';
+import { valueText, recipeFill, recipeMatches, sortRecipes, hasValues } from '../core/recipes.js';
 import { formatDay } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
@@ -19,10 +19,14 @@ import { HELP } from '../core/app-help.js';
  * @property {string} title
  * @property {WikiRecipe[]} recipes
  * @property {Template | null} template the form's template: marks the values that fill its fields
+ * @property {(r: WikiRecipe) => Template | null} [templateFor] the template each recipe fills, when that depends on
+ *   the recipe (Tool detail opens a PECVD recipe on the PECVD template); `template` otherwise
  * @property {string} useLabel the Use button ("Use recipe", "Log run with this recipe")
  * @property {(r: WikiRecipe, step: number) => void} onUse
  * @property {string[]} [roles] field roles that Use fills (default input and context)
  * @property {WikiRecipe} [open] show this recipe first
+ * @property {boolean} [allSteps] Use fills every step of a multi-step recipe, and the chosen step
+ *   becomes the run's main step (run forms); without it Use fills the chosen step only (Look up)
  */
 
 const SUBTITLE_MAX = 100;
@@ -108,10 +112,12 @@ function recipeDetail(r, o, close, back) {
       if (document.activeElement === document.body) /** @type {HTMLElement | null} */ (document.querySelector('#view .recipe-open'))?.focus({ preventScroll: true });
     },
   });
+  const many = r.steps.length > 1;
   const draw = () => {
-    fill(values, stepValues(r, step, o.template, o.roles));
+    fill(values, stepValues(r, step, o.templateFor ? o.templateFor(r) : o.template, o.roles));
     const name = r.steps[step] ? r.steps[step].name : '';
-    /** @type {Element} */ (use.lastElementChild).textContent = r.steps.length > 1 && name ? `${o.useLabel} (${name})` : o.useLabel;
+    /** @type {Element} */ (use.lastElementChild).textContent = !many || !name ? o.useLabel
+      : o.allSteps ? `${o.useLabel} (all ${r.steps.length} steps)` : `${o.useLabel} (${name})`;
   };
   draw();
   const facts = [['Films', r.films.join(', ')], ['Mask', r.mask.join(', ')], ['Gases', r.gases.join(', ')]].filter(([, v]) => v);
@@ -121,8 +127,8 @@ function recipeDetail(r, o, close, back) {
     r.about ? h('p', null, r.about) : null,
     r.caveat ? h('p', { class: 'field-note warn' }, `Check this one: ${r.caveat}`) : null,
     facts.length ? h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])) : null,
-    r.steps.length > 1 ? segmented({
-      label: 'Step', compact: true, value: step, help: HELP.recipeStep,
+    many ? segmented({
+      label: o.allSteps ? 'Main step' : 'Step', compact: true, value: step, help: o.allSteps ? HELP.recipeMainStep : HELP.recipeStep,
       options: r.steps.map((s, i) => ({ value: i, label: s.name || `Step ${i + 1}` })),
       onChange: (v) => { if (v !== null) { step = v; draw(); } },
     }) : null,
@@ -132,7 +138,7 @@ function recipeDetail(r, o, close, back) {
     r.notes ? h('p', { class: 'small' }, r.notes) : null,
     h('p', { class: 'muted small' }, 'Source: ', sourceLine(r), '. ',
       r.url ? h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open the source') : null),
-    use);
+    h('div', { class: 'sheet-actions' }, use));
 }
 
 /**
@@ -156,7 +162,7 @@ export function openRecipeSheet(o) {
     const draw = () => {
       const shown = list.filter((r) => recipeMatches(r, query));
       fill(rows, shown.length ? shown.map((r) => {
-        const row = listRow({ title: r.name, subtitle: recipeSubtitle(r), onClick: () => showDetail(r) });
+        const row = listRow({ title: r.name, subtitle: recipeSubtitle(r), badges: nameOnly(r), onClick: () => showDetail(r) });
         if (r === from) back = row;
         return row;
       }) : emptyState('No recipe matches.'));
@@ -200,10 +206,20 @@ export function recipeButton(o) {
 export function wikiReference(r, field) {
   const v = field ? r.expect[field.key] : undefined;
   if (v === undefined && !r.results.length) return null;
-  return section(`LNF wiki: ${r.name}`, h('div', { class: 'card stack' },
+  return section('What the LNF wiki says', h('div', { class: 'card stack' },
+    h('strong', null, r.name),
     v !== undefined && field ? h('p', null, `The wiki gives ${field.label} ${v}${field.unit ? ` ${field.unit}` : ''} for this recipe.`) : null,
     r.results.length ? h('ul', { class: 'recipe-results' }, r.results.map((x) => h('li', null, x))) : null,
     h('p', { class: 'muted small' }, `Source: ${sourceLine(r)}. Your own runs reflect the tool as it is now; the wiki's numbers may be older.`)));
+}
+
+/**
+ * A "Name only" badge for a recipe the wiki names without parameters.
+ * @param {WikiRecipe} r
+ * @returns {HTMLElement[]}
+ */
+function nameOnly(r) {
+  return hasValues(r) ? [] : [badge('Name only', 'muted')];
 }
 
 /**
@@ -214,6 +230,6 @@ export function wikiReference(r, field) {
  */
 export function recipeList(o) {
   return h('div', { class: 'list' }, sortRecipes(o.recipes).slice(0, o.limit).map((r) => listRow({
-    title: r.name, subtitle: recipeSubtitle(r), onClick: () => openRecipeSheet({ ...o, open: r }),
+    title: r.name, subtitle: recipeSubtitle(r), badges: nameOnly(r), onClick: () => openRecipeSheet({ ...o, open: r }),
   })));
 }

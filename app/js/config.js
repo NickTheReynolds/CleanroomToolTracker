@@ -57,11 +57,11 @@ export function withTuning(tuning) {
 }
 
 /**
- * Where the source code is published (the GitHub repository address), shown
+ * Where the source code is published (the public GitHub repository), shown
  * under Settings -> About. The AGPL asks anyone who runs a modified copy for
- * others to offer its source; set this after publishing.
+ * others to offer its source: a fork should point this at its own copy.
  */
-export const SOURCE_URL = '';
+export const SOURCE_URL = 'https://github.com/NickTheReynolds/CleanroomToolTracker';
 
 /** UI timing and size constants (not part of the lookup contract). */
 export const UI = Object.freeze({
@@ -69,6 +69,7 @@ export const UI = Object.freeze({
   AUTOSAVE_MS: 300,
   RECENT_RUNS_HOME: 5,
   HISTORY_PAGE: 50,
+  HOME_PROJECTS: 5,
   STEPPER_DELAY_MS: 400,
   STEPPER_REPEAT_MS: 70,
   ERASE_WORD: 'ERASE',

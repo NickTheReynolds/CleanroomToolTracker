@@ -15,6 +15,8 @@ import { pointStats } from '../core/derive.js';
 import { normText } from '../core/vocab.js';
 import { localDateKey, toMs } from '../core/time.js';
 import { toCsv } from '../core/csv.js';
+import { projectsText } from '../core/projects.js';
+import { stepsText } from '../core/run-steps.js';
 
 export { csvCell, toCsv } from '../core/csv.js';
 
@@ -46,6 +48,8 @@ export const MAX_ERRORS = 5;
  * @property {any[]} runs
  * @property {any[]} measurements
  * @property {any[]} events
+ * @property {any[]} [projects]
+ * @property {any[]} [folders] project folders
  * @property {Record<string, any> | null} [settings] full settings; only materials and tuning are kept
  * @property {any[]} [photos] encoded photos (see encodePhoto); omit to leave photos out
  * @property {string} appVersion
@@ -87,6 +91,8 @@ export function buildBackup(input) {
     runs: list(input.runs),
     measurements: list(input.measurements),
     events: list(input.events),
+    projects: list(input.projects),
+    folders: list(input.folders),
     settings: exportableSettings(input.settings),
   };
   if (Array.isArray(input.photos)) out.photos = input.photos;
@@ -262,9 +268,11 @@ export function mergeMaterials(local, incoming) {
 }
 
 /**
- * Plan a merge import of a parsed backup across tools, templates, runs,
- * measurements, events and photos. From the settings only new material
- * names are taken; local lookup tuning stays as it is.
+ * Plan a merge import of a parsed backup across every data store (tools,
+ * templates, runs, measurements, events, photos, projects and their
+ * folders; a backup from before projects simply has none). From the
+ * settings only new material names are taken; local lookup tuning stays as
+ * it is.
  * @param {Record<string, any[]>} existingByStore stored records per store, tombstones included
  * @param {any} backup parsed backup JSON
  * @param {string[]} [localMaterials] this device's materials list
@@ -398,7 +406,7 @@ function keysOf(records, field) {
 
 export const RUN_COLUMNS = Object.freeze([
   'id', 'tool', 'template', 'status', 'startedAt', 'endedAt', 'material', 'substrate', 'maskMaterial', 'recipe',
-  'targetThickness_nm', 'tags', 'notes', 'author', 'createdAt', 'updatedAt',
+  'targetThickness_nm', 'tags', 'notes', 'author', 'createdAt', 'updatedAt', 'projects', 'steps',
 ]);
 export const MEASUREMENT_COLUMNS = Object.freeze([
   'id', 'runId', 'metrologyTool', 'kind', 'phase', 'material', 'unit', 'n', 'mean', 'min', 'max', 'uniformity_pct',
@@ -408,25 +416,31 @@ export const EVENT_COLUMNS = Object.freeze(['id', 'tool', 'type', 'major', 'at',
 
 /**
  * runs.csv: one row per non-deleted run, oldest first. After the fixed
- * columns comes one `p.<key>` column per parameter key used by any run,
- * then one `r.<key>` column per result key, each group sorted by key.
- * Values are as stored, so durations stay in seconds.
+ * columns comes one `p.<key>` column per parameter key used by any run
+ * (the main step's, for a run with several steps), then one `r.<key>`
+ * column per result key, each group sorted by key. Values are as stored,
+ * so durations stay in seconds. `projects` names the run's projects with
+ * their wafers and step; `steps` lists the other steps of a multi-step run.
  * @param {any[]} runs
  * @param {any[]} tools
  * @param {any[]} templates
+ * @param {any[]} [projects]
  * @returns {string}
  */
-export function runsCsv(runs, tools, templates) {
+export function runsCsv(runs, tools, templates, projects = []) {
   const live = liveSorted(runs, 'startedAt');
   const toolName = namer(tools);
   const templateName = namer(templates);
+  /** @type {Map<string, any>} */
+  const tplById = new Map(list(templates).filter(isObj).map((t) => [t.id, t]));
+  const projectById = new Map(list(projects).filter((p) => isObj(p) && !p.deleted).map((p) => [p.id, p]));
   const pKeys = keysOf(live, 'params');
   const rKeys = keysOf(live, 'results');
   const header = [...RUN_COLUMNS, ...pKeys.map((k) => `p.${k}`), ...rKeys.map((k) => `r.${k}`)];
   const rows = live.map((r) => [
     r.id, toolName(r.toolId), templateName(r.templateId), r.status, r.startedAt, r.endedAt,
     r.material, r.substrate, r.maskMaterial, r.recipe, r.targetThickness, list(r.tags).join('; '),
-    r.notes, r.author, r.createdAt, r.updatedAt,
+    r.notes, r.author, r.createdAt, r.updatedAt, projectsText(r, projectById), stepsText(r, tplById.get(r.templateId)),
     ...pKeys.map((k) => own(r.params, k)), ...rKeys.map((k) => own(r.results, k)),
   ]);
   return toCsv([header, ...rows]);

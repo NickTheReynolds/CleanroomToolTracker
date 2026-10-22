@@ -4,8 +4,8 @@
  * then register the service worker and ask for persistent storage.
  */
 import { setDbNotifier } from './data/db.js';
-import { ensureSeeded, getSettings, saveSettings } from './data/repo.js';
-import { matchRoute, parseHash, consumeReplace } from './router.js';
+import { ensureSeeded, getSettings, saveSettings, getDraft, LOG_DRAFT, logTimerRunning } from './data/repo.js';
+import { matchRoute, parseHash, consumeReplace, track, canGoBack } from './router.js';
 import { h, clear } from './ui/dom.js';
 import { toast, button, linkButton, errorText } from './ui/components.js';
 import { initShell, setTitle, setBack, setActions, setNavActive } from './ui/shell.js';
@@ -16,18 +16,6 @@ const main = /** @type {HTMLElement} */ (document.getElementById('view'));
 let token = 0;
 /** @type {(() => void | Promise<void>) | null} */
 let cleanup = null;
-/** In-app history of paths, so Back knows whether an earlier page exists. */
-const stack = /** @type {string[]} */ ([]);
-
-/**
- * @param {string} path
- * @param {boolean} replaced
- */
-function track(path, replaced) {
-  if (replaced && stack.length) stack[stack.length - 1] = path;
-  else if (stack.length >= 2 && stack[stack.length - 2] === path) stack.pop();
-  else if (stack[stack.length - 1] !== path) stack.push(path);
-}
 
 /**
  * @param {string} message
@@ -56,7 +44,7 @@ async function render() {
   const match = matchRoute(path);
   setActions([]);
   setNavActive(path);
-  setBack(path === '/' ? null : match ? match.route.parent : '/', () => stack.length > 1);
+  setBack(path === '/' ? null : match ? match.route.parent : '/', canGoBack);
   const root = h('div', { class: 'view' });
   clear(main).append(root);
   window.scrollTo(0, 0);
@@ -125,11 +113,30 @@ async function boot() {
   applyTheme(settings.theme);
   window.addEventListener('hashchange', render);
   await render();
+  resumeAlarm();
   initPwa();
   if (!settings.persistAsked && !desktopWrapper()) {
     await requestPersist();
     await saveSettings({ persistAsked: true });
   }
+}
+
+/**
+ * After a reload, a countdown still running in the Log run form keeps its
+ * alarm, whichever screen the app opened on.
+ */
+async function resumeAlarm() {
+  try {
+    /** @type {import('./core/run-draft.js').RunDraft | null} */
+    const d = await getDraft(LOG_DRAFT);
+    if (!d || !d.timerStartedAt || !d.timerTarget) return;
+    const startedAt = d.timerStartedAt;
+    const { armAlarm } = await import('./ui/timer.js');
+    armAlarm({
+      startedAt, target: d.timerTarget, href: `#/log/${encodeURIComponent(d.toolId)}/${encodeURIComponent(d.templateId)}`,
+      stillRunning: () => logTimerRunning(startedAt),
+    });
+  } catch (err) { console.error('Could not resume the run timer', err); }
 }
 
 boot();

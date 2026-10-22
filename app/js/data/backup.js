@@ -15,6 +15,7 @@ import {
   base64ToBytes,
 } from './export-import.js';
 import { allRunsCsv, allSheets, reportBlocks, localStamp } from '../core/export-all.js';
+import { travelerBlocks, travelerSheets, travelerFileBase } from '../core/project-report.js';
 import { xlsxBytes } from '../core/xlsx.js';
 import { pdfBytes } from '../core/pdf.js';
 import { localDateKey } from '../core/time.js';
@@ -81,7 +82,7 @@ export async function makeBackupFile(opts = {}) {
   const now = new Date();
   const json = JSON.stringify(buildBackup({
     tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements, events: all.events,
-    settings, appVersion: APP_VERSION, exportedAt: now.toISOString(),
+    projects: all.projects, folders: all.folders, settings, appVersion: APP_VERSION, exportedAt: now.toISOString(),
   }));
   /** @type {BlobPart[]} */
   const parts = [json];
@@ -108,10 +109,10 @@ export async function makeBackupFile(opts = {}) {
  * @returns {Promise<File[]>}
  */
 export async function makeCsvFiles() {
-  const all = await readStores(['tools', 'templates', 'runs', 'measurements', 'events']);
+  const all = await readStores(['tools', 'templates', 'runs', 'measurements', 'events', 'projects']);
   const csv = (/** @type {string} */ name, /** @type {string} */ text) => new File([BOM + text], name, { type: 'text/csv' });
   return [
-    csv('runs.csv', runsCsv(all.runs, all.tools, all.templates)),
+    csv('runs.csv', runsCsv(all.runs, all.tools, all.templates, all.projects)),
     csv('measurements.csv', measurementsCsv(all.measurements, all.runs, all.tools)),
     csv('events.csv', eventsCsv(all.events, all.tools)),
   ];
@@ -129,19 +130,49 @@ export const ALL_FORMATS = Object.freeze(/** @type {const} */ (['csv', 'xlsx', '
  * @returns {Promise<File[]>}
  */
 export async function makeAllExport(format, now = new Date()) {
-  const [all, settings] = await Promise.all([readStores(['tools', 'templates', 'runs', 'measurements', 'events']), getSettings()]);
-  const input = { tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements, events: all.events };
+  const [all, settings] = await Promise.all([
+    readStores(['tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders']), getSettings(),
+  ]);
+  const input = {
+    tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements, events: all.events, projects: all.projects,
+    folders: all.folders,
+  };
   const base = `lnf-runlog-all-${localDateKey(now)}`;
-  // The bytes are a plain (not shared) buffer; newer TypeScript lib types need telling.
-  const part = (/** @type {Uint8Array} */ bytes) => /** @type {BlobPart} */ (/** @type {unknown} */ (bytes));
   if (format === 'csv') return [new File([BOM + allRunsCsv(input)], `${base}.csv`, { type: 'text/csv' })];
-  if (format === 'xlsx') {
-    return [new File([part(xlsxBytes(allSheets(input)))], `${base}.xlsx`,
-      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })];
-  }
+  if (format === 'xlsx') return [xlsxFile(allSheets(input), `${base}.xlsx`)];
   const blocks = reportBlocks(input, { now: now.getTime(), who: settings.userName ? `by ${settings.userName}` : '' });
-  const pdf = pdfBytes(blocks, { title: 'LNF Run Log: all runs', footer: `LNF Run Log, exported ${localStamp(now.getTime())}` });
-  return [new File([part(pdf)], `${base}.pdf`, { type: 'application/pdf' })];
+  return [pdfFile(pdfBytes(blocks, { title: 'LNF Run Log: all runs', footer: `LNF Run Log, exported ${localStamp(now.getTime())}` }), `${base}.pdf`)];
+}
+
+/** @param {Uint8Array} bytes The bytes are a plain (not shared) buffer; newer TypeScript lib types need telling. */
+const part = (bytes) => /** @type {BlobPart} */ (/** @type {unknown} */ (bytes));
+/** @param {import('../core/xlsx.js').XlsxSheet[]} sheets @param {string} name */
+const xlsxFile = (sheets, name) => new File([part(xlsxBytes(sheets))], name,
+  { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+/** @param {Uint8Array} bytes @param {string} name */
+const pdfFile = (bytes, name) => new File([part(bytes)], name, { type: 'application/pdf' });
+
+/**
+ * One project's traveler: every run its wafers went through, in process
+ * order, with the plan and each wafer's path, as a PDF report or an Excel
+ * workbook.
+ * @param {string} projectId
+ * @param {'pdf' | 'xlsx'} format
+ * @param {Date} [now]
+ * @returns {Promise<File[]>}
+ */
+export async function makeTravelerExport(projectId, format, now = new Date()) {
+  const [all, settings] = await Promise.all([readStores(['tools', 'templates', 'runs', 'measurements', 'projects', 'folders']), getSettings()]);
+  const project = all.projects.find((p) => p.id === projectId && !p.deleted);
+  if (!project) throw new Error('This project no longer exists.');
+  const input = {
+    project, projects: all.projects, tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements,
+    folders: all.folders,
+  };
+  const base = travelerFileBase(project, now);
+  if (format === 'xlsx') return [xlsxFile(travelerSheets(input), `${base}.xlsx`)];
+  const blocks = travelerBlocks(input, { now: now.getTime(), who: settings.userName ? `by ${settings.userName}` : '' });
+  return [pdfFile(pdfBytes(blocks, { title: `Traveler: ${project.name}`, footer: `LNF Run Log traveler, exported ${localStamp(now.getTime())}` }), `${base}.pdf`)];
 }
 
 /**
