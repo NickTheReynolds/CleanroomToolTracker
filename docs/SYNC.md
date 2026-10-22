@@ -1,6 +1,50 @@
 # Syncing across devices with periodic manual syncs (design notes)
 
-**Status: speculative.** None of this is built yet. This note explores how one person, and later a few labmates, could keep the same runs on several devices by tapping **Sync** now and then (for example at the end of a cleanroom day) instead of syncing continuously. It is meant to inform milestone 5 (spec Section 13) and possibly replace parts of it.
+## Built: sync through a private GitHub repository
+
+This is option A below, the per-device snapshot design, with a private GitHub repository as the shared folder, reached directly from the app. Any phone with internet can sync; no Synology app, lab PC or VPN is needed. Code: `app/js/sync/` (`github.js` client, `codec.js`, `plan.js` merge rules, `sync.js` orchestration) and `views/settings-sync.js`.
+
+**Layout and contents**
+
+- **One file per device:** `lnf-runlog-sync/devices/<deviceId>.lnfsync`, gzip-compressed JSON, read by its magic bytes.
+- **What's in it:** `{format: "lnf-runlog-sync", version, appVersion, exportedAt, deviceId, deviceName, author, stores: {tools, templates, runs, measurements, events}, materials}`.
+  - Tombstones are included.
+  - Photos and settings are left out, and the token never is in it (a test checks that).
+
+**One sync**
+
+1. Check the repository is reachable and **private**; a public repository is refused.
+2. Download each other device's file whose blob SHA changed since the last sync (`settings.sync.seen`).
+3. Merge each one with the import merge plus a tie-break: the newer `updatedAt` wins; an equal one goes to the higher `deviceId`, so every device converges.
+4. Recompute derived results for the runs touched.
+5. Write this device's file. A write conflict (409/422) is retried once with the current version.
+
+**Properties**
+
+- **Order doesn't matter:** merging full snapshots is order-independent and idempotent, so devices can sync whenever they like.
+- **No write conflicts:** each device writes only its own file.
+- **History:** every sync is a commit, so the repository history is a versioned backup.
+
+**Access**
+
+- A fine-grained token with *Contents: Read and write* on that one repository. GitHub's fine-grained tokens cannot reach a personal repository you are only a collaborator on, so:
+  - a group shares one token, or
+  - uses an organization-owned repository with a token per person.
+- The token is stored only in this device's settings (`settings.sync`) and is excluded from backups.
+- Requests go only to `api.github.com`, only when Sync runs. A test checks that no other module mentions that host.
+
+**Later options**
+
+- Optional passphrase encryption (WebCrypto AES-GCM).
+- Automatic sync when the app opens.
+- Photos as separate files.
+- A lab-PC hub, using the same merge rules with a different transport.
+
+---
+
+The original exploration follows.
+
+**Status when written: speculative.** This note explores how one person, and later a few labmates, could keep the same runs on several devices by tapping **Sync** now and then (for example at the end of a cleanroom day) instead of syncing continuously. It is meant to inform milestone 5 (spec Section 13) and possibly replace parts of it.
 
 ## Where we start
 

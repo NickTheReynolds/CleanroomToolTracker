@@ -2,13 +2,14 @@
 // @ts-check
 /**
  * Fail when any text file in the repo exceeds MAX_LINES (1000). Files over
- * WARN_LINES (600) are listed as a reminder to split them. Only .git/ and
- * binary files are skipped.
+ * WARN_LINES (600) are listed as a reminder to split them. Skipped: .git/,
+ * binary files, and directories that .gitignore excludes (build outputs and
+ * caches such as build/, dist/, .cache/ are not part of the repo).
  *
  *   node scripts/check-line-limits.mjs [root]
  */
 import { readdir, readFile } from 'node:fs/promises';
-import { realpathSync } from 'node:fs';
+import { realpathSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative, resolve, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,11 +45,34 @@ export function isBinary(file, buf) {
 }
 
 /**
- * Every file under root except the .git directory.
+ * Directory patterns from a .gitignore text: lines ending in "/" without
+ * wildcards. A pattern with no other slash ("build/") matches a directory of
+ * that name at any depth; one with a slash ("server/data/") matches that
+ * path from the root, as in git.
+ * @param {string} text
+ * @returns {{names: Set<string>, paths: Set<string>}}
+ */
+export function ignoredDirs(text) {
+  const names = new Set();
+  const paths = new Set();
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#') || line.startsWith('!') || !line.endsWith('/') || /[*?[\]]/.test(line)) continue;
+    const p = line.replace(/^\//, '').replace(/\/$/, '');
+    if (p.includes('/') || line.startsWith('/')) paths.add(p);
+    else names.add(p);
+  }
+  return { names, paths };
+}
+
+/**
+ * Every file under root except .git and the directories .gitignore excludes.
  * @param {string} root
  * @returns {Promise<string[]>}
  */
 export async function listFiles(root) {
+  const gi = join(root, '.gitignore');
+  const ignored = existsSync(gi) ? ignoredDirs(readFileSync(gi, 'utf8')) : { names: new Set(), paths: new Set() };
   /** @type {string[]} */
   const out = [];
   /** @param {string} dir */
@@ -56,8 +80,13 @@ export async function listFiles(root) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       if (entry.name === '.git') continue;
       const p = join(dir, entry.name);
-      if (entry.isDirectory()) await walk(p);
-      else if (entry.isFile()) out.push(p);
+      if (entry.isDirectory()) {
+        const rel = relative(root, p).split('\\').join('/');
+        if (ignored.names.has(entry.name) || ignored.paths.has(rel)) continue;
+        await walk(p);
+      } else if (entry.isFile()) {
+        out.push(p);
+      }
     }
   }
   await walk(root);

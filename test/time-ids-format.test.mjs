@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { uuid, uuidFromBytes, isUuid } from '../app/js/core/ids.js';
 import {
-  ageDays, formatDay, formatMmSs, parseDuration, splitMinSec, toLocalInput, fromLocalInput, formatAge, isIsoDate, toMs,
+  ageDays, formatDay, formatMmSs, parseDuration, splitMinSec, toLocalInput, fromLocalInput, formatAge, formatAgo, isIsoDate, toMs,
 } from '../app/js/core/time.js';
 import { fmtNum, fmtSigned, withUnit, fmtRange, parseNumber, stepValue } from '../app/js/core/format.js';
 import { normText } from '../app/js/core/vocab.js';
@@ -32,6 +32,8 @@ test('ageDays and formatDay', () => {
   assert.equal(isIsoDate('soon'), false);
   assert.equal(formatAge('2026-10-17T12:00:00Z', '2026-10-20T12:00:00Z'), '3 d');
   assert.equal(formatAge('2026-10-20T11:30:00Z', '2026-10-20T12:00:00Z'), '30 min');
+  assert.equal(formatAgo('2026-10-20T11:59:40Z', '2026-10-20T12:00:00Z'), 'just now');
+  assert.equal(formatAgo('2026-10-20T11:30:00Z', '2026-10-20T12:00:00Z'), '30 min ago');
 });
 
 test('mm:ss formatting and parsing', () => {

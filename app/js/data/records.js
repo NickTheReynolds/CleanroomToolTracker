@@ -22,6 +22,7 @@ import { toMs } from '../core/time.js';
  * @property {boolean} persistAsked
  * @property {string | null} firstRunAt
  * @property {string} publicUrl published HTTPS address, for the install QR code
+ * @property {import('../sync/sync.js').SyncConfig | null} sync GitHub sync settings (this device only)
  */
 
 /** @type {Readonly<Settings>} */
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   persistAsked: false,
   firstRunAt: null,
   publicUrl: '',
+  sync: null,
 });
 
 /** Settings that belong to this device or person and stay out of backups. */

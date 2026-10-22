@@ -3,12 +3,12 @@
  * The data layer's public API. Views reach IndexedDB only through this
  * module: CRUD and queries per store, soft delete, settings and drafts.
  */
-import { getOne, withTx } from './db.js';
+import { getOne, getAll, withTx } from './db.js';
 import {
   createRecord, updateRecord, getLive, getRecord, listLive, softDelete, restoreRecord,
-  getSettings, DEFAULT_SETTINGS,
+  getSettings, prepareUpdate, DEFAULT_SETTINGS,
 } from './records.js';
-import { SCHEMA_VERSION } from './schema.js';
+import { SCHEMA_VERSION, SEED_VERSION } from './schema.js';
 import { uuid } from '../core/ids.js';
 import { toMs } from '../core/time.js';
 import { normText } from '../core/vocab.js';
@@ -22,9 +22,9 @@ export * from './runs.js';
 /** @typedef {import('../core/types.js').Run} Run */
 
 /**
- * First run: write the generic seed tools, templates and settings (with a
- * new device id) in one transaction. Later calls only repair a missing
- * device id.
+ * First run: write the LNF tool list, its templates, the materials list and
+ * settings (with a new device id) in one transaction. Later runs repair a
+ * missing device id and bring an older seed up to date (see seed-upgrade.js).
  * @returns {Promise<boolean>} true when the seed data was written
  */
 export async function ensureSeeded() {
@@ -34,16 +34,17 @@ export async function ensureSeeded() {
     if (!s.deviceId) await withTx(['meta'], 'readwrite', (tx) => {
       tx.objectStore('meta').put({ key: 'settings', value: { ...s, deviceId: uuid() } });
     });
+    await upgradeSeed();
     return false;
   }
-  const { seedRecords, SEED_MATERIALS } = await import('./seed-tools.js');
-  const { tools, templates } = seedRecords();
+  const { lnfSeedRecords, seedMaterials } = await import('./seed-upgrade.js');
+  const { tools, templates } = lnfSeedRecords();
   const existing = await getOne('meta', 'settings');
   const settings = {
     ...DEFAULT_SETTINGS,
     ...(existing && existing.value),
     deviceId: (existing && existing.value && existing.value.deviceId) || uuid(),
-    materials: [...SEED_MATERIALS],
+    materials: seedMaterials(),
     firstRunAt: new Date().toISOString(),
   };
   await withTx(['tools', 'templates', 'meta'], 'readwrite', (tx) => {
@@ -51,8 +52,32 @@ export async function ensureSeeded() {
     for (const t of templates) tx.objectStore('templates').put(t);
     tx.objectStore('meta').put({ key: 'settings', value: settings });
     tx.objectStore('meta').put({ key: 'schemaVersion', value: SCHEMA_VERSION });
+    tx.objectStore('meta').put({ key: 'seedVersion', value: SEED_VERSION });
   });
   return true;
+}
+
+/**
+ * Bring a database seeded by an older app version up to the current seed:
+ * add missing LNF tools and templates, merge new materials, archive example
+ * tools nobody used. Runs once per device, in one transaction.
+ */
+async function upgradeSeed() {
+  const meta = await getOne('meta', 'seedVersion');
+  const current = meta ? meta.value : 1;
+  if (current >= SEED_VERSION) return;
+  const { planSeedUpgrade } = await import('./seed-upgrade.js');
+  const [tools, templates, runs, events, settings] = await Promise.all([
+    getAll('tools'), getAll('templates'), getAll('runs'), getAll('events'), getSettings(),
+  ]);
+  const plan = planSeedUpgrade({ tools, templates, runs, events, materials: settings.materials });
+  const archived = plan.archiveIds.map((id) => prepareUpdate('tools', { ...tools.find((t) => t.id === id), active: false }, settings));
+  await withTx(['tools', 'templates', 'meta'], 'readwrite', (tx) => {
+    for (const t of [...plan.tools, ...archived]) tx.objectStore('tools').put(t);
+    for (const t of plan.templates) tx.objectStore('templates').put(t);
+    tx.objectStore('meta').put({ key: 'settings', value: { ...settings, materials: plan.materials } });
+    tx.objectStore('meta').put({ key: 'seedVersion', value: SEED_VERSION });
+  });
 }
 
 /** @param {{name: string}} a @param {{name: string}} b */

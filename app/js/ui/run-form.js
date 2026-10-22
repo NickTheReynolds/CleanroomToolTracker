@@ -1,15 +1,19 @@
 // @ts-check
 /**
- * Form sections shared by Log run and Run detail: sample details (material
- * pickers, recipe, target thickness), notes and tags, the run timer and the
- * start time.
+ * Form sections shared by Log run and Run detail: the recipe (with the
+ * tool's LNF recipes), sample details (material pickers, target thickness),
+ * notes and tags, the run timer and the start time.
  */
 import { h, uid } from './dom.js';
 import { button } from './components.js';
 import { textInput, numberStepper } from './fields.js';
 import { materialPicker } from './pickers.js';
+import { recipeButton } from './recipes.js';
 import { formatMmSs, formatClock, toLocalInput, fromLocalInput } from '../core/time.js';
 import { elapsedSeconds } from '../core/run-draft.js';
+
+/** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
+/** @typedef {import('../core/types.js').Template} Template */
 
 /**
  * @typedef {Object} SampleState
@@ -28,10 +32,29 @@ import { elapsedSeconds } from '../core/run-draft.js';
  */
 
 /**
- * Material, substrate, mask material, recipe and target thickness.
+ * The recipe name, with the tool's LNF recipes one tap away. Using one
+ * fills its parameters (the caller applies them).
+ * @param {{value: string, onChange: (v: string) => void, recipes: WikiRecipe[], template: Template | null,
+ *   title: string, useLabel?: string, roles?: string[], onUse: (r: WikiRecipe, step: number) => void}} o
+ * @returns {HTMLElement}
+ */
+export function recipeField(o) {
+  const id = uid('recipe');
+  const pick = recipeButton({
+    title: o.title, recipes: o.recipes, template: o.template, useLabel: o.useLabel || 'Use recipe', roles: o.roles, onUse: o.onUse,
+  });
+  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Recipe'),
+    textInput({ id, value: o.value, autocapitalize: 'off', onChange: (v) => o.onChange(v || '') }).el,
+    pick ? h('div', { class: 'row-wrap' }, pick) : null,
+    pick ? h('p', { class: 'field-note' }, 'Choosing an LNF recipe fills in its parameters. You can still change any value.') : null);
+}
+
+/**
+ * Material, substrate, mask material, recipe (unless showRecipe is false)
+ * and target thickness.
  * @param {SampleState} s
  * @param {{lists: MaterialLists, onChange: (patch: Partial<SampleState>) => void,
- *   onAddMaterial: (name: string) => void, showMask?: boolean, showTarget?: boolean}} o
+ *   onAddMaterial: (name: string) => void, showMask?: boolean, showTarget?: boolean, showRecipe?: boolean}} o
  * @returns {HTMLElement[]}
  */
 export function sampleFields(s, o) {
@@ -51,7 +74,7 @@ export function sampleFields(s, o) {
       onChange: (v) => o.onChange({ substrate: v }), onAddNew: o.onAddMaterial, show: 4,
     }),
     o.showMask || s.maskMaterial ? mask : h('details', { class: 'more' }, h('summary', null, 'Mask material'), mask),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: recipeId }, 'Recipe'),
+    o.showRecipe === false ? null : h('div', { class: 'field' }, h('label', { class: 'label', for: recipeId }, 'Recipe'),
       textInput({ id: recipeId, value: s.recipe, autocapitalize: 'off', onChange: (v) => o.onChange({ recipe: v || '' }) }).el),
     o.showTarget === false ? null : h('div', { class: 'field' },
       h('label', { class: 'label', for: targetId }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),

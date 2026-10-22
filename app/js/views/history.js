@@ -222,6 +222,7 @@ export async function render(ctx) {
       h('div', { class: 'filter-head' }, h('h2', { class: 'section-title', id: headId }, 'Filters'), clearBtn),
       filtersBox),
     h('section', { class: 'section', 'aria-label': 'Runs' }, countEl, listBox, moreBox),
+    h('div', { class: 'row-wrap' }, linkButton('Export everything (Excel, CSV or PDF)', '#/settings/data', { icon: 'download' })),
   ]);
   return () => {
     redraw.cancel();

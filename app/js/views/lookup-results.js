@@ -9,14 +9,17 @@ import { h, append } from '../ui/dom.js';
 import { button, linkButton, section, segmented, emptyState, toast } from '../ui/components.js';
 import { summaryCard, matchRow, noMatchesCard } from '../ui/lookup-card.js';
 import { lineChart } from '../ui/chart.js';
+import { wikiReference } from '../ui/recipes.js';
 import { navigate, refresh } from '../router.js';
 import {
   getDraft, saveDraft, listRuns, listTemplates, listTools, listEvents, getSettings, lastRunFor, startLogDraft,
   LOOKUP_DRAFT,
 } from '../data/repo.js';
+import { recipesForTool } from '../data/recipes.js';
 import { lookup } from '../core/similarity.js';
 import { summarize } from '../core/summary.js';
 import { blankDraft, prefillFrom, timerField } from '../core/run-draft.js';
+import { findRecipe } from '../core/recipes.js';
 import { uuid } from '../core/ids.js';
 import { fmtValue } from '../core/format.js';
 import { toMs, formatMmSs } from '../core/time.js';
@@ -31,8 +34,9 @@ export async function render(ctx) {
     append(ctx.root, [emptyState('Start a lookup first.', linkButton('Look up', '#/lookup', { kind: 'primary', icon: 'search' }))]);
     return;
   }
-  const [runs, templates, tools, events, settings] = await Promise.all([
+  const [runs, templates, tools, events, settings, recipes] = await Promise.all([
     listRuns(), listTemplates(), listTools({ includeArchived: true }), listEvents(), getSettings(),
+    q.recipe ? recipesForTool(q.toolId) : [],
   ]);
   const template = templates.find((t) => t.id === q.templateId);
   const tool = tools.find((t) => t.id === q.toolId);
@@ -47,6 +51,8 @@ export async function render(ctx) {
   const wanted = ctx.query.get('output');
   const outputKey = outputs.some((f) => f.key === wanted) ? /** @type {string} */ (wanted) : template.primaryOutput || outputs[0]?.key;
   const field = outputs.find((f) => f.key === outputKey);
+  // The LNF recipe the query came from, if any: what the wiki says it gives.
+  const wiki = findRecipe(recipes, q.recipe);
   const summary = outputKey ? summarize(result, { outputKey }) : null;
   const toolName = (/** @type {string} */ id) => {
     const t = tools.find((x) => x.id === id);
@@ -109,6 +115,7 @@ export async function render(ctx) {
     summary ? summaryCard(summary) : result.matches.length
       ? h('div', { class: 'card' }, h('p', null, `${result.matches.length} matching runs, but none has a value for ${field?.label || 'this result'}.`))
       : null,
+    wiki ? wikiReference(wiki, field) : null,
     result.matches.length ? section(`Matches (${result.matches.length})`,
       h('p', { class: 'muted small' }, 'Ranked by distance d (0 = same inputs). w is the weight in the average: similarity × recency × events.'),
       list, more) : null,
@@ -127,6 +134,7 @@ export async function render(ctx) {
         d = {
           ...d, params: { ...d.params, ...q.params }, copiedFrom: null,
           material: q.material || d.material,
+          recipe: q.recipe ?? d.recipe,
           targetThickness: typeof q.targetThickness === 'number' ? q.targetThickness : d.targetThickness,
         };
         const timeKey = timerField(template);

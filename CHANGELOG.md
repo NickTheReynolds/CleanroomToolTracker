@@ -2,6 +2,63 @@
 
 One entry per milestone (spec Section 16).
 
+## M6: LNF recipes, tool photos, export everything, and updates that reach the phones
+
+Version 1.2.0.
+
+- **LNF recipes.** 599 recipes for 95 tools, read from the LNF wiki's process pages and from the sheets, documents and PDFs that its tool pages embed or link.
+  - **Log run** and **Run detail** have a Recipe section above Inputs. **LNF recipes (n)** lists the tool's recipes, with search. A recipe shows its steps, which values fill the form, its results on the wiki, notes and its source.
+  - **Use recipe** fills the main step (or the step you choose), names the recipe and, when the recipe names one film, sets the material. Gases the recipe does not use are cleared. **Undo** puts the form back.
+  - **Look up:** **LNF recipes → Fill planned inputs** fills the inputs. Results show what the wiki says the recipe gives, next to the estimate from your runs and never mixed into it. **Log this run** keeps the recipe name.
+  - **Tool detail** lists the tool's recipes; **Log run with this recipe** opens a prefilled form.
+  - Recipes ship with the app: no database change, and nothing to back up or sync. A run stores the recipe name, as before.
+  - Wiki pages were read from the Internet Archive's latest copies, because the wiki refused connections from off campus on 2026-10-21. The sheets and documents they embed were read live. Each recipe shows its source and date. Sources that need a UMich login are not included (see DECISIONS.md).
+  - `test/recipes.test.mjs` checks the fill rules and every shipped recipe against its tool's template. The smoke test uses a recipe.
+- **Tool photos and the LNF wiki in one place.**
+  - Log run, Run detail and Tool detail open with the tool's card: its photo from the LNF wiki, its name, and **?**.
+  - **?** gathers the tool's wiki page, its process page, the SOPs and other documents its page links, and its recipes.
+  - The app ships the photos it could read (12 so far). The others load from the wiki when it is reachable, and a category icon stands in otherwise. `npm run photos`, run on the UMich network, ships the rest.
+- **Export everything.** Settings → Backup and data (and a shortcut on History) exports every run, with its parameters, results and measurements, in one file (the Excel and PDF files also hold the tool events):
+  - **Excel**: a workbook with all runs, one sheet per tool with named columns, the measurements and the tool events. Times are real Excel dates.
+  - **CSV**: one table with a row per run.
+  - **PDF**: a report to read or print, tool by tool and run by run.
+  - All three are built on the device with no libraries, and share or download like the other exports.
+- **A friendlier look.** A colour and icon for each tool category, on tool tiles, run rows and tool cards (both themes meet WCAG AA). A greeting on Home with this week's run count. Screens and sheets ease in, unless the system asks for reduced motion.
+- **Updates reach installed apps reliably.** The app now notices a new version that started installing before the page was ready. It shows "Update available — Reload" again when it comes back to the foreground if another message pushed it away.
+- **Why 1.1 never reached the phones.** Version 1.1 was built in a Synology Drive copy of the project. That copy has no `.git` folder, so 1.1 was never pushed and GitHub Pages kept serving 1.0. DEPLOY.md now has a section on what to check when the phones do not see an update.
+
+## M5: Sync through GitHub, and the LNF equipment list
+
+Version 1.1.0.
+
+- **Sync** through a private GitHub repository.
+  - **Settings → Sync** takes the repository, a fine-grained token and a device name, then checks them with GitHub.
+  - **Sync now** sits on Home and in Settings. Each device writes one compressed file; Sync merges everyone else's: the newer edit wins, deletions carry over, nothing is wiped, and ties go to the higher device id.
+  - It refuses public repositories. The token stays on the device. Files it cannot read are reported and skipped.
+  - Photos stay on the device that took them, and a run says how many are elsewhere.
+  - Nine sync tests run against a fake GitHub. The screens were checked in a browser against the same fake: a bad token, connecting, a first sync and a merge.
+- **LNF equipment list** (seed version 2).
+  - 127 tools from the LNF wiki, each with the generic template for its type and the gas lines its wiki page lists.
+  - The tool picker adds category chips once there are more than 12 tools. Settings → Tools groups tools by category.
+- **Materials.**
+  - Every material the wiki lists as supported (106 names for 244 wiki entries), plus LiNbO3 (bulk).
+  - The picker's More… sheet searches them, including the wiki's other names ("gold" finds Au), and adds new ones.
+  - Materials have their own Settings page with the same search.
+- **Existing installs upgrade once.** The LNF tools and materials are added, nothing is overwritten, and example tools that were never used or edited are archived.
+
+## Installers and apps (after M4)
+
+- **Windows.**
+  - `npm run build:windows` builds `dist/LNF-Run-Log-Setup-<version>.exe` (about 1.4 MB): a per-user installer with no admin rights, Start menu and Desktop shortcuts, an Installed apps entry, update in place, and an uninstall that keeps your data unless asked.
+  - The app is a native WebView2 window that bundles the app files. Its data lives in `%LOCALAPPDATA%\LNF Run Log`.
+  - Verified end to end on this PC; `--smoke` repeats that check.
+- **macOS.** `desktop/macos/build-macos.sh` builds a universal `LNF Run Log.app` (WKWebView, `lnfrunlog://app` scheme) and a drag-to-install DMG. Untested until its first build on a Mac.
+- **Phones.** The installed web app, from the published HTTPS address.
+  - **Settings → Install on your devices** shows the address as a QR code (a zero-dependency encoder, verified with OpenCV and ZXing) and the steps for iPhone (iOS 26 and 27), Android, Windows and Mac.
+  - Publishing steps with GitHub Desktop are in `docs/DEPLOY.md`.
+- **License.** GNU AGPL-3.0-or-later.
+- **Sync design notes.** `docs/SYNC.md`.
+
 ## M4: History and data safety
 
 - **History.** Filter by tool, template, material, status and date range (local days, inclusive), plus a keyword search over notes, recipe and tags. Filters are remembered, and `?tool=` presets the tool. Results show 50 at a time.

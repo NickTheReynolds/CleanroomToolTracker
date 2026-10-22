@@ -27,6 +27,9 @@ select.input { appearance: auto; }
 .input:focus { border-color: var(--brand); }
 
 .stepper { display: flex; align-items: stretch; gap: 8px; }
+/* A text box with a button beside it ("Find or add" + Add): the box takes the room. */
+.stepper > .input { flex: 1; min-width: 0; }
+.stepper > .btn { flex: none; white-space: nowrap; }
 .stepper-input { flex: 1; min-width: 0; min-height: var(--tap-lg); text-align: center; font-size: 1.2rem; font-weight: 650; }
 .stepper-btn, .stepper-sign {
   flex: none;

@@ -2,7 +2,8 @@
 /**
  * Log run: pick a tool (recent first) -> pick a template (skipped when the
  * tool has one) -> fill the form, prefilled from the last run with the same
- * tool and template. Every change autosaves to IndexedDB.
+ * tool and template. An LNF wiki recipe can fill the inputs. Every change
+ * autosaves to IndexedDB.
  */
 import { h, append, fill } from '../ui/dom.js';
 import {
@@ -10,7 +11,9 @@ import {
 } from '../ui/components.js';
 import { renderFields } from '../ui/fields.js';
 import { toolTiles, templateTiles } from '../ui/pickers.js';
-import { sampleFields, notesFields, timerCard, dateTimeField } from '../ui/run-form.js';
+import { recipeField, sampleFields, notesFields, timerCard, dateTimeField } from '../ui/run-form.js';
+import { fillMessage } from '../ui/recipes.js';
+import { toolCard } from '../ui/tool-card.js';
 import { photoStrip } from '../ui/photos.js';
 import { createAutosave } from '../ui/autosave.js';
 import { navigate } from '../router.js';
@@ -19,14 +22,17 @@ import {
   saveRun, purgeUnsavedPhotos, getSettings, saveSettings, lastUsedByTool, materialsByRecency,
   LOG_DRAFT as DRAFT, setAsideLogDraft,
 } from '../data/repo.js';
+import { recipesForTool } from '../data/recipes.js';
 import {
   blankDraft, prefillFrom, clearPrefill, missingRequired, hasAnyOutput, draftToRun, timerField, fieldsWithRole,
 } from '../core/run-draft.js';
+import { recipeFill, applyFill, undoFill, recipeFilm } from '../core/recipes.js';
 import { uuid } from '../core/ids.js';
 import { formatDay, formatDateTime } from '../core/time.js';
 import { normText } from '../core/vocab.js';
 
 /** @typedef {import('../core/run-draft.js').RunDraft} RunDraft */
+/** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
 
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
@@ -91,7 +97,9 @@ async function pickTemplate(ctx, toolId) {
  * @param {string} templateId
  */
 async function form(ctx, toolId, templateId) {
-  const [tool, template, settings, runs] = await Promise.all([getTool(toolId), getTemplate(templateId), getSettings(), listRuns()]);
+  const [tool, template, settings, runs, recipes] = await Promise.all([
+    getTool(toolId), getTemplate(templateId), getSettings(), listRuns(), recipesForTool(toolId),
+  ]);
   if (!tool || !template || template.toolId !== toolId) {
     ctx.setTitle('Log run');
     append(ctx.root, [emptyState('This tool or template no longer exists.', linkButton('Choose a tool', '#/log'))]);
@@ -135,6 +143,27 @@ async function form(ctx, toolId, templateId) {
   /** @type {{el: HTMLElement, dispose: () => void} | null} */
   let timer = null;
   const body = h('div', { class: 'view' });
+  // An LNF recipe fills its step's values and names the film when it has one. Undo takes back only
+  // what the recipe changed, and goes away when the form does (after Save, or on leaving the screen).
+  /** @type {{close: () => void} | null} */
+  let undoToast = null;
+  const useRecipe = (/** @type {WikiRecipe} */ r, /** @type {number} */ step) => {
+    const before = { recipe: draft.recipe, params: draft.params, material: draft.material };
+    const f = recipeFill(r, template, { step });
+    change({ recipe: r.name, params: applyFill(draft.params, f.values), material: recipeFilm(r) || draft.material });
+    draw();
+    undoToast?.close();
+    undoToast = toast(fillMessage(r, f), {
+      action: {
+        label: 'Undo',
+        fn: () => {
+          if (!ctx.isCurrent()) return;
+          change({ recipe: before.recipe, params: undoFill(draft.params, before.params, f.values), material: before.material });
+          draw();
+        },
+      },
+    });
+  };
 
   const draw = () => {
     timer?.dispose();
@@ -156,15 +185,20 @@ async function form(ctx, toolId, templateId) {
     const outputs = fieldsWithRole(template, ['output']);
     const setParam = (/** @type {string} */ k, /** @type {any} */ v) => change({ params: { ...draft.params, [k]: v } });
     fill(body,
+      toolCard({ tool, subtitle: template.name, recipes, template, onUse: useRecipe }),
       draft.copiedFrom ? h('div', null, chip(`Copied from ${formatDay(draft.copiedFrom.startedAt, Date.now())} run`, {
         icon: 'copy', actionLabel: 'Clear',
         onClick: () => { draft = { ...clearPrefill(draft), touched: true }; autosave.schedule(); draw(); },
       })) : null,
       timer.el,
+      section('Recipe', recipeField({
+        value: draft.recipe, onChange: (v) => change({ recipe: v }), recipes, template,
+        title: `${tool.shortName || tool.name} recipes`, onUse: useRecipe,
+      })),
       inputs.length ? section('Inputs', renderFields(inputs, draft.params, setParam)) : null,
       section('Sample', h('div', { class: 'fields' }, sampleFields(draft, {
         lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
-        showMask: template.derived.some((x) => x.fn === 'selectivity'),
+        showMask: template.derived.some((x) => x.fn === 'selectivity'), showRecipe: false,
       }))),
       context.length ? section('Conditions', renderFields(context, draft.params, setParam)) : null,
       outputs.length ? h('details', { class: 'more card', open: hasAnyOutput(template, draft.results) || undefined },
@@ -190,6 +224,7 @@ async function form(ctx, toolId, templateId) {
     }
     try {
       autosave.cancel();
+      undoToast?.close();
       const saved = await saveRun(draftToRun(dd, status));
       await clearDraft(DRAFT);
       toast(status === 'complete' ? 'Run saved as complete.' : 'Run saved. Add measurements when you have them.');
@@ -206,6 +241,7 @@ async function form(ctx, toolId, templateId) {
   draw();
   append(ctx.root, [body]);
   return async () => {
+    undoToast?.close();
     timer?.dispose();
     photos.dispose();
     await autosave.flush();

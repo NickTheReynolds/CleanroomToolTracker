@@ -42,6 +42,9 @@ const TEXT = [
   ['brand', 'bg'], ['brand', 'surface'], ['brand-ink', 'brand'], ['header-ink', 'header-bg'], ['danger-ink', 'danger'],
   ['warn', 'warn-soft'], ['warn', 'bg'], ['ok', 'ok-soft'], ['brand', 'brand-soft'], ['danger', 'danger-soft'],
   ['danger', 'surface'], ['text', 'warn-soft'], ['text', 'brand-soft'], ['text-2', 'surface-2'], ['bg', 'text'],
+  // Tool category colours (icons and accents) on every surface.
+  ...['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']
+    .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg']]),
 ];
 /** UI component pairs that must reach 3:1 (WCAG 1.4.11). */
 const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface']];

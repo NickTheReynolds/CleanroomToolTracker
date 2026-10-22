@@ -14,6 +14,9 @@ import {
 import { pointStats } from '../core/derive.js';
 import { normText } from '../core/vocab.js';
 import { localDateKey, toMs } from '../core/time.js';
+import { toCsv } from '../core/csv.js';
+
+export { csvCell, toCsv } from '../core/csv.js';
 
 /** The `format` tag of a backup file. */
 export const BACKUP_FORMAT = 'lnf-runlog';
@@ -193,13 +196,16 @@ function withPhotoPayload(rec, cur) {
  *   keeps the record deleted.
  * Each incoming record is migrated, normalised and validated first; invalid
  * ones are counted and the first few reasons kept. Nothing is ever removed.
+ * With `deviceTieBreak` (sync), an equal updatedAt goes to the higher
+ * deviceId, so every device settles on the same version.
  * @param {string} store
  * @param {any[]} existing stored records, tombstones included
  * @param {unknown[]} incoming records from the backup
  * @param {number} [fromVersion] the backup's format version
+ * @param {{deviceTieBreak?: boolean}} [opts]
  * @returns {{put: any[], counts: MergeCounts, errors: string[]}}
  */
-export function mergeStore(store, existing, incoming, fromVersion = SCHEMA_VERSION) {
+export function mergeStore(store, existing, incoming, fromVersion = SCHEMA_VERSION, opts = {}) {
   /** @type {Map<string, Record<string, any>>} */
   const current = new Map();
   for (const r of list(existing)) if (isObj(r) && typeof r.id === 'string') current.set(r.id, r);
@@ -218,7 +224,10 @@ export function mergeStore(store, existing, incoming, fromVersion = SCHEMA_VERSI
     }
     const cur = current.get(rec.id);
     // An unreadable stored timestamp is never "older": the local copy stays.
-    if (cur && !(toMs(rec.updatedAt) > toMs(cur.updatedAt))) {
+    const a = toMs(rec.updatedAt);
+    const b = cur ? toMs(cur.updatedAt) : NaN;
+    const wins = !cur || a > b || (!!opts.deviceTieBreak && a === b && String(rec.deviceId) > String(cur.deviceId));
+    if (!wins) {
       counts.skipped += 1;
       return;
     }
@@ -259,9 +268,10 @@ export function mergeMaterials(local, incoming) {
  * @param {Record<string, any[]>} existingByStore stored records per store, tombstones included
  * @param {any} backup parsed backup JSON
  * @param {string[]} [localMaterials] this device's materials list
+ * @param {{deviceTieBreak?: boolean}} [opts] passed to mergeStore
  * @returns {ImportPlan}
  */
-export function planImport(existingByStore, backup, localMaterials = []) {
+export function planImport(existingByStore, backup, localMaterials = [], opts = {}) {
   /** @type {ImportPlan} */
   const plan = { put: {}, counts: {}, materials: null, errors: [] };
   for (const s of DATA_STORES) {
@@ -271,7 +281,7 @@ export function planImport(existingByStore, backup, localMaterials = []) {
   const envelope = validateBackupEnvelope(backup);
   if (envelope.length) return { ...plan, errors: envelope };
   for (const s of DATA_STORES) {
-    const r = mergeStore(s, list(existingByStore && existingByStore[s]), list(backup[s]), backup.version);
+    const r = mergeStore(s, list(existingByStore && existingByStore[s]), list(backup[s]), backup.version, opts);
     plan.put[s] = r.put;
     plan.counts[s] = r.counts;
     plan.errors.push(...r.errors);
@@ -335,36 +345,7 @@ export function base64ToBytes(b64) {
   return out;
 }
 
-/* ---------- CSV ---------- */
-
-const PLAIN_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i;
-const FORMULA_START = /^[=+\-@\t\r]/;
-
-/**
- * One CSV cell (RFC 4180). Text that a spreadsheet would run as a formula
- * (starting with =, +, -, an at sign, a tab or CR) gets a leading apostrophe unless the
- * whole text is a plain number such as "-5". Cells holding a comma, quote
- * or line break are quoted, with quotes doubled.
- * @param {unknown} v
- * @returns {string}
- */
-export function csvCell(v) {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
-  let s = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
-  if (FORMULA_START.test(s) && !PLAIN_NUMBER.test(s)) s = `'${s}`;
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/**
- * @param {unknown[][]} rows header row first
- * @returns {string} CSV text with CRLF line ends and no byte-order mark
- *   (the caller adds one, U+FEFF, for Excel)
- */
-export function toCsv(rows) {
-  return rows.map((r) => `${r.map((v) => csvCell(v)).join(',')}\r\n`).join('');
-}
+/* ---------- CSV (cells and quoting in core/csv.js) ---------- */
 
 /**
  * Non-deleted records, oldest first by a date field, then by id.

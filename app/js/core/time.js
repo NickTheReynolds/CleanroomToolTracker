@@ -104,6 +104,17 @@ export function formatAge(at, now) {
 }
 
 /**
+ * "just now", "12 min ago", "3 d ago".
+ * @param {TimeLike} at
+ * @param {TimeLike} now
+ * @returns {string}
+ */
+export function formatAgo(at, now) {
+  const age = formatAge(at, now);
+  return age === 'now' ? 'just now' : age === '?' ? 'at an unknown time' : `${age} ago`;
+}
+
+/**
  * Seconds as "m:ss" ("5:53"), or "h:mm:ss" from one hour up.
  * @param {number} seconds
  * @returns {string}

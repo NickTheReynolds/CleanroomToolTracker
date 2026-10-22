@@ -34,10 +34,15 @@ async function renderList(ctx) {
   });
   const active = tools.filter((t) => t.active);
   const archived = tools.filter((t) => !t.active);
+  // Active tools grouped by category, in the usual process order.
+  const groups = TOOL_CATEGORIES
+    .map((c) => ({ c, list: active.filter((t) => t.category === c) }))
+    .filter((g) => g.list.length);
   append(ctx.root, [
-    h('p', { class: 'muted small' }, 'The “(example)” tools are generic placeholders. Rename them to the tools you really use, or archive them.'),
-    section('Active tools', active.length ? h('div', { class: 'list' }, active.map(row)) : emptyState('No active tools.')),
-    archived.length ? section('Archived', h('div', { class: 'list' }, archived.map(row))) : null,
+    h('p', { class: 'muted small' }, `${active.length} active tools. Archive the ones you never use: they leave the pickers, and their runs stay.`),
+    active.length ? groups.map((g) => section(`${CATEGORY_LABELS[g.c]} (${g.list.length})`, h('div', { class: 'list' }, g.list.map(row))))
+      : emptyState('No active tools.'),
+    archived.length ? section(`Archived (${archived.length})`, h('div', { class: 'list' }, archived.map(row))) : null,
   ]);
   ctx.setActions([linkButton('Add tool', '#/settings/tool/new', { kind: 'primary', icon: 'plus', big: true })]);
 }

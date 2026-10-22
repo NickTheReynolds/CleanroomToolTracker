@@ -12,7 +12,8 @@ let installEvent = null;
 const installListeners = new Set();
 /** @type {ServiceWorkerRegistration | null} */
 let registration = null;
-let updateShown = false;
+/** @type {{close: () => void, el: HTMLElement | null} | null} the "Update available" toast */
+let updateToast = null;
 let reloadRequested = false;
 
 const notifyInstall = () => installListeners.forEach((f) => f());
@@ -91,32 +92,43 @@ async function registerServiceWorker() {
     return;
   }
   const reg = registration;
-  if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
-  reg.addEventListener('updatefound', () => {
-    const worker = reg.installing;
-    if (!worker) return;
-    worker.addEventListener('statechange', () => {
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdate(worker);
-    });
-  });
+  // The browser checks for a new version while the page loads, often before
+  // this runs, so the new worker may already be waiting or still installing.
+  if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
+  if (reg.installing) watchInstall(reg.installing);
+  reg.addEventListener('updatefound', () => { if (reg.installing) watchInstall(reg.installing); });
   // Reload only when the person tapped Reload, never in the middle of entry.
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (reloadRequested) window.location.reload();
   });
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    if (document.visibilityState !== 'visible') return;
+    reg.update().catch(() => {});
+    // Phones resume the app instead of reloading it: offer a waiting update again.
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate();
   });
 }
 
 /**
- * @param {ServiceWorker} worker the installed, waiting worker
+ * Offer the update once this worker has installed.
+ * @param {ServiceWorker} worker an installing worker
  */
-function showUpdate(worker) {
-  if (updateShown) return;
-  updateShown = true;
-  toast('Update available', {
+function watchInstall(worker) {
+  worker.addEventListener('statechange', () => {
+    if (worker.state === 'installed' && navigator.serviceWorker.controller) showUpdate();
+  });
+}
+
+/**
+ * Show "Update available — Reload" unless it is already on screen (other
+ * toasts can push it away; it then comes back). Reload activates whichever
+ * version is waiting by then.
+ */
+function showUpdate() {
+  if (updateToast && updateToast.el && updateToast.el.isConnected) return;
+  updateToast = toast('Update available', {
     timeout: 0,
-    action: { label: 'Reload', fn: () => { applyUpdate(worker); } },
+    action: { label: 'Reload', fn: () => { applyUpdate(); } },
   });
 }
 
@@ -149,8 +161,7 @@ export async function checkForUpdate() {
     return 'offline';
   }
   if (registration.waiting) {
-    updateShown = false;
-    showUpdate(registration.waiting);
+    showUpdate();
     return 'available';
   }
   return registration.installing ? 'downloading' : 'current';

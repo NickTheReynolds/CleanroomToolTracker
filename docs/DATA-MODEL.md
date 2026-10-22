@@ -91,6 +91,10 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 | `tuning` | `{halfLifeDays, eventPenalty, topK}` lookup overrides | yes; imports leave local tuning unchanged |
 | `lastExportAt` | Time of the last backup export (drives the Home reminder) | no |
 | `iosHintDismissed`, `persistAsked`, `firstRunAt` | Device housekeeping | no |
+| `publicUrl` | The published HTTPS address, for the install QR code | no |
+| `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, lastSyncAt, lastResult}` | no, and the token never leaves the device |
+
+`meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list. Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade only adds records that are missing, merges new materials, and archives example tools that were never used or edited.
 
 ## Drafts (`meta` keys `draft:<form>`)
 
@@ -98,10 +102,53 @@ Every in-progress form autosaves its state about 300 ms after each change, and i
 
 ## Seed data
 
-On first run the app writes generic example tools, their templates and the materials list. The tool names end in "(example)". Seed records have fixed UUIDs and the timestamp `2026-01-01T00:00:00.000Z`. Backups from two devices therefore merge without duplicating the examples, and any later edit, such as renaming a tool, wins the merge.
+On first run the app writes the LNF equipment list (`data/seed-lnf.js`). That is 127 tools from the LNF wiki, each with its own copy of the generic template for its type (`data/seed-types.js`), plus the materials list. Seed records have fixed UUIDs and the timestamp `2026-01-01T00:00:00.000Z`, so backups and syncs from two devices merge without duplicates, and any later edit, such as renaming a tool, wins the merge. LNF ids are derived from the tool name (SHA-256, formatted as a v4 UUID).
+
+- `LNF_TOOLS` rows are `[toolId, templateId, name, type, gases]`. `type` picks the template builder; metrology types without inputs (SEM, microscope, XRD) get no template.
+- `LNF_MATERIALS` lists every material the wiki lists as supported, one name each, plus "LiNbO3 (bulk)".
+- `LNF_MATERIAL_WORDS` maps a material to the wiki's other names for it, so the material search finds "gold".
+
+The older generic examples (`data/seed-tools.js`, names ending in "(example)") are seed version 1. The upgrade archives the ones you never used.
+
+## LNF recipes
+
+The recipes the LNF wiki documents ship with the app as reference data in `data/lnf-recipes-etch.js`, `lnf-recipes-dep.js` and `lnf-recipes-other.js`, one recipe per line. `data/recipes.js` loads them the first time a screen needs them. They are not records: they are not stored in IndexedDB, backed up, exported or synced, and a new app version replaces them. A run keeps only the recipe's name, in its `recipe` text, as before.
+
+Each recipe (`WikiRecipe` in `core/recipes.js`):
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable and unique: `<tool>/<recipe>` in slug form. |
+| `tool` | The tool's id (the fixed LNF seed id). |
+| `name`, `about` | The name as the wiki writes it, and one plain sentence. |
+| `films`, `mask`, `gases` | What it etches, deposits or treats (app material names where one matches), mask materials, and gases. |
+| `steps[]` | `{name, values[]}` per process step, in order. A value is `{l, v, u, k, t}`: the wiki's label, the value, its unit, the key of the generic template field it fills (only for the same physical quantity, with `v` converted to that field's unit; durations in seconds), and the wiki's own wording when it differs ("5 min", "variable"). |
+| `main` | The step that fills a run form; -1 when the wiki gives no parameters. |
+| `results`, `expect` | Expected results as short lines, and as numbers keyed by template output (`{etchRate: 181}`). |
+| `notes` | Caveats from the source. |
+| `src`, `url`, `date` | The source (a wiki page, or a sheet, document or PDF a wiki page embeds or links), its address, and the date of the copy read. |
+| `caveat` | Optional: why to check the recipe before relying on it (its sources disagree or are unclear). |
+
+**Using a recipe** (`recipeFill` in `core/recipes.js`): the chosen step's values go into the template fields with the same key, when the field exists, has the role being filled and the value suits its type (a number for number and duration fields, one of the options for choice fields). Gas fields the step does not use are cleared when the step gives any gas flow, because a recipe names its whole chemistry; a gas it lists without one number ("ramped") stays as it is. The recipe's name goes into the run's `recipe`, and its film into `material` when it names exactly one. Everything else stays, and Undo (`undoFill`) takes back only what the recipe changed. Lookup fills input fields only, and keeps cleared gases as empty values so Log this run does not bring back the last run's gases.
+
+`test/recipes.test.mjs` checks every shipped recipe against its tool's seeded template: the keys exist, the values suit the fields, units match and the step indexes are valid.
 
 ## Versions and migrations
 
 - **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes).
 - **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup.
 - **`MIGRATIONS`** in `schema.js` is the ordered list of migrations. Each step lists the stores and indexes to create and, optionally, a function that upgrades one record from the previous version. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
+
+## LNF wiki links and tool photos
+
+`data/lnf-wiki.js` maps each LNF tool id to its place on the LNF wiki: `{page, image?, processes?, docs?}`. That is the page title, the path of the photo on that page, the title of its process (recipe) page, and `[label, address]` pairs for the documents the page links (SOPs, system overviews, process sheets). `wikiPageUrl(title)` builds a page address. Tools you add yourself have no entry.
+
+The app ships tool photos in `app/img/tools/`, named after the wiki file, at most 480 px on the long edge. `data/tool-photos.js` lists them, and the service worker precaches them. A tool whose photo is not shipped shows it from the wiki when the wiki is reachable, and its category icon otherwise. `scripts/tool-photos.mjs` (`npm run photos`) fetches and shrinks the missing photos and rewrites both lists.
+
+## Export everything
+
+Settings → Backup and data writes one file of the live records (no tombstones), built on the device by `core/export-all.js`:
+
+- **CSV** (`lnf-runlog-all-<date>.csv`): one row per run, oldest first. It has the run's facts, a `p.<key>` column per parameter, an `r.<key>` column per result, `m.<phase>.<kind> [<unit>]` with the mean of the latest such measurement of the run's material (a blank material counts as the run's), `m.<phase>.<kind> <material> [<unit>]` for any other material measured, such as the mask, every measurement in words, and the ISO 8601 start and end. `date` is local time.
+- **Excel** (`.xlsx`, `core/xlsx.js`): the same table as "All runs", then one sheet per tool with labelled columns ("ICP power (W)", durations in seconds), then "Measurements" (one row per measurement, with its points) and "Tool events". Times are Excel dates in local time; the first row is bold, frozen and filterable.
+- **PDF** (`core/pdf.js`): a report, tool by tool and run by run, with inputs, conditions, results, sample, measurements, notes and tags, then the tool's events. It uses the standard Helvetica fonts and WinAnsi text; characters outside it are spelled out ("Ω" becomes "Ohm") or shown as "?".

@@ -38,8 +38,16 @@ const PATHS = {
   play: ['M7 4l13 8-13 8z'],
   stop: ['M6 6h12v12H6z'],
   undo: ['M9 14 4 9l5-5', 'M4 9h11a5 5 0 0 1 0 10h-3'],
+  sync: ['M4.5 10a8 8 0 0 1 14.1-3.9', 'M19 3v4h-4', 'M19.5 14a8 8 0 0 1-14.1 3.9', 'M5 21v-4h4'],
   ruler: ['M3 17 17 3l4 4L7 21z', 'M7 13l2 2', 'M10 10l2 2', 'M13 7l2 2'],
   filter: ['M4 5h16l-6 8v6l-4 2v-8z'],
+  help: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M9.6 9.3a2.5 2.5 0 1 1 3.5 2.4c-.7.3-1.1.9-1.1 1.6v.4', 'M12 16.8v.01'],
+  external: ['M14 4h6v6', 'M20 4l-9 9', 'M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5'],
+  layers: ['M12 3 2.5 8 12 13l9.5-5z', 'M2.5 12.5 12 17.5l9.5-5', 'M2.5 16.5 12 21.5l9.5-5'],
+  thermo: ['M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0z', 'M12 9v7.5'],
+  sun: ['M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M12 2v2', 'M12 20v2', 'M4.9 4.9l1.4 1.4', 'M17.7 17.7l1.4 1.4', 'M2 12h2', 'M20 12h2', 'M4.9 19.1l1.4-1.4', 'M17.7 6.3l1.4-1.4'],
+  image: ['M4 5h16v14H4z', 'M4 16l4.5-4.5 3.5 3.5 2.5-2.5L20 18', 'M15.5 9.5h.01'],
+  book: ['M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15H7.5A2.5 2.5 0 0 0 5 20.5z', 'M5 20.5A2.5 2.5 0 0 1 7.5 18H19v3H7.5', 'M9 7h6'],
 };
 
 /**
@@ -62,4 +70,21 @@ export function icon(name, opts = {}) {
     'aria-hidden': 'true',
     focusable: 'false',
   }, (PATHS[name] || PATHS.info).map((d) => svg('path', { d })));
+}
+
+/** The icon of each tool category. */
+export const CATEGORY_ICONS = Object.freeze(/** @type {Record<string, string>} */ ({
+  etch: 'bolt', deposition: 'layers', thermal: 'thermo', litho: 'sun', metrology: 'ruler', other: 'wrench',
+}));
+
+/**
+ * A tool category's icon, coloured by the category (class cat-icon).
+ * @param {string} category
+ * @param {{size?: number}} [opts]
+ * @returns {SVGElement}
+ */
+export function categoryIcon(category, opts = {}) {
+  const el = icon(CATEGORY_ICONS[category] || 'wrench', { size: opts.size, class: 'cat-icon' });
+  el.dataset.category = category in CATEGORY_ICONS ? category : 'other';
+  return el;
 }

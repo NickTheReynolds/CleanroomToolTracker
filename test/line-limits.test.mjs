@@ -6,7 +6,7 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { countLines, isBinary, checkLineLimits, MAX_LINES } from '../scripts/check-line-limits.mjs';
+import { countLines, isBinary, checkLineLimits, ignoredDirs, MAX_LINES } from '../scripts/check-line-limits.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -44,6 +44,24 @@ test('checkLineLimits flags long files, warns on 600+, skips .git and binaries',
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('directories excluded by .gitignore are skipped; others are not', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'lnf-lines-gi-'));
+  try {
+    await writeFile(join(dir, '.gitignore'), '# outputs\nbuild/\n/dist/\nserver/data/\n*.log\n!keep/\n');
+    for (const d of ['build', join('app', 'build'), 'dist', join('server', 'data'), join('server', 'src'), 'keep']) {
+      await mkdir(join(dir, d), { recursive: true });
+      await writeFile(join(dir, d, 'big.txt'), 'x\n'.repeat(MAX_LINES + 5));
+    }
+    const r = await checkLineLimits(dir);
+    assert.deepEqual(r.over.map((o) => o.file).sort(), ['keep/big.txt', 'server/src/big.txt']);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  const p = ignoredDirs('build/\n/dist/\nserver/data/\n*.tmp\n#x/\n');
+  assert.deepEqual([...p.names], ['build']);
+  assert.deepEqual([...p.paths].sort(), ['dist', 'server/data']);
 });
 
 test('every text file in this repo is within the line limit', async () => {

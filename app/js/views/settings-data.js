@@ -1,18 +1,18 @@
 // @ts-check
 /**
- * Settings -> Data: export a JSON backup (photos optional), export CSV for
- * Excel or Sheets, import a backup (a merge that never deletes), storage
+ * Settings -> Data: export a JSON backup (photos optional), export
+ * everything as one CSV, Excel or PDF file, export CSV for Excel or Sheets, import a backup (a merge that never deletes), storage
  * status and Erase all data. Each export is prepared first and then shared
  * or downloaded with a second tap, because iOS opens the share sheet only
  * from a fresh tap, not at the end of a slow build.
  */
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { button, section, toggle, toast, confirmDialog, sheet, badge, errorText } from '../ui/components.js';
+import { button, section, toggle, toast, confirmDialog, sheet, badge, errorText, segmented } from '../ui/components.js';
 import { storageStatus, requestPersist } from '../ui/pwa.js';
 import { refresh } from '../router.js';
 import {
-  estimatePhotoBytes, makeBackupFile, makeCsvFiles, canShareFiles, shareFiles, downloadFile, markExported,
+  estimatePhotoBytes, makeBackupFile, makeCsvFiles, makeAllExport, canShareFiles, shareFiles, downloadFile, markExported,
   importBackupFile, eraseAllData,
 } from '../data/backup.js';
 import { getSettings, photoUsage } from '../data/repo.js';
@@ -62,7 +62,7 @@ function lastExportText(at) {
  * sheet takes them) and Download buttons. `onSaved` runs after a share
  * that went through, or a download.
  * @param {File[]} files
- * @param {{title: string, onSaved?: () => Promise<void>}} o
+ * @param {{title: string, shared?: string, onSaved?: () => Promise<void>}} o
  * @returns {HTMLElement}
  */
 function preparedCard(files, o) {
@@ -80,7 +80,7 @@ function preparedCard(files, o) {
     onClick: async () => {
       try {
         const r = await shareFiles(files, o.title);
-        if (r === 'shared') await saved(several ? 'Files shared.' : 'Backup shared.');
+        if (r === 'shared') await saved(o.shared || (several ? 'Files shared.' : 'Backup shared.'));
         else if (r === 'unsupported') toast('This browser cannot share these files. Use Download.');
       } catch (err) {
         toast(`Could not share: ${errorText(err)} Use Download instead.`, { kind: 'error' });
@@ -109,7 +109,7 @@ function preparedCard(files, o) {
 /**
  * A Prepare button, a status line and the prepared result.
  * @param {{label: string, kind?: 'primary' | 'secondary', icon: string, busy: () => string,
- *   make: () => Promise<File[]>, ready: (files: File[]) => string, title: string,
+ *   make: () => Promise<File[]>, ready: (files: File[]) => string, title: string, shared?: string,
  *   onSaved?: () => Promise<void>}} o
  * @returns {{el: HTMLElement, reset: () => void}}
  */
@@ -179,6 +179,43 @@ function backupSection(settings, photos, photoEstimate) {
       },
     }),
     warning,
+    flow.el);
+}
+
+/** What each format of the export of everything holds. */
+const EVERYTHING_NOTES = Object.freeze({
+  xlsx: 'An Excel workbook: all runs on one sheet, one sheet per tool with named columns, then the measurements and tool events.',
+  csv: 'One table with a row per run: a p. column for each parameter, an r. column for each result, the mean of each kind of measurement, and every measurement in words. Tool events are in events.csv below.',
+  pdf: "A report to read or print: each tool's runs with their inputs, results, measurements and notes, then its tool events.",
+});
+
+/** @returns {HTMLElement} */
+function everythingSection() {
+  /** @type {'xlsx' | 'csv' | 'pdf'} */
+  let format = 'xlsx';
+  const note = h('p', { class: 'muted small' }, EVERYTHING_NOTES[format]);
+  const flow = exportFlow({
+    label: 'Prepare the export',
+    icon: 'download',
+    busy: () => 'Preparing the export…',
+    make: () => makeAllExport(format),
+    ready: () => 'Ready. Share or download it below.',
+    title: 'LNF Run Log export',
+    shared: 'Export shared.',
+  });
+  return section('Export everything',
+    h('p', null, 'Every run with its parameters, results and measurements in one file; the Excel and PDF files also list the tool events. Deleted records are left out.'),
+    segmented({
+      label: 'Format', value: format,
+      options: [{ value: 'xlsx', label: 'Excel' }, { value: 'csv', label: 'CSV' }, { value: 'pdf', label: 'PDF' }],
+      onChange: (v) => {
+        if (!v) return;
+        format = /** @type {'xlsx' | 'csv' | 'pdf'} */ (v);
+        note.textContent = EVERYTHING_NOTES[format];
+        flow.reset();
+      },
+    }),
+    note,
     flow.el);
 }
 
@@ -342,6 +379,7 @@ export async function render(ctx) {
   const [settings, photos, photoEstimate] = await Promise.all([getSettings(), photoUsage(), estimatePhotoBytes()]);
   append(ctx.root, [
     backupSection(settings, photos, photoEstimate),
+    everythingSection(),
     csvSection(),
     importSection(ctx),
     storageSection(),

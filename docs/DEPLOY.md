@@ -11,7 +11,7 @@ GitHub Pages is free for public repositories and serves `*.github.io` over HTTPS
 
 ### One-time setup with GitHub Desktop (no command line)
 
-GitHub Desktop is installed on the development PC. The project folder is already a git repository with the milestone commits.
+GitHub Desktop needs the project folder to be a git repository (it has a `.git` folder). A copy synced by Synology Drive has none; see [When the phones do not see an update](#when-the-phones-do-not-see-an-update).
 
 1. Open GitHub Desktop, choose **File → Add local repository…**, and pick this folder (`CleanroomToolTracker`).
 2. Click **Publish repository**. Untick **Keep this code private**: free GitHub Pages needs a public repository. Only the app's code is published; your runs live on your devices, never in the repository.
@@ -34,11 +34,32 @@ Later changes ship with **Commit** and then **Push origin** in GitHub Desktop.
 
 1. Run `npm test`.
 2. For a user-visible release, run `npm run bump` (patch), `npm run bump -- minor` or `npm run bump -- 2.0.0`. This updates `app/version.js`, the cache name in `app/sw.js` and `package.json` together.
-3. Commit and push to `main`.
+3. Optional, on the UMich network or VPN: run `npm run photos` to ship the tool photos the app does not have yet.
+4. Commit and push to `main`.
 
 Installed apps check for a new service worker when they open or come back to the foreground. When a new version is ready they show **Update available — Reload**. The app never reloads by itself in the middle of data entry. Settings → About → **Check for update** checks on demand.
 
 If you forget to bump, the deploy workflow's commit stamp still changes the cache name, so the update still arrives. The version number shown in Settings just stays the same.
+
+### When the phones do not see an update
+
+Phones and browsers load the app from the published address, not from this folder or from a desktop installer. A new version reaches them only after it is pushed to `main` and the "Deploy to GitHub Pages" run has finished.
+
+1. Open `https://<user>.github.io/<repository>/version.js` in a private (incognito) window, or in a browser that has never opened the app. It shows the version and the commit the site serves. A browser where the app is installed shows its own cached copy instead. If the private window still shows the old version, the new one was never published: commit, push to `main`, and watch the **Actions** tab.
+2. If the site serves the new version, open the installed app and wait a few seconds; **Update available — Reload** appears. If it does not, close the app completely and open it again, or tap **Settings → About → Check for update**.
+
+**Synology Drive and git.** Synology Drive does not sync names that start with a dot. A copy of this folder on another computer therefore has no `.git` folder (it is not a repository and cannot push) and no `.github/workflows`. Push from the computer that holds the repository, or make this copy a repository once, keeping the workflows from GitHub:
+
+```text
+git init -b main
+git remote add origin https://github.com/<user>/<repository>.git
+git fetch origin
+git reset origin/main
+git branch -u origin/main
+git checkout origin/main -- .github .gitignore
+```
+
+`git reset` here only moves git's bookkeeping; your files stay as they are. `git status` then lists your local changes, ready to commit and push. (Version 1.1 did not reach the phones for exactly this reason: it was built in a copy without `.git`, so it was never pushed.)
 
 ## Any other static host
 

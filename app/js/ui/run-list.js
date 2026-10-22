@@ -2,6 +2,7 @@
 /** Run rows shared by Home, Open runs, History and Tool detail. */
 import { h } from './dom.js';
 import { listRow, badge } from './components.js';
+import { categoryIcon } from './icons.js';
 import { fmtValue } from '../core/format.js';
 import { formatDateTime, formatAge } from '../core/time.js';
 import { STATUS_LABELS } from '../core/vocab.js';
@@ -72,7 +73,9 @@ export function runRow(run, L, opts = {}) {
   if (run.status !== 'complete') {
     badges.push(badge(STATUS_LABELS[run.status] || run.status, run.status === 'draft' ? 'warn' : 'info'));
   }
+  const tool = L.tools.get(run.toolId);
   return listRow({
+    lead: categoryIcon(tool ? tool.category : 'other'),
     title: runTitle(run, L),
     subtitle: sub,
     meta: primaryText(run, L) || undefined,

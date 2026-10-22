@@ -16,6 +16,8 @@ export const DB_NAME = 'lnf-runlog';
 export const DB_VERSION = 1;
 /** Record format version, stored in meta and in backups. */
 export const SCHEMA_VERSION = 1;
+/** Seed data version (meta.seedVersion): 1 = generic examples, 2 = the LNF equipment list. */
+export const SEED_VERSION = 2;
 /** Stores holding user records (meta excluded). */
 export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos']);
 export const MAX_REQUIRED_FIELDS = 5;

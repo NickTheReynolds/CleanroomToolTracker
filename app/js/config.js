@@ -56,6 +56,13 @@ export function withTuning(tuning) {
   return /** @type {Config} */ (cfg);
 }
 
+/**
+ * Where the source code is published (the GitHub repository address), shown
+ * under Settings -> About. The AGPL asks anyone who runs a modified copy for
+ * others to offer its source; set this after publishing.
+ */
+export const SOURCE_URL = '';
+
 /** UI timing and size constants (not part of the lookup contract). */
 export const UI = Object.freeze({
   UNDO_MS: 5000,

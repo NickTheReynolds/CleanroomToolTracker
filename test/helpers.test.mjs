@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { join, sep } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { materialsByRecency, lastUsedByTool } from '../app/js/data/repo.js';
-import { byRecent } from '../app/js/ui/pickers.js';
+import { byRecent, materialMatches } from '../app/js/ui/pickers.js';
 import { keyFromLabel } from '../app/js/ui/field-spec-editor.js';
 import { fitWithin } from '../app/js/data/photos.js';
 import { resolvePath } from '../serve.mjs';
@@ -33,6 +33,21 @@ test('lastUsedByTool and byRecent order tools recently used first, then by name'
   assert.equal(used.get('b'), Date.parse('2026-10-09T00:00:00Z'));
   const tools = /** @type {any[]} */ ([{ id: 'a', name: 'Zeta' }, { id: 'b', name: 'Beta' }, { id: 'c', name: 'Gamma' }, { id: 'd', name: 'Alpha' }]);
   assert.deepEqual(byRecent(tools, used).map((t) => t.id), ['b', 'c', 'd', 'a']);
+});
+
+test('materialMatches: word prefixes of the name or the wiki\'s other names', () => {
+  assert.ok(materialMatches('Au', 'gold'));
+  assert.ok(materialMatches('Au', ' GO '));
+  assert.ok(materialMatches('SiO2 (PECVD)', 'sio2 pecvd'));
+  assert.ok(materialMatches('SiO2 (PECVD)', 'SiO₂'));
+  assert.ok(materialMatches('SiO2 (PECVD)', 'p5000'));
+  assert.ok(materialMatches('LiNbO3 (bulk)', 'lithium niobate'));
+  assert.ok(materialMatches('SPR 220 3.0', 'spr 220'));
+  assert.ok(materialMatches('My custom film', 'custom'));
+  assert.ok(materialMatches('Anything', ''));
+  assert.ok(!materialMatches('Positive resist', 'si'), 'only word starts count');
+  assert.ok(!materialMatches('SiO2 (PECVD)', 'sio2 thermal'), 'every query word must match');
+  assert.ok(!materialMatches('Au', 'silver'));
 });
 
 test('keyFromLabel makes unique camelCase keys', () => {

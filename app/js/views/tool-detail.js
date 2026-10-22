@@ -1,14 +1,22 @@
 // @ts-check
 /**
- * Tool detail: the tool's facts, its event timeline, one chart per template
- * of the primary output over time (tool events as markers; runs from before
- * the latest major event drawn hollow) and its latest runs.
+ * Tool detail: the tool's facts, its LNF wiki recipes, its event timeline,
+ * one chart per template of the primary output over time (tool events as
+ * markers; runs from before the latest major event drawn hollow) and its
+ * latest runs.
  */
 import { h, append } from '../ui/dom.js';
-import { button, linkButton, section, listRow, badge, emptyState } from '../ui/components.js';
+import { button, linkButton, section, listRow, badge, emptyState, toast } from '../ui/components.js';
+import { recipeList, fillMessage } from '../ui/recipes.js';
+import { toolCard } from '../ui/tool-card.js';
 import { runList, lookups } from '../ui/run-list.js';
 import { lineChart } from '../ui/chart.js';
-import { getTool, listTemplates, listEvents, runsForTool, getSettings } from '../data/repo.js';
+import { navigate } from '../router.js';
+import { getTool, listTemplates, listEvents, runsForTool, getSettings, lastRunFor, startLogDraft } from '../data/repo.js';
+import { recipesForTool } from '../data/recipes.js';
+import { blankDraft, prefillFrom } from '../core/run-draft.js';
+import { recipeFill, applyFill, recipeFilm } from '../core/recipes.js';
+import { uuid } from '../core/ids.js';
 import { primarySeries } from '../core/search.js';
 import { CATEGORY_LABELS, EVENT_LABELS, EVENT_SHORT } from '../core/vocab.js';
 import { formatDateTime, formatDay, toMs } from '../core/time.js';
@@ -18,8 +26,10 @@ import { withTuning } from '../config.js';
 /** @typedef {import('../core/types.js').ToolEvent} ToolEvent */
 /** @typedef {import('../core/types.js').Template} Template */
 /** @typedef {import('../core/types.js').Run} Run */
+/** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
 
 const EVENTS_SHOWN = 5;
+const RECIPES_SHOWN = 5;
 const RUNS_SHOWN = 20;
 const NOTE_MAX = 90;
 
@@ -43,6 +53,53 @@ function factsCard(tool, defaultHalfLife) {
   return h('div', { class: 'card stack tool-facts' },
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     h('div', { class: 'row-wrap' }, linkButton('Edit tool', `#/settings/tool/${encodeURIComponent(tool.id)}`, { icon: 'edit' })));
+}
+
+/**
+ * "Log run with this recipe": a Log run form with the tool's default
+ * template, prefilled from the last run, with the recipe's values on top.
+ * @param {Tool} tool
+ * @param {Template | null} tpl
+ * @returns {(r: WikiRecipe, step: number) => Promise<void>}
+ */
+function logWithRecipe(tool, tpl) {
+  return async (r, step) => {
+    if (!tpl) { navigate(`/log/${tool.id}`); return; }
+    let d = blankDraft({ runId: uuid(), toolId: tool.id, templateId: tpl.id, now: new Date().toISOString() });
+    const last = await lastRunFor(tool.id, tpl.id);
+    if (last) d = prefillFrom(d, last, tpl);
+    const f = recipeFill(r, tpl, { step });
+    d = { ...d, recipe: r.name, params: applyFill(d.params, f.values), material: recipeFilm(r) || d.material };
+    if (await startLogDraft(d)) toast('Your other unsaved run was kept in Open runs as a draft.');
+    toast(fillMessage(r, f));
+    navigate(`/log/${encodeURIComponent(tool.id)}/${encodeURIComponent(tpl.id)}`);
+  };
+}
+
+/**
+ * The tool's LNF wiki recipes, the first few then Show all.
+ * @param {Tool} tool
+ * @param {Template | null} tpl the tool's default template
+ * @param {WikiRecipe[]} recipes
+ * @returns {HTMLElement | null}
+ */
+function recipesSection(tool, tpl, recipes) {
+  if (!recipes.length) return null;
+  const opts = {
+    title: `${tool.shortName || tool.name} recipes`, recipes, template: tpl, useLabel: 'Log run with this recipe', onUse: logWithRecipe(tool, tpl),
+  };
+  const list = recipeList({ ...opts, limit: RECIPES_SHOWN });
+  const showAll = recipes.length > RECIPES_SHOWN ? button(`Show all ${recipes.length} recipes`, {
+    onClick: () => {
+      const all = recipeList(opts);
+      list.replaceWith(all);
+      showAll?.remove();
+      /** @type {HTMLElement} */ (all.children[RECIPES_SHOWN]).focus(); // the first newly shown row
+    },
+  }) : null;
+  return section(`LNF recipes (${recipes.length})`,
+    h('p', { class: 'muted small' }, 'From the LNF wiki. Open one for its steps, results and source.'),
+    list, showAll);
 }
 
 /**
@@ -152,13 +209,19 @@ export async function render(ctx) {
     append(ctx.root, [emptyState('This tool does not exist.', linkButton('All tools', '#/settings/tools'))]);
     return;
   }
-  const [templates, events, runs, settings] = await Promise.all([
-    listTemplates(id), listEvents(id), runsForTool(id), getSettings(),
+  const [templates, events, runs, settings, recipes] = await Promise.all([
+    listTemplates(id), listEvents(id), runsForTool(id), getSettings(), recipesForTool(id),
   ]);
   const L = lookups([tool], templates);
+  const tpl = templates.find((t) => t.id === tool.defaultTemplateId) || templates[0] || null;
   ctx.setTitle(tool.name);
   append(ctx.root, [
+    toolCard({
+      tool, subtitle: CATEGORY_LABELS[tool.category] || tool.category, recipes, template: tpl,
+      useLabel: 'Log run with this recipe', onUse: logWithRecipe(tool, tpl),
+    }),
     factsCard(tool, withTuning(settings.tuning).HALF_LIFE_DAYS),
+    recipesSection(tool, tpl, recipes),
     eventsSection(id, events, L.now),
     chartSections(templates, runs, events, L.now),
     runsSection(id, runs, L),

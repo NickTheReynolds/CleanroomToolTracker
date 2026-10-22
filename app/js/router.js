@@ -41,7 +41,9 @@ export const ROUTES = [
   { pattern: '/settings', load: () => import('./views/settings.js'), parent: null },
   { pattern: '/settings/tools', load: () => import('./views/settings-tools.js'), parent: '/settings' },
   { pattern: '/settings/tool/:id', load: () => import('./views/settings-tools.js'), parent: '/settings/tools' },
+  { pattern: '/settings/materials', load: () => import('./views/settings-materials.js'), parent: '/settings' },
   { pattern: '/settings/data', load: () => import('./views/settings-data.js'), parent: '/settings' },
+  { pattern: '/settings/sync', load: () => import('./views/settings-sync.js'), parent: '/settings' },
   { pattern: '/install', load: () => import('./views/install.js'), parent: '/settings' },
   { pattern: '/template/:id', load: () => import('./views/template-editor.js'), parent: '/settings/tools' },
 ];

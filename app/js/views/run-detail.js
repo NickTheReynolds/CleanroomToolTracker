@@ -1,9 +1,9 @@
 // @ts-check
 /**
- * Run detail: results (derived or manual), measurements, editable inputs and
- * sample details, photos and notes. Edits autosave and recompute derived
- * outputs. Actions: add measurement, mark complete / reopen, duplicate,
- * delete (soft, with Undo).
+ * Run detail: results (derived or manual), measurements, the recipe (an LNF
+ * wiki recipe can fill the inputs), editable inputs and sample details,
+ * photos and notes. Edits autosave and recompute derived outputs. Actions:
+ * add measurement, mark complete / reopen, duplicate, delete (soft, with Undo).
  */
 import { h, append, fill } from '../ui/dom.js';
 import {
@@ -11,23 +11,28 @@ import {
 } from '../ui/components.js';
 import { renderFields } from '../ui/fields.js';
 import { templateTiles } from '../ui/pickers.js';
-import { sampleFields, notesFields, dateTimeField } from '../ui/run-form.js';
+import { recipeField, sampleFields, notesFields, dateTimeField } from '../ui/run-form.js';
+import { fillMessage } from '../ui/recipes.js';
+import { toolCard } from '../ui/tool-card.js';
 import { outputsList, measurementList } from '../ui/run-outputs.js';
 import { photoStrip } from '../ui/photos.js';
 import { createAutosave } from '../ui/autosave.js';
 import { navigate, refresh } from '../router.js';
 import {
   getRecord, recomputeRun, getTool, getTemplate, listTemplates, listMeasurements, listTools, listRuns,
-  saveRun, deleteRun, restoreRun, startLogDraft, getSettings, saveSettings, materialsByRecency,
+  saveRun, deleteRun, restoreRun, startLogDraft, getSettings, saveSettings, materialsByRecency, listPhotos,
 } from '../data/repo.js';
+import { recipesForTool } from '../data/recipes.js';
 import {
   fieldsWithRole, hasAnyOutput, missingRequired, parseTags, blankDraft, prefillFrom,
 } from '../core/run-draft.js';
+import { recipeFill, applyFill, undoFill, recipeFilm } from '../core/recipes.js';
 import { uuid } from '../core/ids.js';
 import { formatDateTime } from '../core/time.js';
 import { STATUS_LABELS, normText } from '../core/vocab.js';
 
 /** @typedef {import('../core/types.js').Run} Run */
+/** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
 
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
@@ -42,10 +47,12 @@ export async function render(ctx) {
   }
   /** @type {Run} */
   let run = (await recomputeRun(id)) || stored;
-  const [tool, template, measurements, tools, settings, runs] = await Promise.all([
+  const [tool, template, measurements, tools, settings, runs, localPhotos, recipes] = await Promise.all([
     getTool(run.toolId), run.templateId ? getTemplate(run.templateId) : null, listMeasurements(id),
-    listTools({ includeArchived: true }), getSettings(), listRuns(),
+    listTools({ includeArchived: true }), getSettings(), listRuns(), listPhotos(id), recipesForTool(run.toolId),
   ]);
+  // Photos do not sync: count the ones taken on another device.
+  const elsewhere = (run.photoIds || []).filter((pid) => !localPhotos.some((p) => p.id === pid)).length;
   const toolMap = new Map(tools.map((t) => [t.id, t]));
   ctx.setTitle(`${tool ? tool.shortName || tool.name : 'Run'}${template ? ` · ${template.name}` : ''}`);
 
@@ -136,6 +143,44 @@ export async function render(ctx) {
   const orphans = [...Object.entries(run.params || {}), ...Object.entries(run.results || {})].filter(([k]) => !known.has(k));
   const setParam = (/** @type {string} */ k, /** @type {any} */ v) => change({ params: { ...state.params, [k]: v } });
 
+  // Recipe, inputs, sample and conditions redraw together when a recipe fills them.
+  const formBox = h('div', { class: 'view' });
+  const drawForm = () => fill(formBox,
+    section('Recipe', recipeField({
+      value: state.recipe, onChange: (v) => change({ recipe: v }), recipes, template,
+      title: `${tool ? tool.shortName || tool.name : 'Tool'} recipes`, onUse: useRecipe,
+    })),
+    template && fieldsWithRole(template, ['input']).length
+      ? section('Inputs', renderFields(fieldsWithRole(template, ['input']), state.params, setParam)) : null,
+    section('Sample', h('div', { class: 'fields' }, sampleFields(state, {
+      lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
+      showMask: !!template && template.derived.some((d) => d.fn === 'selectivity'), showRecipe: false,
+    }))),
+    template && fieldsWithRole(template, ['context']).length
+      ? section('Conditions', renderFields(fieldsWithRole(template, ['context']), state.params, setParam)) : null);
+  // Undo takes back only what the recipe changed, and goes away with the view.
+  /** @type {{close: () => void} | null} */
+  let recipeUndo = null;
+  /** @param {WikiRecipe} r @param {number} step */
+  function useRecipe(r, step) {
+    const before = { recipe: state.recipe, params: state.params, material: state.material };
+    const f = template ? recipeFill(r, template, { step }) : null;
+    change({ recipe: r.name, params: f ? applyFill(state.params, f.values) : state.params, material: recipeFilm(r) || state.material });
+    drawForm();
+    recipeUndo?.close();
+    recipeUndo = toast(fillMessage(r, f), {
+      action: {
+        label: 'Undo',
+        fn: () => {
+          if (!ctx.isCurrent()) return;
+          change({ recipe: before.recipe, params: f ? undoFill(state.params, before.params, f.values) : state.params, material: before.material });
+          drawForm();
+        },
+      },
+    });
+  }
+  drawForm();
+
   const setStatus = async (/** @type {'draft' | 'open' | 'complete'} */ status) => {
     if (status !== 'draft') {
       const missing = missingRequired(template, state.params, state.results);
@@ -160,26 +205,21 @@ export async function render(ctx) {
   };
 
   append(ctx.root, [
+    tool ? toolCard({ tool, subtitle: template ? template.name : 'No template yet', recipes, template, onUse: useRecipe }) : null,
     h('div', { class: 'card stack' },
       h('div', { class: 'row-wrap' }, statusBadge,
         run.status === 'draft' ? button('Mark open', { kind: 'ghost', onClick: () => setStatus('open') }) : null),
       h('p', { class: 'muted' }, `Started ${formatDateTime(run.startedAt, Date.now())}${run.author ? ` · by ${run.author}` : ''}`),
-      h('p', null, tool ? tool.name : 'Unknown tool', template ? ` · ${template.name}` : '')),
+      tool ? null : h('p', null, 'Unknown tool')),
     template ? null : section('Choose a template', templateTiles({
       templates: await listTemplates(run.toolId), defaultId: tool?.defaultTemplateId,
       onPick: async (t) => { if (await saveNow({ templateId: t.id })) refresh(); },
     })),
     template ? section('Results', outputsBox) : null,
     section('Measurements', measurementList({ runId: id, measurements, tools: toolMap })),
-    template && fieldsWithRole(template, ['input']).length
-      ? section('Inputs', renderFields(fieldsWithRole(template, ['input']), state.params, setParam)) : null,
-    section('Sample', h('div', { class: 'fields' }, sampleFields(state, {
-      lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
-      showMask: !!template && template.derived.some((d) => d.fn === 'selectivity'),
-    }))),
-    template && fieldsWithRole(template, ['context']).length
-      ? section('Conditions', renderFields(fieldsWithRole(template, ['context']), state.params, setParam)) : null,
-    section('Photos', photos.el),
+    formBox,
+    section('Photos', photos.el,
+      elsewhere ? h('p', { class: 'field-note' }, `${elsewhere} photo${elsewhere === 1 ? ' is' : 's are'} on another device (photos do not sync).`) : null),
     section('Notes', h('div', { class: 'fields' }, notesFields({ notes: state.notes, tags: state.tagsText },
       (p) => change(p.tags !== undefined ? { tagsText: p.tags } : p)))),
     orphans.length ? section('Other values', h('p', { class: 'muted small' }, 'Kept from fields that the template no longer has.'),
@@ -218,6 +258,7 @@ export async function render(ctx) {
       : button('Mark complete', { kind: 'primary', icon: 'check', onClick: () => setStatus('complete') }),
   ]);
   return async () => {
+    recipeUndo?.close();
     photos.dispose();
     try { await autosave.flush(); } catch (err) { toast(errorText(err), { kind: 'error' }); }
   };

@@ -25,6 +25,12 @@
   --focus: #1f6feb;
   --chart-line: #0b5d7a;
   --chart-grid: #d5dce3;
+  --cat-etch: #b8430b;
+  --cat-deposition: #1d4fc4;
+  --cat-thermal: #b4232a;
+  --cat-litho: #7a2dc0;
+  --cat-metrology: #0b7350;
+  --cat-other: #4b5866;
   --shadow: 0 1px 2px rgb(16 24 32 / 0.08), 0 2px 10px rgb(16 24 32 / 0.06);
   --radius: 14px;
   --radius-sm: 10px;
@@ -63,6 +69,12 @@
     --focus: #79b8ff;
     --chart-line: #6cc6e4;
     --chart-grid: #2c3945;
+    --cat-etch: #fb9a5c;
+    --cat-deposition: #93bdfd;
+    --cat-thermal: #fca5a5;
+    --cat-litho: #d4b0fd;
+    --cat-metrology: #6ee0b2;
+    --cat-other: #c3ccd7;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
   }
 }
@@ -91,6 +103,12 @@
   --focus: #79b8ff;
   --chart-line: #6cc6e4;
   --chart-grid: #2c3945;
+  --cat-etch: #fb9a5c;
+  --cat-deposition: #93bdfd;
+  --cat-thermal: #fca5a5;
+  --cat-litho: #d4b0fd;
+  --cat-metrology: #6ee0b2;
+  --cat-other: #c3ccd7;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
 }
 

@@ -25,6 +25,8 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 
 6. **Dev server binds to 127.0.0.1 by default.** `--lan` exposes it to phones on the same Wi-Fi. This avoids opening a firewall prompt and the LAN when it is not needed.
 
+6a. **The line-limit check skips directories excluded by `.gitignore`.** These are build outputs and caches such as `build/`, `dist/` and `.cache/`: they are not part of the repository, and a desktop build copies the whole app into them.
+
 7. **Browser smoke test.** `scripts/smoke-browser.mjs` drives headless Chrome or Edge through the DevTools protocol, using Node built-ins only. It is not part of `npm test`, because CI and other machines may have no browser.
 
 ## Data
@@ -142,6 +144,11 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
     - CSV download is one button per file, because browsers block several downloads from one tap. Share sends all three files at once.
 46. **Android Chrome refuses to share `.json` files,** so on Android the backup offers Download only.
 
+## Installed apps (after M4)
+
+47. **Phones use the installed web app.** You chose this over native or store apps. Android Chrome turns it into a WebAPK; iOS makes a Home Screen web app. **Settings → Install on your devices** shows a QR code of the published HTTPS address and the steps for each platform. When the app is not running from a public HTTPS address (desktop apps, localhost), you enter the address once (`settings.publicUrl`).
+48. **The desktop apps define `window.LNF_DESKTOP`** before the page loads. The web app then skips the service worker and the persistent-storage request (files are local, and updates come from the installer), and Settings → About explains how to update.
+
 ## Charts, History and Tool detail (M4)
 
 49. **Chart ranges.** Events outside the data are drawn when they fall within 10% of max(data span, 30 days) of it; farther ones are dropped. The date axis is at least 2 days wide. Tick labels add the year when the axis spans years or is not the current year.
@@ -149,9 +156,92 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 51. **Hollow points** mark runs that started strictly before the latest major event that is not in the future. This is the rule lookup uses for "Before last …".
 52. **`#/history?tool=<id>`** shows that tool only, then rewrites the address to `#/history`, so a reload keeps the filters you change afterwards. Saved filters that no longer apply (a deleted tool, for example) are dropped.
 53. **Keyword search keeps accents** (NFKC keeps "é"): "resist" does not find "Résist". It searches notes, recipe and tags only, as the spec says.
-54. **Tool detail order:** facts, events (5, then Show all), one chart per template, recent runs. An active tool also gets a sticky **Log run** bar.
+54. **Tool detail order:** the tool card, facts, LNF recipes when the tool has any (5, then Show all), events (5, then Show all), one chart per template, recent runs. An active tool also gets a sticky **Log run** bar.
 
-## Installed apps (after M4)
+## License
 
-47. **Phones use the installed web app.** You chose this over native or store apps. Android Chrome turns it into a WebAPK; iOS makes a Home Screen web app. **Settings → Install on your devices** shows a QR code of the published HTTPS address and the steps for each platform. When the app is not running from a public HTTPS address (desktop apps, localhost), you enter the address once (`settings.publicUrl`).
-48. **The desktop apps define `window.LNF_DESKTOP`** before the page loads. The web app then skips the service worker and the persistent-storage request (files are local, and updates come from the installer), and Settings → About explains how to update.
+55. **GNU AGPL v3 or later.** You wanted it shareable but not co-opted. The AGPL is a strong copyleft:
+    - anyone may use, share and change the app;
+    - copies keep the copyright notice;
+    - changed versions must be marked and released under the same license with their source;
+    - its network clause also covers running a changed version as a hosted service, which matters for a web app.
+
+    Alternatives considered:
+    - **GPL v3** lacks the network clause.
+    - **MPL** and permissive licenses (MIT, Apache) allow closed forks.
+    - **Non-commercial licenses** (such as PolyForm Noncommercial) forbid commercial use outright but are not open source, and they would also block benign uses. Switching later is possible while you are the only copyright holder.
+
+    The full text in `LICENSE` is the official gnu.org file, unmodified. At 661 lines it is the one file over the 600-line split guideline, and legal text cannot be split. Settings → About shows the copyright, the license summary, a link to the source once `SOURCE_URL` in `config.js` is set, and a note that the project is not affiliated with the University of Michigan or the LNF.
+
+## Sync (M5, GitHub variant)
+
+56. **Sync uses a private GitHub repository, at your request.** It replaces the spec's self-hosted push/pull server for now, because not everyone has the Synology app and phones reach GitHub anywhere. A private repository in your own account or organization is a reasonable reading of "a server the user controls". A server or lab-PC hub can come later with the same merge rules.
+57. **Snapshot per device, not a change log.** Each device writes its whole state, minus photos, to one file of its own, and reads everyone else's. This needs no cursor and no coordination, can never cause a write conflict between devices, and lets the repository history serve as a backup. At lab scale the compressed files stay small.
+58. **Ties go to the higher `deviceId` in sync** (the spec's rule), so devices converge. Backup import keeps the local copy on a tie (decision 41).
+59. **Safety rules.**
+    - A public repository is refused.
+    - The token is stored only on the device and never exported.
+    - Unreadable or newer-format files are reported and skipped, and the sync still writes this device's file.
+    - Derived results are recomputed for runs touched by a merge.
+60. **Photos do not sync** (spec v1). A run with photos taken elsewhere says how many are on another device.
+
+## LNF equipment and materials (seed version 2)
+
+61. **Real LNF tool names, at your request.** The spec said not to invent LNF tool names. You asked for every tool on the LNF wiki, so the seed lists them as the wiki names them: 127 tools from Category:Equipment, read on 2026-10-20. The 8 decommissioned tools are left out; the 10 the wiki marks as down or unclear are kept. Nothing is invented: each tool gets the generic template for its type (ICP etch, LPCVD, sputter and so on) with the gas lines its wiki page lists, and no recipes or process numbers.
+62. **Ids come from the names.** Each tool and template id is a SHA-256 of a fixed prefix and the tool name, formatted as a v4 UUID, so devices that seed separately merge cleanly (as in decision 8). `data/seed-lnf.js` was generated once and is now edited by hand.
+63. **Existing databases upgrade once** (`meta.seedVersion` 1 → 2). The upgrade adds the LNF tools and templates that are missing and never overwrites a record. It merges the materials and archives example tools that were never used or edited. Used or renamed examples stay.
+64. **One entry per material.** The wiki lists materials on several pages and spells them differently ("Gold", "Au", "Gold (all)").
+    - The seed merges each material under one formula-style name.
+    - Films keep their process where it changes the film, because etch rates differ: "SiO2 (thermal)", "SiO2 (PECVD)", "SiO2 (LTO)".
+    - The example list's names come first, in its old order.
+    - The result is 106 materials covering all 244 wiki entries, plus "LiNbO3 (bulk)" as you asked. The approved-materials sheet lists lithium niobate for 41 tool pages.
+    - Restricted materials (KOH-exposed samples, spin-on dopants) are left out.
+65. **Material search also uses the wiki's names.** The picker's More… sheet and Settings → Materials match the start of each word of the name and of the wiki's other names for it. So "gold" finds Au and "nitride" finds every nitride, while "si" does not match "Positive resist". The same box adds a new material.
+66. **Materials have their own Settings page,** because the list grew from 11 to about 100.
+
+## LNF recipes (version 1.2)
+
+67. **Recipes from the LNF wiki, at your request.** Decision 61 left recipes out; you then asked for every recipe the wiki documents. The app now ships 599 recipes for 95 tools. Nothing is invented: each recipe gives its source, the date of the copy it was read from, and a link.
+68. **Where they come from.**
+    - On 2026-10-21 the wiki refused connections from off campus, so its pages were read from the Internet Archive's newest copies (most from 2024 to 2026).
+    - The Google Sheets, Docs and PDFs that those pages embed or link were read live the same day, so their data is current. For example, the GSI PECVD characterization tab was last updated in August 2026.
+    - The import was a one-time job. Fix or add a recipe by editing `data/lnf-recipes-*.js`, as for `seed-lnf.js`.
+69. **What is missing.** Some recipes could not be read in full.
+    - The Internet Archive never saved some recipe pages: LAM 9400's Bell_Poly, mnf_parylene_slow_iso, LNF_GaAs_HBr, Moly_HBr_O2 and BARC_1, and STS APS DGRIE's SiC_1 and Si3N4_R27. Their process pages name them, so the app lists them by name, without parameters, with a link to the wiki.
+    - Some documents the wiki links need a UMich login, or were deleted. Examples are the Oxford ALD and AE evaporator process sheets, the Cooke and SJ-20 standard-process documents, and a Plasmatherm 790 process sheet. Recipes that only they describe are missing or listed by name only.
+    - Of the 599 recipes, 99 have a name but no parameters. 32 tools have no recipes on the wiki at all: mostly microscopes, probe stations, storage, and benches without a named process.
+70. **Reference data, not records.** Recipes live in the app's code, not in the database. So there is no schema change, nothing to back up or sync, and every device has the same list. A run still stores only the recipe name, so History search and CSV work as before. A wiki recipe cannot be edited in the app; type your own name, or change values after using one.
+71. **What Use fills.**
+    - The main step by default (the step you choose, for multi-step recipes).
+    - A value goes only into a field with the same key, the role being filled and a suitable type. Values are converted into the template's units on import.
+    - Gas fields the step does not use are cleared, because a recipe names its whole chemistry.
+    - The material is set when the recipe names exactly one film.
+    - A gas the step lists without one number ("30-0 sccm (ramped)") is used, so it stays as it is.
+    - Everything else stays. Undo takes back only what the recipe changed, and goes away when the form does. Values with no field are shown for reference only.
+    - A recipe whose sources disagree or are unclear carries a short "Check this one" note.
+72. **The Recipe field moved** from Sample to its own section above Inputs, in Log run and Run detail, because choosing a recipe sets the inputs.
+73. **Lookup.** "Fill planned inputs" fills input fields only, since context is never matched. Log this run keeps the recipe name. When the query names an LNF recipe, Results shows what the wiki says it gives, separately from the estimate: the estimate uses only your own runs.
+74. **How the recipes were read.** For each tool, one agent read its sources and wrote the recipes in the app's format, converting values into the template's units. A second, independent agent checked every value against its source and looked for missed recipes. `test/recipes.test.mjs` checks that every value fits its tool's template. Treat a recipe as a starting point and check it against the tool: the wiki's numbers can be older than the tool's current state.
+
+## Updates (version 1.2)
+
+75. **The update prompt no longer misses a new version.** Phones check for a new version as the app starts, often before the page listens for it. The app now also watches a worker that is already installing when it registers. It shows "Update available — Reload" again when the app returns to the foreground if another message pushed it away. Before, the prompt could wait until the app was restarted.
+76. **Why 1.1 did not reach the phones.** It was never pushed: the Synology Drive copy it was built in has no `.git` folder (Synology does not sync names that start with a dot), and GitHub Pages kept serving 1.0. DEPLOY.md explains how to check the published version and how to make such a copy a repository.
+
+## Tool photos, the wiki sheet and export (version 1.2)
+
+77. **Tool photos ship when possible and load from the wiki otherwise.**
+    - The app is offline-first, so it ships the photos it could read: 12 were in the Internet Archive. The live wiki refused connections from off campus on 2026-10-21.
+    - Any other photo loads from the wiki when the wiki is reachable (on the UMich network, where runs are logged). This is the one resource the app loads from another site; the README says so. Without it, the tool's category icon stands in.
+    - `npm run photos` on the UMich network ships the rest. The photos are the LNF's; the app credits the LNF wiki.
+78. **"?" is the tool's single entry point to the wiki.** It lists the tool page, the process page, the documents the page links (SOPs, overviews, process sheets) and the tool's recipes in the app. Links open in the browser; the sheet says that the wiki may need the UMich network and some documents a UMich login.
+79. **Export everything writes one file, in the format you choose.** Excel is the default because it keeps one sheet per tool with named columns and real dates, plus the tool events. CSV is one table with a row per run, since a CSV file can hold only one table; tool events stay in events.csv. PDF is a report for reading and printing, with each tool's events, not for analysis.
+80. **Times.** The Excel, PDF and CSV `date` column use local time, for people. The CSV also keeps the ISO 8601 UTC start and end (as runs.csv does, decision 45), for machines.
+81. **No libraries for Excel or PDF.**
+    - The workbook is a zip of stored (uncompressed) SpreadsheetML parts with inline strings, which every spreadsheet program reads.
+    - The PDF uses the 14 standard fonts, which PDF readers always have, so nothing is embedded. That limits text to WinAnsi; other characters are spelled out or shown as "?".
+    - Both writers are pure core modules with tests. Excel opened a sample workbook without repairs.
+82. **Visual changes stay within the existing design.**
+    - Each tool category has a colour and an icon, used on tool tiles, run rows and tool cards. The colours meet AA contrast on every surface in both themes (tested).
+    - Home greets you with this week's run count.
+    - Screens, sheets and dialogs ease in over about 0.2 s, and buttons respond to a press. All motion is off when the system asks for reduced motion.

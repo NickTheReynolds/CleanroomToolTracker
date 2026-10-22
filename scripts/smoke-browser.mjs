@@ -2,8 +2,9 @@
 // @ts-check
 /**
  * Browser smoke test (spec Section 15): in headless Chrome or Edge, load the
- * app, log a run, add pre and post measurements, run a lookup, export a
- * backup, then stop the server and reload offline. Uses Node built-ins
+ * app, log a run, add pre and post measurements, run a lookup, fill a run
+ * form from an LNF wiki recipe, export a backup, then stop the server and
+ * reload offline. Uses Node built-ins
  * only; needs a Chromium-based browser (set CHROME_PATH if it is not found)
  * and a global WebSocket (Node 22+, or Node 20 with --experimental-websocket).
  *
@@ -17,6 +18,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch } from './cdp.mjs';
 import { makeServer } from '../serve.mjs';
+import { LNF_TOOLS } from '../app/js/data/seed-lnf.js';
+import { RECIPES } from '../app/js/data/lnf-recipes-etch.js';
+
+/** The seeded ICP etcher the test logs a run on, and its first gas line. */
+const ICP = LNF_TOOLS.find((t) => t[3] === 'icp-etch') || LNF_TOOLS[0];
+const TOOL_NAME = ICP[2];
+const GAS_KEY = ICP[4].length ? ICP[4][0].normalize('NFKD').replace(/[^A-Za-z0-9]/g, '').toLowerCase() : 'cf4';
+/** An LNF recipe of that tool whose main step sets the ICP power (not to the 400 W logged below), and that power. */
+const RECIPE = RECIPES.find((r) => r.tool === ICP[0] && r.main >= 0
+  && r.steps[r.main].values.some((v) => v.k === 'icpPower' && typeof v.v === 'number' && v.v !== 400));
+const RECIPE_ICP = RECIPE ? RECIPE.steps[RECIPE.main].values.find((v) => v.k === 'icpPower')?.v : null;
 
 const args = process.argv.slice(2);
 const shotsDir = args.includes('--shots') ? args[args.indexOf('--shots') + 1] : null;
@@ -95,11 +107,10 @@ async function main() {
   await step('log a run', async () => {
     await t(`__t.click('Log run')`);
     await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
-    await t(`__t.tile('ICP etcher')`);
+    await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`document.querySelector('.field[data-key="icpPower"]')`);
-    await t(`__t.field('icpPower', 400) && __t.field('pressure', 10) && __t.field('chf3', 50) && __t.field('o2', 0)`);
+    await t(`__t.field('icpPower', 400) && __t.field('pressure', 10) && __t.field(${JSON.stringify(GAS_KEY)}, 50)`);
     await t(`__t.type('.field[data-key="time"] .dur-min', '5') && __t.type('.field[data-key="time"] .dur-sec', '0')`);
-    await t(`[...document.querySelectorAll('.pick-btn')].find((b) => b.textContent.includes('SiO2 (thermal)')).click()`);
     await snap('log-form');
     await t(`__t.click('Save')`);
     await page.waitFor(`location.hash.startsWith('#/run/') && document.querySelector('.section')`);
@@ -125,13 +136,36 @@ async function main() {
   await step('run a lookup', async () => {
     await page.evaluate(`location.hash = '#/lookup'`);
     await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
-    await t(`__t.tile('ICP etcher')`);
+    await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`__t.btn('Find similar runs')`);
     await t(`__t.click('Find similar runs')`);
     await page.waitFor(`location.hash.startsWith('#/results') && document.querySelector('.summary-card .headline')`);
     const headline = await t(`document.querySelector('.summary-card .headline').textContent`);
     if (headline.trim() !== '85 nm/min') throw new Error(`headline was ${headline}`);
     await snap('lookup-results');
+  });
+  await step('fill a run form from an LNF wiki recipe', async () => {
+    if (!RECIPE) throw new Error(`no LNF recipe that sets the ICP power on ${TOOL_NAME}`);
+    await page.evaluate(`location.hash = '#/log'`);
+    await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
+    await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
+    const open = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('LNF recipes'))`;
+    await page.waitFor(`!!${open} && document.querySelector('.field[data-key="icpPower"] .stepper-input').value === '400'`);
+    await t(`${open}.click()`);
+    await page.waitFor(`document.querySelector('dialog.sheet .row')`);
+    await checkLabels('recipe-list');
+    await t(`[...document.querySelectorAll('dialog.sheet .row')].find((r) => r.querySelector('.row-title').textContent === ${JSON.stringify(RECIPE.name)}).click()`);
+    await page.waitFor(`document.querySelector('dialog.sheet .recipe-detail .recipe-fills')`);
+    await snap('recipe-detail');
+    await t(`document.querySelector('dialog.sheet .recipe-detail > .btn-primary').click()`);
+    await page.waitFor(`!document.querySelector('dialog.sheet')
+      && document.querySelector('.field[data-key="icpPower"] .stepper-input').value === ${JSON.stringify(String(RECIPE_ICP))}`);
+    const name = await t(`[...document.querySelectorAll('#view label')].find((l) => l.textContent === 'Recipe').control.value`);
+    if (name !== RECIPE.name) throw new Error(`the recipe field says ${name}`);
+    await snap('log-form-recipe');
+    await page.evaluate(`location.hash = '#/tool/${ICP[0]}'`);
+    await page.waitFor(`[...document.querySelectorAll('.section-title')].some((h) => h.textContent.startsWith('LNF recipes'))`);
+    await checkLabels('tool-detail');
   });
   await step('export a backup file', async () => {
     await page.evaluate(`location.hash = '#/settings/data'`);
@@ -151,6 +185,24 @@ async function main() {
     }
     if (!/^lnf-runlog-backup-\d{4}-\d{2}-\d{2}\.json$/.test(file)) throw new Error(`unexpected file name ${file}`);
   });
+  await step('export everything as Excel, CSV and PDF', async () => {
+    /** First bytes each format must start with. */
+    const MAGIC = /** @type {Record<string, number[]>} */ ({ xlsx: [0x50, 0x4b, 3, 4], csv: [0xef, 0xbb, 0xbf], pdf: [0x25, 0x50, 0x44, 0x46] });
+    for (const [label, ext] of [['Excel', 'xlsx'], ['CSV', 'csv'], ['PDF', 'pdf']]) {
+      await t(`[...document.querySelectorAll('.seg-btn')].find((b) => b.textContent.trim() === ${JSON.stringify(label)}).click()`);
+      await t(`__t.click('Prepare the export')`);
+      await page.waitFor(`[...document.querySelectorAll('.card strong')].some((s) => s.textContent.endsWith('.${ext}'))`, 15000);
+      await t(`[...document.querySelectorAll('.card')].find((c) => c.textContent.includes('.${ext}')).querySelector('button:last-of-type').click()`);
+      let file = '';
+      for (let i = 0; i < 50 && !file; i++) {
+        await sleep(200);
+        file = readdirSync(downloads).find((f) => f.startsWith('lnf-runlog-all-') && f.endsWith(`.${ext}`)) || '';
+      }
+      if (!file) throw new Error(`no ${ext} file was downloaded`);
+      const head = [...readFileSync(join(downloads, file)).subarray(0, 4)];
+      if (MAGIC[ext].some((b, i) => head[i] !== b)) throw new Error(`${file} does not look like a ${label} file`);
+    }
+  });
   await step('works offline after the server stops', async () => {
     await new Promise((r) => { server.closeAllConnections?.(); server.close(() => r(undefined)); });
     await page.evaluate(`location.hash = ${JSON.stringify(runHash)}`);
@@ -163,7 +215,8 @@ async function main() {
   await step('other screens render with every control labelled', async () => {
     for (const [hash, ready] of [
       ['#/', '.home-grid'], ['#/open', '.view'], ['#/history', '.view .list, .view .empty'], ['#/settings', '.section'],
-      ['#/settings/tools', '.list'], ['#/event', '.tiles'], ['#/capture', '.tiles'],
+      ['#/settings/tools', '.list'], ['#/settings/materials', '.list'], ['#/settings/sync', '.section'],
+      ['#/event', '.tiles'], ['#/capture', '.tiles'],
     ]) {
       await page.evaluate(`location.hash = ${JSON.stringify(hash)}`);
       await page.waitFor(`document.querySelector(${JSON.stringify(ready)})`, 10000);

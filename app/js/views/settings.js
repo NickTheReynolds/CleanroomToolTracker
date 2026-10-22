@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Settings: name and device, tools and templates, materials, lookup tuning,
- * data and storage, theme, version and updates.
+ * Settings: name and device, links to tools and materials, lookup tuning,
+ * data and devices, theme, version and updates.
  */
 import { h, uid, debounce, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -10,9 +10,8 @@ import { textInput, numberStepper } from '../ui/fields.js';
 import { applyTheme } from '../ui/theme.js';
 import { checkForUpdate, updateWaiting, applyUpdate, desktopWrapper } from '../ui/pwa.js';
 import { getSettings, saveSettings, listTools } from '../data/repo.js';
-import { DEFAULTS, TUNABLE } from '../config.js';
+import { DEFAULTS, TUNABLE, SOURCE_URL } from '../config.js';
 import { APP_VERSION, APP_BUILD } from '../../version.js';
-import { normText } from '../core/vocab.js';
 
 /** @typedef {import('../data/records.js').Settings} Settings */
 
@@ -33,61 +32,6 @@ function textSetting(label, value, save, hint) {
   const input = textInput({ id, value, onChange: (v) => saveSoon(v || ''), autocapitalize: 'words' });
   return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), input.el,
     hint ? h('p', { class: 'field-note' }, hint) : null);
-}
-
-/**
- * Editable materials list: reorder, remove (with Undo) and add.
- * @param {Settings} settings
- * @returns {HTMLElement}
- */
-function materialsEditor(settings) {
-  let list = [...settings.materials];
-  const box = h('div', { class: 'stack' });
-  const save = async (/** @type {string[]} */ next) => {
-    list = next;
-    await saveSettings({ materials: next });
-    draw();
-  };
-  const addId = uid('mat');
-  const input = /** @type {HTMLInputElement} */ (h('input', {
-    id: addId, class: 'input', type: 'text', placeholder: 'e.g. Pt', autocomplete: 'off', enterkeyhint: 'done',
-  }));
-  const add = () => {
-    const name = input.value.trim();
-    if (!name) return;
-    if (list.some((m) => normText(m) === normText(name))) {
-      toast(`${name} is already in the list.`);
-      return;
-    }
-    input.value = '';
-    save([...list, name]);
-  };
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
-  const draw = () => {
-    box.replaceChildren(
-      h('div', { class: 'list' }, list.map((m, i) => h('div', { class: 'row' },
-        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, m)),
-        button('', {
-          kind: 'ghost', icon: 'up', ariaLabel: `Move ${m} up`, disabled: i === 0,
-          onClick: () => { const n = [...list]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; save(n); },
-        }),
-        button('', {
-          kind: 'ghost', icon: 'down', ariaLabel: `Move ${m} down`, disabled: i === list.length - 1,
-          onClick: () => { const n = [...list]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; save(n); },
-        }),
-        button('', {
-          kind: 'ghost', icon: 'trash', ariaLabel: `Remove ${m}`,
-          onClick: () => {
-            const before = list;
-            save(list.filter((_, j) => j !== i));
-            toast(`Removed ${m}.`, { action: { label: 'Undo', fn: () => save(before) } });
-          },
-        })))),
-      h('div', { class: 'field' }, h('label', { class: 'label', for: addId }, 'Add material'),
-        h('div', { class: 'stepper' }, input, button('Add', { kind: 'primary', icon: 'plus', onClick: add }))));
-  };
-  draw();
-  return box;
 }
 
 /**
@@ -133,6 +77,14 @@ function tuningEditor(settings) {
   return box;
 }
 
+/** @returns {HTMLElement} copyright, license, source link and the not-affiliated note */
+function licenseBlock() {
+  return h('div', { class: 'stack' },
+    h('p', { class: 'small' }, 'Copyright © 2026 Nick Reynolds. Free software under the GNU Affero General Public License, version 3 or later: you may use, share and change it, and copies and changed versions must stay under the same license with the source available. It comes with no warranty.'),
+    SOURCE_URL ? h('p', { class: 'small' }, 'Source code: ', h('a', { href: SOURCE_URL, target: '_blank', rel: 'noopener' }, SOURCE_URL)) : null,
+    h('p', { class: 'small muted' }, 'An independent project, not made or endorsed by the University of Michigan or the Lurie Nanofabrication Facility.'));
+}
+
 /** @returns {HTMLElement} version, build and the update check */
 function aboutBlock() {
   const wrapper = desktopWrapper();
@@ -140,7 +92,8 @@ function aboutBlock() {
     const name = wrapper.platform === 'macos' ? 'macOS' : 'Windows';
     return h('div', { class: 'stack' },
       h('p', null, `Version ${APP_VERSION}, ${name} desktop app${wrapper.version ? ` ${wrapper.version}` : ''}.`),
-      h('p', { class: 'field-note' }, `To update, install the newer ${name} app over this one; your data is kept.`));
+      h('p', { class: 'field-note' }, `To update, install the newer ${name} app over this one; your data is kept.`),
+      licenseBlock());
   }
   const status = h('p', { class: 'field-note', role: 'status' }, updateWaiting() ? 'An update is ready.' : '');
   const messages = {
@@ -161,7 +114,8 @@ function aboutBlock() {
         },
       }),
       updateWaiting() ? button('Reload now', { kind: 'primary', onClick: () => applyUpdate() }) : null),
-    status);
+    status,
+    licenseBlock());
 }
 
 /** @param {import('../router.js').ViewContext} ctx */
@@ -175,15 +129,18 @@ export async function render(ctx) {
         'Recorded as the author of runs you log.'),
       textSetting('Device name', settings.deviceName, (v) => saveSettings({ deviceName: v }),
         'For example “Phone” or “Office PC”.')),
-    section('Tools and templates',
+    section('Tools and materials',
       h('div', { class: 'list' },
         listRow({
           title: 'Tools and templates', lead: icon('wrench'),
           subtitle: `${tools.filter((t) => t.active).length} active tools. Add, rename, archive, edit templates.`,
           href: '#/settings/tools',
+        }),
+        listRow({
+          title: 'Materials', lead: icon('list'),
+          subtitle: `${settings.materials.length} in the material and substrate pickers. Search, add, remove.`,
+          href: '#/settings/materials',
         }))),
-    section('Materials', h('p', { class: 'muted small' }, 'Shown in the material and substrate pickers; the ones you used recently come first.'),
-      materialsEditor(settings)),
     section('Lookup tuning', tuningEditor(settings)),
     section('Data and devices',
       h('div', { class: 'list' },
@@ -191,6 +148,12 @@ export async function render(ctx) {
           title: 'Backup, import and storage', lead: icon('download'),
           subtitle: settings.lastExportAt ? `Last export ${new Date(settings.lastExportAt).toLocaleDateString()}` : 'No backup exported yet',
           href: '#/settings/data',
+        }),
+        listRow({
+          title: 'Sync', lead: icon('sync'),
+          subtitle: /** @type {any} */ (settings).sync && /** @type {any} */ (settings).sync.repo
+            ? `With ${/** @type {any} */ (settings).sync.repo}` : 'Keep phones, computers and labmates in step through a private GitHub repository',
+          href: '#/settings/sync',
         }),
         listRow({
           title: 'Install on your devices', lead: icon('share'),

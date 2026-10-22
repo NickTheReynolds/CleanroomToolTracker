@@ -1,6 +1,7 @@
 // @ts-check
 // Code conventions from the spec: @ts-check everywhere, a pure core that imports
-// nothing outside core/ (and config.js), no third-party requests, layering.
+// nothing outside core/ (and config.js), no third-party requests (except tool photos
+// from the LNF wiki, in one place), layering.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
@@ -62,8 +63,13 @@ test('core modules import only other core modules or config.js', async () => {
   }
 });
 
-test('layers call only downwards: data never imports ui/views; ui never imports views', async () => {
+test('layers call only downwards: data never imports sync/ui/views; sync never imports ui/views; ui never imports views', async () => {
   for (const f of await walk(join(JS, 'data'))) {
+    for (const spec of importsOf(await readFile(f, 'utf8'))) {
+      assert.ok(!/\/(ui|views|sync)\//.test(spec) && !spec.includes('router'), `${relative(ROOT, f)} imports ${spec}`);
+    }
+  }
+  for (const f of await walk(join(JS, 'sync'))) {
     for (const spec of importsOf(await readFile(f, 'utf8'))) {
       assert.ok(!/\/(ui|views)\//.test(spec) && !spec.includes('router'), `${relative(ROOT, f)} imports ${spec}`);
     }
@@ -106,6 +112,22 @@ test('the app loads nothing from other origins', async () => {
   for (const f of await walk(join(ROOT, 'app'), /\.(m?js|css|html|svg|webmanifest|json)$/)) {
     const src = await readFile(f, 'utf8');
     for (const re of LOADS) assert.ok(!re.test(src), `${relative(ROOT, f)} loads from another origin (${re})`);
+  }
+});
+
+test('only the tool card loads from the LNF wiki (a tool photo the app does not ship)', async () => {
+  for (const f of await walk(join(ROOT, 'app'), /\.(m?js|html)$/)) {
+    const rel = relative(ROOT, f).split('\\').join('/');
+    if (rel === 'app/js/data/lnf-wiki.js' || rel === 'app/js/ui/tool-card.js') continue;
+    assert.ok(!(await readFile(f, 'utf8')).includes('WIKI_HOST'), `${rel} uses WIKI_HOST`);
+  }
+});
+
+test('only the sync client talks to GitHub (the one third-party host, used only when Sync runs)', async () => {
+  for (const f of await walk(join(ROOT, 'app'), /\.(m?js|html)$/)) {
+    const rel = relative(ROOT, f).split('\\').join('/');
+    if (rel === 'app/js/sync/github.js') continue;
+    assert.ok(!(await readFile(f, 'utf8')).includes('api.github.com'), `${rel} mentions api.github.com`);
   }
 });
 

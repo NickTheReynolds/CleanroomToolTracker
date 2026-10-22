@@ -1,9 +1,10 @@
 // @ts-check
 /**
- * Backup, CSV export and import in the browser: reads and writes the
- * database, builds File objects and hands them to the share sheet or a
- * download link. The merge and CSV logic is pure and lives in
- * export-import.js.
+ * Backup, CSV export, the export of everything (CSV, Excel or PDF) and
+ * import in the browser: reads and writes the database, builds File
+ * objects and hands them to the share sheet or a download link. The merge,
+ * CSV, workbook and report logic is pure and lives in export-import.js and
+ * core/ (export-all.js, xlsx.js, pdf.js).
  */
 import { withTx, req, putAll, deleteDatabase } from './db.js';
 import { getSettings, saveSettings } from './records.js';
@@ -13,6 +14,10 @@ import {
   buildBackup, backupFileName, planImport, runsCsv, measurementsCsv, eventsCsv, encodePhoto, bytesToBase64,
   base64ToBytes,
 } from './export-import.js';
+import { allRunsCsv, allSheets, reportBlocks, localStamp } from '../core/export-all.js';
+import { xlsxBytes } from '../core/xlsx.js';
+import { pdfBytes } from '../core/pdf.js';
+import { localDateKey } from '../core/time.js';
 import { APP_VERSION } from '../../version.js';
 
 /** Byte-order mark: Excel needs it to read a CSV file as UTF-8. */
@@ -110,6 +115,33 @@ export async function makeCsvFiles() {
     csv('measurements.csv', measurementsCsv(all.measurements, all.runs, all.tools)),
     csv('events.csv', eventsCsv(all.events, all.tools)),
   ];
+}
+
+/** The formats of the export of everything. */
+export const ALL_FORMATS = Object.freeze(/** @type {const} */ (['csv', 'xlsx', 'pdf']));
+
+/**
+ * Everything in one file: every run with its parameters, results and
+ * measurements, as one CSV table, an Excel workbook or a PDF report (the
+ * workbook and the report also hold the tool events).
+ * @param {'csv' | 'xlsx' | 'pdf'} format
+ * @param {Date} [now]
+ * @returns {Promise<File[]>}
+ */
+export async function makeAllExport(format, now = new Date()) {
+  const [all, settings] = await Promise.all([readStores(['tools', 'templates', 'runs', 'measurements', 'events']), getSettings()]);
+  const input = { tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements, events: all.events };
+  const base = `lnf-runlog-all-${localDateKey(now)}`;
+  // The bytes are a plain (not shared) buffer; newer TypeScript lib types need telling.
+  const part = (/** @type {Uint8Array} */ bytes) => /** @type {BlobPart} */ (/** @type {unknown} */ (bytes));
+  if (format === 'csv') return [new File([BOM + allRunsCsv(input)], `${base}.csv`, { type: 'text/csv' })];
+  if (format === 'xlsx') {
+    return [new File([part(xlsxBytes(allSheets(input)))], `${base}.xlsx`,
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })];
+  }
+  const blocks = reportBlocks(input, { now: now.getTime(), who: settings.userName ? `by ${settings.userName}` : '' });
+  const pdf = pdfBytes(blocks, { title: 'LNF Run Log: all runs', footer: `LNF Run Log, exported ${localStamp(now.getTime())}` });
+  return [new File([part(pdf)], `${base}.pdf`, { type: 'application/pdf' })];
 }
 
 /**

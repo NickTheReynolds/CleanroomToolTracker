@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v1.0.0-dev';
+const CACHE_NAME = 'lnf-runlog-v1.2.0-dev';
 
 const ASSETS = [
   './',
@@ -23,6 +23,20 @@ const ASSETS = [
   'icons/icon-512.png',
   'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
+  // Tool photos (scripts/tool-photos.mjs keeps these lines).
+  'img/tools/10030.jpg',
+  'img/tools/10061.jpg',
+  'img/tools/110101.jpg',
+  'img/tools/14021.jpg',
+  'img/tools/170030.jpg',
+  'img/tools/21040.jpg',
+  'img/tools/21051.jpg',
+  'img/tools/51000.jpg',
+  'img/tools/53111.jpg',
+  'img/tools/53131.jpg',
+  'img/tools/54081.jpg',
+  'img/tools/85051.jpg',
+  // End of tool photos.
   'js/main.js',
   'js/router.js',
   'js/config.js',
@@ -38,6 +52,12 @@ const ASSETS = [
   'js/core/summary.js',
   'js/core/summary-text.js',
   'js/core/search.js',
+  'js/core/qr.js',
+  'js/core/recipes.js',
+  'js/core/csv.js',
+  'js/core/xlsx.js',
+  'js/core/pdf.js',
+  'js/core/export-all.js',
   'js/data/db.js',
   'js/data/schema.js',
   'js/data/records.js',
@@ -48,6 +68,19 @@ const ASSETS = [
   'js/data/photos.js',
   'js/data/export-import.js',
   'js/data/backup.js',
+  'js/data/seed-types.js',
+  'js/data/seed-upgrade.js',
+  'js/data/seed-lnf.js',
+  'js/data/recipes.js',
+  'js/data/lnf-recipes-etch.js',
+  'js/data/lnf-recipes-dep.js',
+  'js/data/lnf-recipes-other.js',
+  'js/data/lnf-wiki.js',
+  'js/data/tool-photos.js',
+  'js/sync/codec.js',
+  'js/sync/github.js',
+  'js/sync/plan.js',
+  'js/sync/sync.js',
   'js/ui/dom.js',
   'js/ui/icons.js',
   'js/ui/components.js',
@@ -64,6 +97,9 @@ const ASSETS = [
   'js/ui/run-outputs.js',
   'js/ui/lookup-card.js',
   'js/ui/chart.js',
+  'js/ui/qr.js',
+  'js/ui/recipes.js',
+  'js/ui/tool-card.js',
   'js/views/home.js',
   'js/views/settings.js',
   'js/views/settings-tools.js',
@@ -80,6 +116,8 @@ const ASSETS = [
   'js/views/install.js',
   'js/views/history.js',
   'js/views/tool-detail.js',
+  'js/views/settings-sync.js',
+  'js/views/settings-materials.js',
 ];
 
 /** @type {any} */

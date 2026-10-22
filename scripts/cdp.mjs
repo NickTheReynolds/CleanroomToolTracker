@@ -1,7 +1,8 @@
 // @ts-check
 /**
  * Minimal Chrome DevTools Protocol client for the browser smoke test:
- * launch headless Chrome or Edge, open a page, evaluate scripts, take
+ * launch headless Chrome or Edge (or connect to a running browser, such as
+ * the WebView2 desktop app), open a page, evaluate scripts, take
  * screenshots. Node built-ins only (uses the global WebSocket, which Node 22
  * provides; Node 20 needs --experimental-websocket).
  */
@@ -43,15 +44,15 @@ export function findBrowser() {
  * @property {() => Promise<void>} close
  */
 
+const NO_WEBSOCKET = 'This Node has no global WebSocket. Use Node 22+, or Node 20 with --experimental-websocket.';
+
 /**
  * Launch a headless browser and open one page.
  * @param {{width?: number, height?: number, scale?: number, mobile?: boolean, dark?: boolean}} [opts]
  * @returns {Promise<Page>}
  */
 export async function launch(opts = {}) {
-  if (typeof WebSocket === 'undefined') {
-    throw new Error('This Node has no global WebSocket. Use Node 22+, or Node 20 with --experimental-websocket.');
-  }
+  if (typeof WebSocket === 'undefined') throw new Error(NO_WEBSOCKET);
   const exe = findBrowser();
   if (!exe) throw new Error('No Chrome or Edge found. Set CHROME_PATH.');
   const profile = mkdtempSync(join(tmpdir(), 'lnf-cdp-'));
@@ -69,7 +70,41 @@ export async function launch(opts = {}) {
     });
     proc.on('exit', (code) => reject(new Error(`Browser exited (${code})`)));
   });
-  const ws = new WebSocket(/** @type {string} */ (wsUrl));
+  const page = await connect(/** @type {string} */ (wsUrl), { newPage: true });
+  const { send } = page;
+  await send('Emulation.setDeviceMetricsOverride', {
+    width: opts.width || 390, height: opts.height || 844, deviceScaleFactor: opts.scale || 2, mobile: opts.mobile !== false,
+  });
+  if (opts.mobile !== false) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  if (opts.dark) {
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+  }
+  const disconnect = page.close;
+  page.close = async () => {
+    const exited = proc.exitCode !== null ? Promise.resolve() : new Promise((r) => proc.once('exit', r));
+    try { await page.sendBrowser('Browser.close'); } catch { /* already closed */ }
+    await disconnect();
+    await Promise.race([exited, new Promise((r) => setTimeout(r, 5000))]);
+    proc.kill();
+    // The browser's helper processes let go of the profile a moment after it exits.
+    try { rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); } catch { /* still locked */ }
+  };
+  return page;
+}
+
+/**
+ * Connect to a running browser's DevTools endpoint and attach to a page:
+ * the first open page, or a new about:blank one. For a browser or WebView2
+ * app started with --remote-debugging-port=<port>, wsUrl is the
+ * webSocketDebuggerUrl from http://127.0.0.1:<port>/json/version. The
+ * returned page's close() only disconnects; the browser keeps running.
+ * @param {string} wsUrl browser-level DevTools WebSocket URL
+ * @param {{newPage?: boolean}} [opts] newPage: open a new about:blank page instead of attaching to an open one
+ * @returns {Promise<Page>}
+ */
+export async function connect(wsUrl, opts = {}) {
+  if (typeof WebSocket === 'undefined') throw new Error(NO_WEBSOCKET);
+  const ws = new WebSocket(wsUrl);
   await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
   let nextId = 1;
   /** @type {Map<number, {resolve: (v: any) => void, reject: (e: Error) => void}>} */
@@ -97,19 +132,23 @@ export async function launch(opts = {}) {
     waiting.set(id, { resolve, reject });
     ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
   });
-  const { targetId } = await raw('Target.createTarget', { url: 'about:blank' });
+  let targetId;
+  if (opts.newPage) {
+    ({ targetId } = await raw('Target.createTarget', { url: 'about:blank' }));
+  } else {
+    const { targetInfos } = await raw('Target.getTargets');
+    const open = targetInfos.find((/** @type {any} */ t) => t.type === 'page');
+    if (!open) {
+      ws.close();
+      throw new Error('The browser has no open page to attach to.');
+    }
+    targetId = open.targetId;
+  }
   const { sessionId } = await raw('Target.attachToTarget', { targetId, flatten: true });
   /** @type {(method: string, params?: object) => Promise<any>} */
   const send = (method, params) => raw(method, params, sessionId);
   await send('Page.enable');
   await send('Runtime.enable');
-  await send('Emulation.setDeviceMetricsOverride', {
-    width: opts.width || 390, height: opts.height || 844, deviceScaleFactor: opts.scale || 2, mobile: opts.mobile !== false,
-  });
-  if (opts.mobile !== false) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-  if (opts.dark) {
-    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
-  }
   /** @type {Page} */
   const page = {
     send,
@@ -150,11 +189,7 @@ export async function launch(opts = {}) {
       await loaded;
     },
     async close() {
-      try { await raw('Browser.close'); } catch { /* already closed */ }
       ws.close();
-      proc.kill();
-      await new Promise((r) => setTimeout(r, 300));
-      try { rmSync(profile, { recursive: true, force: true }); } catch { /* still locked */ }
     },
   };
   return page;

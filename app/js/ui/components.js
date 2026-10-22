@@ -65,11 +65,11 @@ export function linkButton(label, href, o = {}) {
  * (default 5 s); timeout 0 keeps it until dismissed.
  * @param {string} message
  * @param {{action?: {label: string, fn: () => void}, timeout?: number, kind?: 'info'|'error'}} [o]
- * @returns {{close: () => void}}
+ * @returns {{close: () => void, el: HTMLElement | null}} el is the toast (null without a toast area)
  */
 export function toast(message, o = {}) {
   const box = document.getElementById('toasts');
-  if (!box) return { close() {} };
+  if (!box) return { close() {}, el: null };
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let timer;
   const close = () => {
@@ -89,7 +89,7 @@ export function toast(message, o = {}) {
   box.append(el);
   const timeout = o.timeout ?? (o.kind === 'error' ? 8000 : UI.UNDO_MS);
   if (timeout > 0) timer = setTimeout(close, timeout);
-  return { close };
+  return { close, el };
 }
 
 /**
