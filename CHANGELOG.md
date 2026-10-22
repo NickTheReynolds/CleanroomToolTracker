@@ -2,6 +2,24 @@
 
 One entry per milestone (spec Section 16).
 
+## M7: An "i" button on every field
+
+Version 1.3.0.
+
+- **Every field label has an "i" beside it.** Tap it to open a short note under the label, and tap again to close it.
+  - **Template fields** (inputs, conditions and results) say what the setting or result is and, where there is a usual trend, what raising it tends to do. A key gets the meaning its template gives it: "pressure" is the chamber pressure on a plasma etcher, the XeF2 pressure on the Xactix and the down force on the CMP. Gases say what they do in that process: NF3 cleans the chamber of a PECVD but etches on a plasma etcher.
+  - Each note ends with how Lookup treats the field, worked out from the template, for example "a difference of 5 mTorr adds 1 to the distance", "Lookup leaves it out", or the formula of a derived result. It stays right when you edit a template.
+  - **Lookup tuning** (half-life, event penalty, top K): what each one does, and what raising or lowering it changes.
+  - Look up's match rules, the template and field editors (weight, spread hint, must match exactly, chemistry), measurements, tool events, tool settings, sync, backup, export and the History filters have notes too.
+  - The notes are general process knowledge, not recipe advice: the tool's documentation and its engineer come first.
+  - Notes that only repeated a visible hint moved behind the "i": primary output, process type, role and spread hint in the template editor.
+  - `test/field-help.test.mjs` checks that every field of every seeded template and every LNF gas has its own note, that a key gets its template's meaning, the Lookup line, and that every note a screen asks for exists. The smoke test checks that every visible field label on the main screens has its button, and that the button opens and closes its note.
+- **No tool photos, and no automatic contact with the LNF wiki.**
+  - The LNF wiki has had security problems, so the app no longer loads anything from it. A tool's card shows its category icon.
+  - **?** still opens the tool's wiki page, with its photo, in your browser. If the wiki asks for a UMich login or the UMich network, you sign in there.
+  - Wiki information reaches the app only through releases.
+  - The photo download script is gone. The browser tests (`npm run smoke` and the desktop smoke test) cannot reach the wiki, and the smoke test fails if a page tries.
+
 ## M6: LNF recipes, tool photos, export everything, and updates that reach the phones
 
 Version 1.2.0.

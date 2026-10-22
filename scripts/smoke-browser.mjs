@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launch } from './cdp.mjs';
+import { launch, BLOCKED_HOSTS } from './cdp.mjs';
 import { makeServer } from '../serve.mjs';
 import { LNF_TOOLS } from '../app/js/data/seed-lnf.js';
 import { RECIPES } from '../app/js/data/lnf-recipes-etch.js';
@@ -52,6 +52,20 @@ async function main() {
   const base = `http://127.0.0.1:${port}/`;
   const downloads = mkdtempSync(join(tmpdir(), 'lnf-smoke-dl-'));
   const page = await launch();
+  // The app must never contact the LNF wiki on its own (only links the person taps go there).
+  // launch() makes the wiki unreachable, and every page notes any request it still tries. (DevTools
+  // request interception would do it too, but it makes the page bypass its service worker.)
+  await page.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `window.__wikiTries = [];
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          try { if (${JSON.stringify(BLOCKED_HOSTS)}.includes(new URL(e.name).hostname)) window.__wikiTries.push(e.name); } catch { /* not a URL */ }
+        }
+      }).observe({ type: 'resource', buffered: true });`,
+  });
+  /** @type {string[]} */
+  const wikiRequests = [];
+  const collectWikiTries = async () => { wikiRequests.push(...await page.evaluate('window.__wikiTries || []')); };
   /** @type {string[]} */
   const errors = [];
   page.on('Runtime.exceptionThrown', (p) => errors.push(p.exceptionDetails?.exception?.description || p.exceptionDetails?.text));
@@ -64,13 +78,23 @@ async function main() {
   let shot = 0;
   /** @type {string[]} */
   const unlabeled = [];
-  // Accessibility: every visible form control needs a label or an aria name.
+  /** @type {string[]} */
+  const noHelp = [];
+  // Accessibility: every visible form control needs a label or an aria name,
+  // and every visible field label its "i" button.
   const checkLabels = async (/** @type {string} */ screen) => {
     const bad = await page.evaluate(`[...document.querySelectorAll('input, select, textarea')]
       .filter((el) => el.type !== 'hidden' && el.getAttribute('aria-hidden') !== 'true')
       .filter((el) => !(el.labels && el.labels.length) && !el.getAttribute('aria-label') && !el.getAttribute('aria-labelledby'))
       .map((el) => el.outerHTML.slice(0, 90))`);
     for (const b of bad) unlabeled.push(`${screen}: ${b}`);
+    const helpless = await page.evaluate(`[...document.querySelectorAll(['#view', 'dialog.sheet']
+      .flatMap((root) => ['.field > .label', '.field > .field-head .label', '.seg > .label', '.seg > .field-head .label'].map((s) => root + ' ' + s))
+      .join(', '))]
+      .filter((l) => l.offsetParent !== null && !l.classList.contains('visually-hidden'))
+      .filter((l) => !l.closest('.label-help')?.querySelector('.help-btn'))
+      .map((l) => l.textContent.trim().slice(0, 60))`);
+    for (const b of helpless) noHelp.push(`${screen}: ${b}`);
   };
   const snap = async (/** @type {string} */ name) => {
     await checkLabels(name);
@@ -138,6 +162,7 @@ async function main() {
     await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
     await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`__t.btn('Find similar runs')`);
+    await checkLabels('lookup-form');
     await t(`__t.click('Find similar runs')`);
     await page.waitFor(`location.hash.startsWith('#/results') && document.querySelector('.summary-card .headline')`);
     const headline = await t(`document.querySelector('.summary-card .headline').textContent`);
@@ -204,6 +229,7 @@ async function main() {
     }
   });
   await step('works offline after the server stops', async () => {
+    await collectWikiTries(); // the reload below starts a new page
     await new Promise((r) => { server.closeAllConnections?.(); server.close(() => r(undefined)); });
     await page.evaluate(`location.hash = ${JSON.stringify(runHash)}`);
     await page.reload();
@@ -216,13 +242,33 @@ async function main() {
     for (const [hash, ready] of [
       ['#/', '.home-grid'], ['#/open', '.view'], ['#/history', '.view .list, .view .empty'], ['#/settings', '.section'],
       ['#/settings/tools', '.list'], ['#/settings/materials', '.list'], ['#/settings/sync', '.section'],
-      ['#/event', '.tiles'], ['#/capture', '.tiles'],
+      ['#/settings/data', '.section'], ['#/install', '.section'], [`#/settings/tool/${ICP[0]}`, '.section'],
+      [`#/template/${ICP[1]}`, '.section'], ['#/event', '.tiles'], ['#/capture', '.tiles'],
     ]) {
       await page.evaluate(`location.hash = ${JSON.stringify(hash)}`);
       await page.waitFor(`document.querySelector(${JSON.stringify(ready)})`, 10000);
       await checkLabels(hash);
     }
     if (unlabeled.length) throw new Error(`unlabelled controls:\n${unlabeled.join('\n')}`);
+    if (noHelp.length) throw new Error(`field labels without an "i" button:\n${noHelp.join('\n')}`);
+  });
+  await step('an "i" button opens and closes its note', async () => {
+    await page.evaluate(`location.hash = '#/settings'`);
+    await page.waitFor(`document.querySelector('.help-btn[aria-label="About Half-life"]')`, 10000);
+    const res = await t(`(() => {
+      const b = document.querySelector('.help-btn[aria-label="About Half-life"]');
+      const note = document.getElementById(b.getAttribute('aria-controls'));
+      const shut = note.hidden && b.getAttribute('aria-expanded') === 'false';
+      b.click();
+      const open = !note.hidden && b.getAttribute('aria-expanded') === 'true' && note.innerText.includes('half as much');
+      b.click();
+      return { shut, open, closed: note.hidden && b.getAttribute('aria-expanded') === 'false' };
+    })()`);
+    if (!res.shut || !res.open || !res.closed) throw new Error(`note states ${JSON.stringify(res)}`);
+  });
+  await step('the app never contacts the LNF wiki by itself', async () => {
+    await collectWikiTries();
+    if (wikiRequests.length) throw new Error(`the page asked the wiki for:\n${[...new Set(wikiRequests)].join('\n')}`);
   });
   await step('no errors in the page', async () => {
     if (errors.length) throw new Error(errors.join('\n'));

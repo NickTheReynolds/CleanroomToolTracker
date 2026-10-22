@@ -7,13 +7,14 @@
  * the run.
  */
 import { h, append, fill, uid, debounce } from '../ui/dom.js';
-import { button, linkButton, emptyState, segmented } from '../ui/components.js';
+import { button, linkButton, emptyState, segmented, labelRow } from '../ui/components.js';
 import { runList, runRow, lookups } from '../ui/run-list.js';
 import { createAutosave } from '../ui/autosave.js';
 import { listRuns, listTools, listTemplates, getDraft, saveDraft } from '../data/repo.js';
 import { filterRuns, distinctMaterials, normalizeFilters, hasFilters, EMPTY_FILTERS } from '../core/search.js';
 import { RUN_STATUSES, STATUS_LABELS, normText } from '../core/vocab.js';
 import { UI } from '../config.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/search.js').RunFilters} RunFilters */
 /** @typedef {import('../ui/run-list.js').Lookups} Lookups */
@@ -48,7 +49,7 @@ function usable(raw, L, materials) {
  * @param {[string, string][]} options [value, text]
  * @param {string} value
  * @param {(v: string) => void} onChange
- * @param {{disabled?: boolean, note?: string}} [o]
+ * @param {{disabled?: boolean, note?: string, help?: string}} [o] help: the note behind its "i" button
  * @returns {HTMLElement}
  */
 function selectField(label, options, value, onChange, o = {}) {
@@ -57,7 +58,7 @@ function selectField(label, options, value, onChange, o = {}) {
     options.map(([v, text]) => h('option', { value: v }, text))));
   sel.value = value;
   sel.addEventListener('change', () => onChange(sel.value));
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), sel,
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, o.help), sel,
     o.note ? h('p', { class: 'field-note' }, o.note) : null);
 }
 
@@ -66,13 +67,14 @@ function selectField(label, options, value, onChange, o = {}) {
  * @param {string} label
  * @param {string} value
  * @param {(v: string) => void} onChange
+ * @param {string} [help] the note behind its "i" button
  * @returns {HTMLElement}
  */
-function dateField(label, value, onChange) {
+function dateField(label, value, onChange, help) {
   const id = uid('hf');
   const input = /** @type {HTMLInputElement} */ (h('input', { id, class: 'input', type: 'date', value }));
   input.addEventListener('change', () => onChange(input.value));
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), input);
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, help), input);
 }
 
 /** @param {import('../router.js').ViewContext} ctx */
@@ -177,19 +179,20 @@ export async function render(ctx) {
       fill(templateSlot, selectField('Template',
         /** @type {[string, string][]} */ ([['', 'Any template'], ...own.map((t) => [t.id, t.name])]),
         filters.templateId, (v) => change({ templateId: v }),
-        filters.toolId ? {} : { disabled: true, note: 'Choose a tool first.' }));
+        filters.toolId ? { help: HELP.historyTemplate } : { disabled: true, note: 'Choose a tool first.', help: HELP.historyTemplate }));
     };
     drawTemplate();
     fill(filtersBox,
-      h('div', { class: 'field' }, h('label', { class: 'label', for: qId }, 'Search notes, recipe and tags'), q),
+      h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: qId }, 'Search notes, recipe and tags'), 'Search', HELP.historySearch), q),
       selectField('Tool',
         /** @type {[string, string][]} */ ([['', 'All tools'], ...tools.map((t) => [t.id, t.active ? t.name : `${t.name} (archived)`])]),
         filters.toolId, (v) => {
           change({ toolId: v, templateId: '' });
           drawTemplate();
-        }),
+        }, { help: HELP.historyTool }),
       h('div', { class: 'history-status' }, segmented({
-        label: 'Status', options: STATUS_OPTIONS, value: filters.status,
+        label: 'Status', options: STATUS_OPTIONS, value: filters.status, help: HELP.historyStatus,
         onChange: (v) => change({ status: v || '' }),
       })),
       h('details', { class: 'more', open: MORE.some((k) => filters[k]) },
@@ -197,10 +200,10 @@ export async function render(ctx) {
         h('div', { class: 'fields' },
           templateSlot,
           selectField('Material', /** @type {[string, string][]} */ ([['', 'Any material'], ...materials.map((m) => [m, m])]),
-            filters.material, (v) => change({ material: v })),
+            filters.material, (v) => change({ material: v }), { help: HELP.historyMaterial }),
           h('div', { class: 'filter-dates' },
-            dateField('From', filters.from, (v) => change({ from: v })),
-            dateField('To', filters.to, (v) => change({ to: v }))))));
+            dateField('From', filters.from, (v) => change({ from: v }), HELP.historyFrom),
+            dateField('To', filters.to, (v) => change({ to: v }), HELP.historyTo)))));
   };
 
   const clearAll = () => {

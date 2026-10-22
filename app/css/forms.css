@@ -10,6 +10,40 @@
 .field-note { margin: 0; font-size: 0.86rem; color: var(--text-2); }
 .field-note.warn { color: var(--warn); font-weight: 600; }
 
+/* The "i" button beside a label, and the note it opens under the label row.
+   The button keeps a 36 px tap target; negative margins stop it from making
+   the row taller. */
+.label-help { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.help-btn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  margin: -6px 0;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--brand);
+  touch-action: manipulation;
+}
+.help-btn .icon { width: 20px; height: 20px; }
+.help-btn[aria-expanded="true"] { background: var(--brand-soft); }
+.field-help {
+  padding: 8px 12px;
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.field-help[hidden] { display: none; }
+.field-help p { margin: 0; }
+.field-help p + p { margin-top: 6px; }
+.seg > .field-head, .seg > .label { align-self: flex-start; }
+
 .input {
   width: 100%;
   min-height: var(--tap);
@@ -126,6 +160,11 @@ select.input { appearance: auto; }
 .switch[aria-checked="true"] .switch-track { background: var(--brand); border-color: var(--brand); }
 .switch[aria-checked="true"] .switch-thumb { left: 25px; background: var(--brand-ink); }
 .switch-state { flex: none; width: 2.2em; font-weight: 700; font-size: 0.92rem; }
+/* A switch with an "i" button beside it (a button cannot hold another one). */
+.switch-wrap { display: flex; flex-direction: column; gap: 6px; }
+.switch-row { display: flex; align-items: center; gap: 4px; }
+.switch-row > .switch { flex: 1; min-width: 0; }
+.switch-row > .help-btn { width: 40px; height: 40px; margin: 0; }
 
 /* Material picker */
 .picker { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -181,4 +220,4 @@ details.more > summary {
 details.more > summary::-webkit-details-marker { display: none; }
 details.more > summary::before { content: "▸"; font-size: 0.9em; }
 details.more[open] > summary::before { content: "▾"; }
-details.more > .fields, details.more > .stack { margin-top: 8px; }
+details.more > .fields, details.more > .stack, details.more > .field { margin-top: 8px; }

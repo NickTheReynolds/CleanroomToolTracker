@@ -197,11 +197,65 @@ export function section(title, ...children) {
 }
 
 /**
+ * A titled block whose title has an "i" button, for a choice that has no
+ * label of its own (a row of tool tiles, a group of measurement points).
+ * @param {string} title
+ * @param {string | readonly string[]} help
+ * @param {...import('./dom.js').Child} children
+ * @returns {HTMLElement}
+ */
+export function helpSection(title, help, ...children) {
+  const { btn, note } = helpToggle(title, help);
+  return h('section', { class: 'section' },
+    h('div', { class: 'section-head' }, h('h2', { class: 'section-title' }, title), btn), note, children);
+}
+
+/**
+ * A small "i" button that shows or hides a note about a field. Put `btn`
+ * beside the field's label and `note` under the label row.
+ * @param {string} name what the note is about, read out as "About <name>"
+ * @param {string | readonly string[]} text one paragraph per string
+ * @returns {{btn: HTMLButtonElement, note: HTMLElement}}
+ */
+export function helpToggle(name, text) {
+  const id = uid('help');
+  const note = h('div', { id, class: 'field-help', hidden: true },
+    (typeof text === 'string' ? [text] : [...text]).map((p) => h('p', null, p)));
+  const btn = /** @type {HTMLButtonElement} */ (h('button', {
+    type: 'button', class: 'help-btn', 'aria-label': `About ${name}`, 'aria-expanded': 'false', 'aria-controls': id,
+    onClick: () => {
+      note.hidden = !note.hidden;
+      btn.setAttribute('aria-expanded', String(!note.hidden));
+    },
+  }, icon('info', { size: 20 })));
+  return { btn, note };
+}
+
+/**
+ * A field's label row: the label with its "i" button, then any extra
+ * controls (a Clear button) at the end of the row, and the note under it.
+ * Without help it is the label (in a row with the extras, if any).
+ * @param {HTMLElement} label the label element
+ * @param {string} name read out as "About <name>"
+ * @param {string | readonly string[] | null | undefined} help
+ * @param {...import('./dom.js').Child} extra
+ * @returns {HTMLElement[]}
+ */
+export function labelRow(label, name, help, ...extra) {
+  const more = extra.filter(Boolean);
+  if (!help || !help.length) return more.length ? [h('div', { class: 'field-head' }, label, more)] : [label];
+  const { btn, note } = helpToggle(name, help);
+  return [h('div', { class: 'field-head' }, h('span', { class: 'label-help' }, label, btn), more), note];
+}
+
+/**
  * One-of-n choice as big buttons (an ARIA radio group). The selected option
- * shows a check mark, so state never relies on colour alone.
+ * shows a check mark, so state never relies on colour alone. `help` adds an
+ * "i" button beside the label.
  * @template T
  * @param {{label?: string, options: {value: T, label: string}[], value: T | null,
- *   onChange: (v: T | null) => void, allowNone?: boolean, compact?: boolean}} o
+ *   onChange: (v: T | null) => void, allowNone?: boolean, compact?: boolean,
+ *   help?: string | readonly string[]}} o
  * @returns {HTMLElement}
  */
 export function segmented(o) {
@@ -237,13 +291,15 @@ export function segmented(o) {
   });
   sync();
   return h('div', { class: ['seg', o.compact && 'seg-compact'] },
-    o.label ? h('span', { class: 'label', id: labelId }, o.label) : null,
+    o.label ? labelRow(h('span', { class: 'label', id: labelId }, o.label), o.label, o.help) : null,
     h('div', { class: 'seg-row', role: 'radiogroup', 'aria-labelledby': o.label ? labelId : undefined }, buttons));
 }
 
 /**
- * An on/off switch with a visible On/Off word.
- * @param {{label: string, checked: boolean, onChange: (v: boolean) => void, hint?: string}} o
+ * An on/off switch with a visible On/Off word. `help` adds an "i" button
+ * beside the switch (the switch is a button, so it cannot hold one).
+ * @param {{label: string, checked: boolean, onChange: (v: boolean) => void, hint?: string,
+ *   help?: string | readonly string[]}} o
  * @returns {HTMLElement}
  */
 export function toggle(o) {
@@ -260,7 +316,9 @@ export function toggle(o) {
   }, h('span', { class: 'switch-text' }, h('span', { class: 'switch-label' }, o.label),
     o.hint ? h('span', { class: 'switch-hint' }, o.hint) : null),
   h('span', { class: 'switch-track', 'aria-hidden': 'true' }, h('span', { class: 'switch-thumb' })), state);
-  return btn;
+  if (!o.help || !o.help.length) return btn;
+  const info = helpToggle(o.label, o.help);
+  return h('div', { class: 'switch-wrap' }, h('div', { class: 'switch-row' }, btn, info.btn), info.note);
 }
 
 /**

@@ -24,6 +24,7 @@ import { uuid } from '../core/ids.js';
 import { fmtValue } from '../core/format.js';
 import { toMs, formatMmSs } from '../core/time.js';
 import { EVENT_LABELS } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 import { withTuning } from '../config.js';
 
 /** @param {import('../router.js').ViewContext} ctx */
@@ -107,7 +108,7 @@ export async function render(ctx) {
       typeof q.targetThickness === 'number' ? `target ${q.targetThickness} nm` : null].filter(Boolean).join(' · '),
     rules.length ? ` · ${rules.join(', ')}` : ''),
     outputs.length > 1 ? segmented({
-      label: 'Result to estimate', compact: true,
+      label: 'Result to estimate', compact: true, help: HELP.lookupOutput,
       options: outputs.map((f) => ({ value: f.key, label: f.label })), value: outputKey,
       onChange: (v) => { if (v) navigate(`/results?output=${encodeURIComponent(v)}`, { replace: true }); },
     }) : null,

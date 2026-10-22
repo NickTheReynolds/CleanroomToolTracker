@@ -34,8 +34,7 @@ Later changes ship with **Commit** and then **Push origin** in GitHub Desktop.
 
 1. Run `npm test`.
 2. For a user-visible release, run `npm run bump` (patch), `npm run bump -- minor` or `npm run bump -- 2.0.0`. This updates `app/version.js`, the cache name in `app/sw.js` and `package.json` together.
-3. Optional, on the UMich network or VPN: run `npm run photos` to ship the tool photos the app does not have yet.
-4. Commit and push to `main`.
+3. Commit and push to `main`.
 
 Installed apps check for a new service worker when they open or come back to the foreground. When a new version is ready they show **Update available — Reload**. The app never reloads by itself in the middle of data entry. Settings → About → **Check for update** checks on demand.
 

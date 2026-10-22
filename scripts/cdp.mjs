@@ -47,6 +47,18 @@ export function findBrowser() {
 const NO_WEBSOCKET = 'This Node has no global WebSocket. Use Node 22+, or Node 20 with --experimental-websocket.';
 
 /**
+ * Hosts a test browser must never reach. Nothing automated may download from
+ * the LNF wiki without the owner's say-so (it has had security problems), and
+ * the app's tool card would otherwise load tool photos from it in every test.
+ */
+export const BLOCKED_HOSTS = Object.freeze(['lnf-wiki.eecs.umich.edu']);
+const RULES = BLOCKED_HOSTS.map((host) => `MAP ${host} ~NOTFOUND`).join(', ');
+/** Makes BLOCKED_HOSTS unresolvable for the whole browser (pages and service workers), as one argument. */
+export const BLOCK_HOSTS_ARG = `--host-resolver-rules=${RULES}`;
+/** The same switch for a command-line string, such as WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS. */
+export const BLOCK_HOSTS_SWITCH = `--host-resolver-rules="${RULES}"`;
+
+/**
  * Launch a headless browser and open one page.
  * @param {{width?: number, height?: number, scale?: number, mobile?: boolean, dark?: boolean}} [opts]
  * @returns {Promise<Page>}
@@ -58,7 +70,7 @@ export async function launch(opts = {}) {
   const profile = mkdtempSync(join(tmpdir(), 'lnf-cdp-'));
   const proc = spawn(exe, [
     '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
-    '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars', 'about:blank',
+    '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars', BLOCK_HOSTS_ARG, 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
   const wsUrl = await new Promise((resolve, reject) => {
     let buf = '';

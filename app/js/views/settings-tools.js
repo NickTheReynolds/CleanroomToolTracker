@@ -5,7 +5,7 @@
  */
 import { h, uid, append } from '../ui/dom.js';
 import {
-  button, linkButton, section, listRow, badge, emptyState, segmented, toggle, toast, chip, errorText, confirmDialog,
+  button, linkButton, section, listRow, badge, emptyState, segmented, toggle, toast, chip, errorText, confirmDialog, labelRow,
 } from '../ui/components.js';
 import { textInput, numberStepper } from '../ui/fields.js';
 import { createAutosave } from '../ui/autosave.js';
@@ -15,6 +15,7 @@ import {
 } from '../data/repo.js';
 import { CATEGORY_LABELS, TOOL_CATEGORIES } from '../core/vocab.js';
 import { withTuning } from '../config.js';
+import { HELP } from '../core/app-help.js';
 
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
@@ -82,7 +83,7 @@ async function renderTool(ctx, id) {
   const notesId = uid('tool');
   const kindSlot = h('div');
   const drawKind = () => kindSlot.replaceChildren(segmented({
-    label: 'Kind',
+    label: 'Kind', help: HELP.toolKind,
     options: [{ value: 'process', label: 'Process tool' }, { value: 'metrology', label: 'Metrology' }],
     value: state.kind,
     onChange: (v) => change({ kind: v || 'process' }),
@@ -96,13 +97,13 @@ async function renderTool(ctx, id) {
       onClick: async () => { autosave.cancel(); await clearDraft(draftKey); refresh(); },
     })) : null,
     section('Tool',
-      h('div', { class: 'field' }, h('label', { class: 'label', for: nameId }, 'Name'),
+      h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: nameId }, 'Name'), 'Name', HELP.toolName),
         textInput({ id: nameId, value: state.name, onChange: (v) => change({ name: v || '' }), autocapitalize: 'words' }).el),
-      h('div', { class: 'field' }, h('label', { class: 'label', for: shortId }, 'Short name'),
+      h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: shortId }, 'Short name'), 'Short name', HELP.toolShortName),
         textInput({ id: shortId, value: state.shortName, onChange: (v) => change({ shortName: v || '' }) }).el,
         h('p', { class: 'field-note' }, 'Shown in lists, e.g. “ICP-2”.')),
       segmented({
-        label: 'Category',
+        label: 'Category', help: HELP.toolCategory,
         options: TOOL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] })),
         value: state.category,
         onChange: (v) => {
@@ -113,13 +114,15 @@ async function renderTool(ctx, id) {
         },
       }),
       kindSlot,
-      h('div', { class: 'field' }, h('label', { class: 'label', for: halfId }, 'Recency half-life', h('span', { class: 'unit' }, ' (days)')),
+      h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: halfId }, 'Recency half-life', h('span', { class: 'unit' }, ' (days)')),
+          'Recency half-life', HELP.toolHalfLife),
         numberStepper({
           id: halfId, label: 'half-life', value: state.halfLifeDays ?? null, step: 5, min: 1, max: 3650,
           placeholder: null, onChange: (v) => change({ halfLifeDays: v }),
         }).el,
         h('p', { class: 'field-note' }, `Leave empty to use the setting (${defaultHalfLife} days). Use a shorter half-life for tools that drift fast.`)),
-      h('div', { class: 'field' }, h('label', { class: 'label', for: notesId }, 'Notes'),
+      h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: notesId }, 'Notes'), 'Notes', HELP.toolNotes),
         textInput({ id: notesId, value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el),
       isNew ? null : toggle({
         label: 'Active', hint: 'Archived tools are hidden from pickers; their runs stay.',

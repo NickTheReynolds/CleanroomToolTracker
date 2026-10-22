@@ -17,6 +17,7 @@ import {
 } from '../data/backup.js';
 import { getSettings, photoUsage } from '../data/repo.js';
 import { UI } from '../config.js';
+import { HELP } from '../core/app-help.js';
 import { ageDays, formatDateTime } from '../core/time.js';
 import { fmtNum } from '../core/format.js';
 
@@ -167,7 +168,7 @@ function backupSection(settings, photos, photoEstimate) {
     h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
     last,
     toggle({
-      label: 'Include photos',
+      label: 'Include photos', help: HELP.includePhotos,
       hint: photos.count
         ? `${plural(photos.count, 'photo')}, about ${formatBytes(photoEstimate)} in the backup`
         : 'No photos stored on this device.',
@@ -206,7 +207,7 @@ function everythingSection() {
   return section('Export everything',
     h('p', null, 'Every run with its parameters, results and measurements in one file; the Excel and PDF files also list the tool events. Deleted records are left out.'),
     segmented({
-      label: 'Format', value: format,
+      label: 'Format', value: format, help: HELP.exportFormat,
       options: [{ value: 'xlsx', label: 'Excel' }, { value: 'csv', label: 'CSV' }, { value: 'pdf', label: 'PDF' }],
       onChange: (v) => {
         if (!v) return;

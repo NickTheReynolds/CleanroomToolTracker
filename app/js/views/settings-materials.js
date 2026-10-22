@@ -4,10 +4,11 @@
  * Search it, add to it, reorder it and remove entries (with Undo).
  */
 import { h, fill, uid, append } from '../ui/dom.js';
-import { button, toast, emptyState } from '../ui/components.js';
+import { button, toast, emptyState, labelRow } from '../ui/components.js';
 import { materialMatches } from '../ui/pickers.js';
 import { getSettings, saveSettings } from '../data/repo.js';
 import { normText } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
@@ -72,7 +73,8 @@ export async function render(ctx) {
   draw();
   append(ctx.root, [
     h('p', null, 'Offered in the material and substrate pickers, the ones you used recently first. It starts with what the LNF wiki lists as supported; add your own or remove ones you never use.'),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Find or add a material'),
+    h('div', { class: 'field' },
+      labelRow(h('label', { class: 'label', for: id }, 'Find or add a material'), 'finding or adding a material', HELP.findMaterial),
       h('div', { class: 'stepper' }, input, add)),
     count,
     rows,

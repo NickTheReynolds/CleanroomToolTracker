@@ -5,12 +5,13 @@
  * notes and tags, the run timer and the start time.
  */
 import { h, uid } from './dom.js';
-import { button } from './components.js';
+import { button, labelRow } from './components.js';
 import { textInput, numberStepper } from './fields.js';
 import { materialPicker } from './pickers.js';
 import { recipeButton } from './recipes.js';
 import { formatMmSs, formatClock, toLocalInput, fromLocalInput } from '../core/time.js';
 import { elapsedSeconds } from '../core/run-draft.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
 /** @typedef {import('../core/types.js').Template} Template */
@@ -43,7 +44,7 @@ export function recipeField(o) {
   const pick = recipeButton({
     title: o.title, recipes: o.recipes, template: o.template, useLabel: o.useLabel || 'Use recipe', roles: o.roles, onUse: o.onUse,
   });
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Recipe'),
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, 'Recipe'), 'Recipe', pick ? HELP.recipe : HELP.recipeName),
     textInput({ id, value: o.value, autocapitalize: 'off', onChange: (v) => o.onChange(v || '') }).el,
     pick ? h('div', { class: 'row-wrap' }, pick) : null,
     pick ? h('p', { class: 'field-note' }, 'Choosing an LNF recipe fills in its parameters. You can still change any value.') : null);
@@ -62,22 +63,24 @@ export function sampleFields(s, o) {
   const targetId = uid('target');
   const mask = materialPicker({
     label: 'Mask material (optional)', value: s.maskMaterial || '', options: o.lists.maskMaterial,
-    onChange: (v) => o.onChange({ maskMaterial: v }), onAddNew: o.onAddMaterial, show: 4,
+    onChange: (v) => o.onChange({ maskMaterial: v }), onAddNew: o.onAddMaterial, show: 4, help: HELP.maskMaterial,
   });
   return [
     materialPicker({
       label: 'Material', value: s.material, options: o.lists.material,
-      onChange: (v) => o.onChange({ material: v }), onAddNew: o.onAddMaterial,
+      onChange: (v) => o.onChange({ material: v }), onAddNew: o.onAddMaterial, help: HELP.material,
     }),
     materialPicker({
       label: 'Substrate', value: s.substrate, options: o.lists.substrate,
-      onChange: (v) => o.onChange({ substrate: v }), onAddNew: o.onAddMaterial, show: 4,
+      onChange: (v) => o.onChange({ substrate: v }), onAddNew: o.onAddMaterial, show: 4, help: HELP.substrate,
     }),
     o.showMask || s.maskMaterial ? mask : h('details', { class: 'more' }, h('summary', null, 'Mask material'), mask),
-    o.showRecipe === false ? null : h('div', { class: 'field' }, h('label', { class: 'label', for: recipeId }, 'Recipe'),
+    o.showRecipe === false ? null : h('div', { class: 'field' },
+      labelRow(h('label', { class: 'label', for: recipeId }, 'Recipe'), 'Recipe', HELP.recipeName),
       textInput({ id: recipeId, value: s.recipe, autocapitalize: 'off', onChange: (v) => o.onChange({ recipe: v || '' }) }).el),
     o.showTarget === false ? null : h('div', { class: 'field' },
-      h('label', { class: 'label', for: targetId }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),
+      labelRow(h('label', { class: 'label', for: targetId }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),
+        'Target thickness', HELP.targetThickness),
       numberStepper({
         id: targetId, label: 'target thickness', value: s.targetThickness ?? null, step: 10, min: 0,
         onChange: (v) => o.onChange({ targetThickness: v }),
@@ -95,10 +98,11 @@ export function notesFields(s, onChange) {
   const notesId = uid('notes');
   const tagsId = uid('tags');
   return [
-    h('div', { class: 'field' }, h('label', { class: 'label', for: notesId }, 'Notes'),
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: notesId }, 'Notes'), 'Notes', HELP.notes),
       textInput({ id: notesId, value: s.notes, multiline: true, onChange: (v) => onChange({ notes: v || '' }) }).el,
       h('p', { class: 'field-note' }, 'Tip: use the microphone on the keyboard to dictate.')),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: tagsId }, 'Tags', h('span', { class: 'unit' }, ' (comma-separated)')),
+    h('div', { class: 'field' },
+      labelRow(h('label', { class: 'label', for: tagsId }, 'Tags', h('span', { class: 'unit' }, ' (comma-separated)')), 'Tags', HELP.tags),
       textInput({ id: tagsId, value: s.tags, autocapitalize: 'off', onChange: (v) => onChange({ tags: v || '' }) }).el),
   ];
 }
@@ -160,9 +164,10 @@ export function timerCard(o) {
  * @param {string} label
  * @param {string} value ISO
  * @param {(iso: string) => void} onChange
+ * @param {string | readonly string[]} [help] the note behind its "i" button
  * @returns {HTMLElement}
  */
-export function dateTimeField(label, value, onChange) {
+export function dateTimeField(label, value, onChange, help) {
   const id = uid('when');
   const input = /** @type {HTMLInputElement} */ (h('input', {
     id, class: 'input', type: 'datetime-local', value: toLocalInput(value),
@@ -171,7 +176,7 @@ export function dateTimeField(label, value, onChange) {
     const iso = fromLocalInput(input.value);
     if (iso) onChange(iso);
   });
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label),
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, help),
     h('div', { class: 'stepper' }, input, button('Now', {
       onClick: () => {
         const now = new Date().toISOString();

@@ -30,6 +30,7 @@ import { recipeFill, applyFill, undoFill, recipeFilm } from '../core/recipes.js'
 import { uuid } from '../core/ids.js';
 import { formatDay, formatDateTime } from '../core/time.js';
 import { normText } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/run-draft.js').RunDraft} RunDraft */
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
@@ -195,19 +196,19 @@ async function form(ctx, toolId, templateId) {
         value: draft.recipe, onChange: (v) => change({ recipe: v }), recipes, template,
         title: `${tool.shortName || tool.name} recipes`, onUse: useRecipe,
       })),
-      inputs.length ? section('Inputs', renderFields(inputs, draft.params, setParam)) : null,
+      inputs.length ? section('Inputs', renderFields(inputs, draft.params, setParam, { template })) : null,
       section('Sample', h('div', { class: 'fields' }, sampleFields(draft, {
         lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
         showMask: template.derived.some((x) => x.fn === 'selectivity'), showRecipe: false,
       }))),
-      context.length ? section('Conditions', renderFields(context, draft.params, setParam)) : null,
+      context.length ? section('Conditions', renderFields(context, draft.params, setParam, { template })) : null,
       outputs.length ? h('details', { class: 'more card', open: hasAnyOutput(template, draft.results) || undefined },
         h('summary', null, 'Results now (optional)'),
-        renderFields(outputs, draft.results, (k, v) => change({ results: { ...draft.results, [k]: v } }))) : null,
+        renderFields(outputs, draft.results, (k, v) => change({ results: { ...draft.results, [k]: v } }), { template })) : null,
       section('Photos', photos.el),
       section('Notes', h('div', { class: 'fields' }, notesFields(draft, (p) => change(p)))),
       h('details', { class: 'more' }, h('summary', null, 'Start time'),
-        h('div', { class: 'stack' }, dateTimeField('Started', draft.startedAt, (iso) => change({ startedAt: iso })))),
+        h('div', { class: 'stack' }, dateTimeField('Started', draft.startedAt, (iso) => change({ startedAt: iso }), HELP.started))),
     );
   };
 

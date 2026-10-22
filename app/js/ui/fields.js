@@ -1,18 +1,21 @@
 // @ts-check
 /**
  * Form fields driven by a template field spec: a numeric stepper with
- * hold-to-repeat, an mm:ss duration input, choice, yes/no and text fields.
+ * hold-to-repeat, an mm:ss duration input, choice, yes/no and text fields,
+ * each with an "i" button that explains the field (core/field-help.js).
  * Every control returns {el, set} so callers can reset it.
  */
 import { h, on, uid } from './dom.js';
 import { icon } from './icons.js';
-import { segmented } from './components.js';
+import { segmented, helpToggle } from './components.js';
 import { parseNumber, stepValue } from '../core/format.js';
+import { fieldHelp } from '../core/field-help.js';
 import { splitMinSec } from '../core/time.js';
 import { UI } from '../config.js';
 
 /** @typedef {import('../core/types.js').FieldSpec} FieldSpec */
 /** @typedef {import('../core/types.js').FieldValue} FieldValue */
+/** @typedef {import('../core/field-help.js').TemplateLike} TemplateLike */
 /** @typedef {{el: HTMLElement, set: (v: any) => void, focus?: () => void}} Control */
 
 /**
@@ -111,7 +114,8 @@ const pad2 = (n) => String(n).padStart(2, '0');
 /**
  * Duration entered as minutes and seconds (two numeric boxes, since phone
  * number pads have no colon key) between − and + buttons. Value in seconds.
- * @param {{id?: string, label: string, value: number | null, step?: number, onChange: (v: number | null) => void}} o
+ * @param {{id?: string, label: string, value: number | null, step?: number, min?: number, max?: number,
+ *   onChange: (v: number | null) => void}} o min and max (seconds) bound the − and + buttons; never below 0
  * @returns {Control}
  */
 export function durationInput(o) {
@@ -150,7 +154,7 @@ export function durationInput(o) {
     on(inp, 'blur', () => { if (read() !== undefined) show(); });
   }
   const bump = (/** @type {1 | -1} */ dir) => (/** @type {number} */ mult) => {
-    set(stepValue(current ?? 0, step * mult, dir, 0));
+    set(stepValue(current ?? 0, step * mult, dir, Math.max(0, o.min ?? 0), o.max));
   };
   const minus = h('button', { type: 'button', class: 'stepper-btn', 'aria-label': `Decrease ${o.label}` }, icon('minus'));
   const plus = h('button', { type: 'button', class: 'stepper-btn', 'aria-label': `Increase ${o.label}` }, icon('plus'));
@@ -242,12 +246,13 @@ function boolInput(o) {
 }
 
 /**
- * Render one template field with its label, unit and control.
+ * Render one template field with its label, unit, "i" button and control.
  * @param {FieldSpec} f
  * @param {FieldValue | undefined} value
  * @param {(v: FieldValue) => void} onChange
- * @param {{clearable?: boolean, placeholder?: FieldValue, note?: string | Node}} [opts]
- *   clearable adds a Clear button (lookup: every field optional)
+ * @param {{clearable?: boolean, placeholder?: FieldValue, note?: string | Node, template?: TemplateLike | null}} [opts]
+ *   clearable adds a Clear button (lookup: every field optional); template picks the
+ *   field's help text (a key can mean different things in different templates)
  * @returns {HTMLElement}
  */
 export function renderField(f, value, onChange, opts = {}) {
@@ -262,7 +267,7 @@ export function renderField(f, value, onChange, opts = {}) {
       placeholder: typeof opts.placeholder === 'number' ? opts.placeholder : null, onChange,
     });
   } else if (f.type === 'duration') {
-    control = durationInput({ id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, onChange });
+    control = durationInput({ id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max, onChange });
   } else if (f.type === 'select') {
     control = choiceInput({ id, labelId, field: f, value: typeof v === 'string' ? v : null, clearable: opts.clearable, onChange });
   } else if (f.type === 'bool') {
@@ -271,17 +276,18 @@ export function renderField(f, value, onChange, opts = {}) {
     control = textInput({ id, value: v === null ? null : String(v), onChange });
   }
   const labelTag = (f.type === 'select' && asButtons(f)) || f.type === 'bool' ? 'span' : 'label';
-  const head = h('div', { class: 'field-head' },
-    h(labelTag, { class: 'label', id: labelId, for: labelTag === 'label' ? id : undefined },
-      f.label,
-      f.unit && f.type !== 'duration' ? h('span', { class: 'unit' }, ` (${f.unit})`) : null,
-      f.type === 'duration' ? h('span', { class: 'unit' }, ' (mm:ss)') : null,
-      f.required ? h('span', { class: 'req' }, ' · required') : null),
+  const label = h(labelTag, { class: 'label', id: labelId, for: labelTag === 'label' ? id : undefined },
+    f.label,
+    f.unit && f.type !== 'duration' ? h('span', { class: 'unit' }, ` (${f.unit})`) : null,
+    f.type === 'duration' ? h('span', { class: 'unit' }, ' (mm:ss)') : null,
+    f.required ? h('span', { class: 'req' }, ' · required') : null);
+  const help = helpToggle(f.label, fieldHelp(f, opts.template || null));
+  const head = h('div', { class: 'field-head' }, h('span', { class: 'label-help' }, label, help.btn),
     opts.clearable ? h('button', {
       type: 'button', class: 'link-btn', 'aria-label': `Clear ${f.label}`, onClick: () => control.set(null),
     }, 'Clear') : null);
   return h('div', { class: ['field', `field-${f.type}`], dataset: { key: f.key } },
-    head, control.el, opts.note ? h('p', { class: 'field-note' }, opts.note) : null);
+    head, help.note, control.el, opts.note ? h('p', { class: 'field-note' }, opts.note) : null);
 }
 
 /**
@@ -289,11 +295,11 @@ export function renderField(f, value, onChange, opts = {}) {
  * @param {FieldSpec[]} fields
  * @param {Record<string, FieldValue>} values
  * @param {(key: string, v: FieldValue) => void} onChange
- * @param {{clearable?: boolean, notes?: Record<string, string | Node>}} [opts]
+ * @param {{clearable?: boolean, notes?: Record<string, string | Node>, template?: TemplateLike | null}} [opts]
  * @returns {HTMLElement}
  */
 export function renderFields(fields, values, onChange, opts = {}) {
   return h('div', { class: 'fields' }, fields.map((f) => renderField(f, values[f.key], (v) => onChange(f.key, v), {
-    clearable: opts.clearable, note: opts.notes ? opts.notes[f.key] : undefined,
+    clearable: opts.clearable, note: opts.notes ? opts.notes[f.key] : undefined, template: opts.template,
   })));
 }

@@ -30,6 +30,7 @@ import { recipeFill, applyFill, undoFill, recipeFilm } from '../core/recipes.js'
 import { uuid } from '../core/ids.js';
 import { formatDateTime } from '../core/time.js';
 import { STATUS_LABELS, normText } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
@@ -151,13 +152,13 @@ export async function render(ctx) {
       title: `${tool ? tool.shortName || tool.name : 'Tool'} recipes`, onUse: useRecipe,
     })),
     template && fieldsWithRole(template, ['input']).length
-      ? section('Inputs', renderFields(fieldsWithRole(template, ['input']), state.params, setParam)) : null,
+      ? section('Inputs', renderFields(fieldsWithRole(template, ['input']), state.params, setParam, { template })) : null,
     section('Sample', h('div', { class: 'fields' }, sampleFields(state, {
       lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
       showMask: !!template && template.derived.some((d) => d.fn === 'selectivity'), showRecipe: false,
     }))),
     template && fieldsWithRole(template, ['context']).length
-      ? section('Conditions', renderFields(fieldsWithRole(template, ['context']), state.params, setParam)) : null);
+      ? section('Conditions', renderFields(fieldsWithRole(template, ['context']), state.params, setParam, { template })) : null);
   // Undo takes back only what the recipe changed, and goes away with the view.
   /** @type {{close: () => void} | null} */
   let recipeUndo = null;
@@ -226,8 +227,8 @@ export async function render(ctx) {
       h('dl', { class: 'facts' }, orphans.map(([k, v]) => [h('dt', null, k), h('dd', null, String(v))]))) : null,
     h('details', { class: 'more' }, h('summary', null, 'Times'),
       h('div', { class: 'stack' },
-        dateTimeField('Started', state.startedAt, (iso) => change({ startedAt: iso })),
-        state.endedAt ? dateTimeField('Ended', state.endedAt, (iso) => change({ endedAt: iso })) : null)),
+        dateTimeField('Started', state.startedAt, (iso) => change({ startedAt: iso }), HELP.started),
+        state.endedAt ? dateTimeField('Ended', state.endedAt, (iso) => change({ endedAt: iso }), HELP.ended) : null)),
     section('Run actions', h('div', { class: 'row-wrap' },
       button('Duplicate as new run', {
         icon: 'copy',

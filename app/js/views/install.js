@@ -7,9 +7,10 @@
  */
 import { h, append, fill, uid } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { button, section, toast, badge } from '../ui/components.js';
+import { button, section, toast, badge, labelRow } from '../ui/components.js';
 import { isIos, isStandalone, canInstall, promptInstall, desktopWrapper } from '../ui/pwa.js';
 import { getSettings, saveSettings } from '../data/repo.js';
+import { HELP } from '../core/app-help.js';
 
 /**
  * The address phones should open: this page's own address when it is served
@@ -149,7 +150,7 @@ export async function render(ctx) {
     canInstall() ? button('Install this app now', { kind: 'primary', icon: 'download', big: true, onClick: () => promptInstall() }) : null,
     section('App address',
       own ? null : h('div', { class: 'field' },
-        h('label', { class: 'label', for: inputId }, 'Published HTTPS address'),
+        labelRow(h('label', { class: 'label', for: inputId }, 'Published HTTPS address'), 'Published HTTPS address', HELP.installAddress),
         input,
         h('p', { class: 'field-note' }, 'Phones install the app from its HTTPS address. Not published yet? See “Publish the app” below.')),
       qrBox),

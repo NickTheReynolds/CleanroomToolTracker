@@ -6,7 +6,7 @@
  */
 import { h, append, fill, uid } from '../ui/dom.js';
 import {
-  button, section, segmented, toggle, emptyState, linkButton, toast, confirmDialog, errorText,
+  button, section, segmented, toggle, emptyState, linkButton, toast, confirmDialog, errorText, labelRow, helpSection,
 } from '../ui/components.js';
 import { textInput } from '../ui/fields.js';
 import { toolTiles } from '../ui/pickers.js';
@@ -18,6 +18,7 @@ import {
   lastUsedByTool,
 } from '../data/repo.js';
 import { EVENT_TYPES, MAJOR_BY_DEFAULT } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 import { toMs } from '../core/time.js';
 
 /** Short button labels for event types. */
@@ -67,7 +68,7 @@ export async function render(ctx) {
   }
   const majorSlot = h('div');
   const drawMajor = () => fill(majorSlot, toggle({
-    label: 'Major event',
+    label: 'Major event', help: HELP.eventMajor,
     hint: 'Major events (PM, chamber clean, target change) reduce the weight of earlier runs in lookup.',
     checked: state.major,
     onChange: (v) => change({ major: v, majorTouched: true }),
@@ -75,11 +76,12 @@ export async function render(ctx) {
   drawMajor();
   const notesId = uid('ev');
   append(ctx.root, [
-    section('Tool', tools.length
+    helpSection('Tool', HELP.eventTool, tools.length
       ? toolTiles({ tools, lastUsed, selectedId: state.toolId, onPick: (t) => change({ toolId: t.id }) })
       : emptyState('No tools yet.', linkButton('Set up tools', '#/settings/tools'))),
     segmented({
       label: 'Type', options: EVENT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] })), value: state.type, compact: true,
+      help: HELP.eventType,
       onChange: (v) => {
         const type = v || 'other';
         change(state.majorTouched ? { type } : { type, major: MAJOR_BY_DEFAULT.includes(type) });
@@ -87,8 +89,8 @@ export async function render(ctx) {
       },
     }),
     majorSlot,
-    dateTimeField('When', state.at, (iso) => change({ at: iso })),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: notesId }, 'Notes'),
+    dateTimeField('When', state.at, (iso) => change({ at: iso }), HELP.eventWhen),
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: notesId }, 'Notes'), 'Notes', HELP.eventNotes),
       textInput({ id: notesId, value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el),
   ]);
 

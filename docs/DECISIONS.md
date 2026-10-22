@@ -230,11 +230,13 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 
 ## Tool photos, the wiki sheet and export (version 1.2)
 
-77. **Tool photos ship when possible and load from the wiki otherwise.**
-    - The app is offline-first, so it ships the photos it could read: 12 were in the Internet Archive. The live wiki refused connections from off campus on 2026-10-21.
-    - Any other photo loads from the wiki when the wiki is reachable (on the UMich network, where runs are logged). This is the one resource the app loads from another site; the README says so. Without it, the tool's category icon stands in.
-    - `npm run photos` on the UMich network ships the rest. The photos are the LNF's; the app credits the LNF wiki.
-78. **"?" is the tool's single entry point to the wiki.** It lists the tool page, the process page, the documents the page links (SOPs, overviews, process sheets) and the tool's recipes in the app. Links open in the browser; the sheet says that the wiki may need the UMich network and some documents a UMich login.
+77. **No tool photos: the app never contacts the LNF wiki by itself.**
+    - Version 1.2 showed each tool's photo from the LNF wiki. It shipped 12, and loaded the rest from the wiki when the wiki was reachable.
+    - Version 1.3 removes the photos. The LNF wiki has had security problems, and the app should add nothing to its traffic. A tool's card shows its category icon instead.
+    - To see a photo, tap **?**: the tool's wiki page opens in the browser, where UMich's own sign-in or network rules apply.
+    - Wiki information (tools, recipes, links) reaches the app only through releases. It is read by hand, with the project owner's agreement.
+    - The browser tests cannot reach the wiki: `scripts/cdp.mjs` makes its host unresolvable, and the smoke test fails if a page even tries.
+78. **"?" is the tool's single entry point to the wiki.** It lists the tool page, the process page, the documents the page links (SOPs, overviews, process sheets) and the tool's recipes in the app. Links open in the browser. The sheet says the wiki may ask for a UMich login or the UMich network, and that the app itself never contacts the wiki.
 79. **Export everything writes one file, in the format you choose.** Excel is the default because it keeps one sheet per tool with named columns and real dates, plus the tool events. CSV is one table with a row per run, since a CSV file can hold only one table; tool events stay in events.csv. PDF is a report for reading and printing, with each tool's events, not for analysis.
 80. **Times.** The Excel, PDF and CSV `date` column use local time, for people. The CSV also keeps the ISO 8601 UTC start and end (as runs.csv does, decision 45), for machines.
 81. **No libraries for Excel or PDF.**
@@ -245,3 +247,24 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
     - Each tool category has a colour and an icon, used on tool tiles, run rows and tool cards. The colours meet AA contrast on every surface in both themes (tested).
     - Home greets you with this week's run count.
     - Screens, sheets and dialogs ease in over about 0.2 s, and buttons respond to a press. All motion is off when the system asks for reduced motion.
+
+## Info buttons (version 1.3)
+
+83. **One "i" button per field, opening a note in place.**
+    - Not a tooltip, because phones have no hover. Not a sheet either: the note sits under the field it explains, and the form stays usable while it is open.
+    - The button is a disclosure, with `aria-expanded` and `aria-controls`, named "About <field>".
+    - It sits beside the label, never inside it, so tapping the label still focuses the input. On a switch it sits beside the switch, because a button cannot hold another button.
+    - Its 36 px target overlaps the row's spacing, so rows do not get taller.
+    - A choice with no label of its own gets the button beside its section title: an event's tool, the metrology tool, the measurement points.
+    - A few inputs have no button on purpose. The Active switch in a tool's settings: its hint says it all. The quick-capture and measurement notes and the tool search box: their purpose is plain. The template choice on a run that has none, and the word typed to confirm Erase all data.
+84. **Process notes give general trends, hedged, and no settings.**
+    - A note says what a setting is and what raising it usually does. It does not say what to set: there is no recipe-specific advice, as asked.
+    - Some keys mean different things in different templates: pressure, temperature, time, cycles, dose, source, current, power and force. For these, the template's other fields pick the note: a CMP template has a slurry field, an XeF2 template a pulse field, a sputter template a target. Its process type is the fallback.
+    - Units and names are free text, so they decide only where nothing else can: the LPCVD and laser-writer notes, and a plasma cleaner's when its fields are ambiguous. So a unit changed in the field editor, or a renamed template, keeps the right note (tested).
+    - A gas note fits where the gas is used. On the LNF PECVD tools, NF3, CF4 and C2F6 clean the chamber; on an etcher they etch.
+85. **The Lookup line is worked out, not written.**
+    - The line comes from the field's spec: role, weight, spread hint, must match exactly, chemistry, and the formula of a derived output.
+    - So it stays right for templates people edit, and for fields the app has no note for.
+86. **Notes that only repeated a visible hint moved behind the "i".**
+    - Hints that carry a rule or a number stay visible, such as "Default 30. Allowed 1–3650." or the key's rules.
+    - Hints that only described the field went behind the "i": primary output, process type, role and spread hint in the template editor.

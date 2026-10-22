@@ -5,12 +5,13 @@
  */
 import { h, uid } from './dom.js';
 import { icon } from './icons.js';
-import { button, badge, listRow, emptyState } from './components.js';
+import { button, badge, listRow, emptyState, helpToggle } from './components.js';
 import { numberStepper, renderField } from './fields.js';
 import { computeDerived, pointStats, DERIVED_INFO } from '../core/derive.js';
 import { fmtValue, fmtNum } from '../core/format.js';
 import { formatDateTime } from '../core/time.js';
 import { KIND_LABELS, PHASE_LABELS } from '../core/vocab.js';
+import { fieldHelp } from '../core/field-help.js';
 
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/types.js').Template} Template */
@@ -36,11 +37,14 @@ export function outputsList(o) {
     const isDerived = (o.run.derivedKeys || []).includes(f.key) && typeof v === 'number';
     const id = uid(f.key);
     const editable = !isDerived && f.type === 'number';
+    const help = helpToggle(f.label, fieldHelp(f, o.template));
     const head = h('div', { class: 'spread' },
-      h(editable ? 'label' : 'span', { class: 'label', for: editable ? id : undefined }, f.label, f.unit ? h('span', { class: 'unit' }, ` (${f.unit})`) : null),
+      h('span', { class: 'label-help' },
+        h(editable ? 'label' : 'span', { class: 'label', for: editable ? id : undefined }, f.label, f.unit ? h('span', { class: 'unit' }, ` (${f.unit})`) : null),
+        help.btn),
       isDerived ? badge('derived', 'ok', 'check') : v !== undefined && v !== null && v !== '' ? badge('manual', 'muted', 'edit') : null);
     if (isDerived) {
-      return h('div', { class: 'card stack' }, head,
+      return h('div', { class: 'card stack' }, head, help.note,
         h('div', { class: 'spread' }, h('strong', { class: 'big-value' }, fmtValue(/** @type {number} */ (v), f.unit)),
           button('Edit', { kind: 'ghost', icon: 'edit', onClick: () => o.onManual(f.key, /** @type {number} */ (v)) })),
         spec ? h('p', { class: 'field-note' }, `From measurements: ${DERIVED_INFO[spec.fn]?.formula || spec.fn}`) : null);
@@ -51,13 +55,13 @@ export function outputsList(o) {
       : null;
     if (!editable) {
       // A text, choice or yes/no output: renderField brings its own label.
-      return h('div', { class: 'card stack' }, renderField(f, v, (nv) => o.onManual(f.key, nv)), note);
+      return h('div', { class: 'card stack' }, renderField(f, v, (nv) => o.onManual(f.key, nv), { template: o.template }), note);
     }
     const field = h('div', { class: 'field' }, numberStepper({
       id, label: f.label, value: typeof v === 'number' ? v : null, step: f.step, min: f.min, max: f.max,
       onChange: (nv) => o.onManual(f.key, nv),
     }).el);
-    return h('div', { class: 'card stack' }, head, field, note,
+    return h('div', { class: 'card stack' }, head, help.note, field, note,
       derivable ? button(`Use derived (${fmtValue(values[f.key], f.unit)})`, {
         icon: 'undo', onClick: () => o.onUseDerived(f.key),
       }) : null);

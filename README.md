@@ -14,7 +14,7 @@ Lookup uses no AI and no external services. The same input always gives the same
 | Screen | What it does |
 |---|---|
 | Home | Log run, Look up, Open runs (with a count) and Tool event; the latest runs; a backup reminder; install help. |
-| Log run | Tool → template → a form prefilled from your last run with that tool, under the tool's photo; **?** opens its LNF wiki pages and documents. **LNF recipes** fill the form from one of the tool's wiki recipes. Steppers, material chips, run timer, camera photos, notes (dictation works). Save open, or complete if you already have results. |
+| Log run | Tool → template → a form prefilled from your last run with that tool; **?** on the tool's card opens its LNF wiki pages and documents. **LNF recipes** fill the form from one of the tool's wiki recipes. Steppers, material chips, run timer, camera photos, notes (dictation works). Save open, or complete if you already have results. |
 | Quick capture | Tool, photo and note only, saved as a draft to fill in later. |
 | Open runs | Drafts and open runs, oldest first. |
 | Run detail | Results (derived from measurements, or typed in), measurements, inputs, photos and notes. Mark complete, duplicate, delete (with Undo). |
@@ -27,7 +27,7 @@ Lookup uses no AI and no external services. The same input always gives the same
 | Settings | Your name and device, tools and the template editor, materials, lookup tuning, backup, export everything (Excel, CSV or PDF), import, sync, storage, theme, version and updates. |
 | Install on your devices | The app's address as a QR code for phones, and install steps for iPhone, Android, Windows and Mac. |
 
-**Tools and materials.** The app starts with the LNF equipment list from the LNF wiki: 127 tools, grouped as etch, deposition, thermal, lithography, metrology and other, with search in every tool picker. It also has every material the wiki lists as supported, plus bulk lithium niobate, and the material picker searches them ("gold" finds Au). Each tool has a generic template for its type, with the gas lines its wiki page lists, and the recipes the wiki documents for it: 599 recipes for 95 tools. Run screens show the tool's photo from the wiki, and **?** gathers its wiki page, process page, SOPs and recipes in one place. Adjust a template to how you use the tool, and archive tools you never use, in **Settings → Tools and templates**.
+**Tools and materials.** The app starts with the LNF equipment list from the LNF wiki: 127 tools, grouped as etch, deposition, thermal, lithography, metrology and other, with search in every tool picker. It also has every material the wiki lists as supported, plus bulk lithium niobate, and the material picker searches them ("gold" finds Au). Each tool has a generic template for its type, with the gas lines its wiki page lists, and the recipes the wiki documents for it: 599 recipes for 95 tools. On run screens, **?** gathers the tool's wiki page (with its photo), process page, SOPs and recipes in one place. Adjust a template to how you use the tool, and archive tools you never use, in **Settings → Tools and templates**.
 
 ## Quick start (development)
 
@@ -90,6 +90,7 @@ The installed app opens full screen and works in airplane mode. To check, open i
 - **Nothing is lost.** Every form saves itself as you go. If the phone locks or the tab is closed, the next visit resumes it. Photos are stored the moment you take them.
 - **Fast logging.** Log run copies your last run with the same tool and template, so usually you only change what differs.
 - **LNF recipes.** On Log run, tap **LNF recipes** to pick one of the tool's wiki recipes. It fills that recipe's parameters, clears the gases it does not use and names the recipe; **Undo** puts your values back. Each recipe shows its source and date: check it against the tool before you rely on it.
+- **What does this field do?** Tap the **i** beside any label for a short note: what the field is, what raising it usually does, and how Lookup uses it. Lookup tuning, match rules and the template editor have notes too.
 - **Run timer.** The timer is optional: **Start** records the start time, and **Stop** fills the template's time field.
 - **Derived results.** Add a **pre** and a **post** measurement, and the run computes etch or deposition rate, thickness change, uniformity and selectivity. A value you type yourself always wins.
 - **Tool events.** Log PMs, chamber cleans and target changes. Lookup flags runs from before the last major event and gives them less weight.
@@ -159,6 +160,7 @@ Run this on an iPhone (Safari) and an Android phone (Chrome) against the HTTPS a
 - [ ] Add a pre and a post measurement; the etch or deposition rate appears as "derived".
 - [ ] Look up the same tool; results show an estimate, matches and a chart.
 - [ ] On Log run, tap **LNF recipes**, pick a recipe and tap **Use recipe**; its values fill the form.
+- [ ] Tap the **i** beside a field; its note opens under the label, and a second tap closes it.
 - [ ] Export a backup through the share sheet to Files or Drive.
 - [ ] Import that file on a desktop; the run, measurements and photos (if included) appear.
 - [ ] Deploy a new version; the app shows "Update available — Reload", and Reload updates it without losing a half-filled form.
@@ -176,7 +178,7 @@ Run this on an iPhone (Safari) and an Android phone (Chrome) against the HTTPS a
 - **Tests.** `npm test` runs `scripts/check-line-limits.mjs` (no file over 1000 lines) and `node --test`. The tests include every core module and the Section 11 worked example.
 - **Version.** `npm run bump` updates `app/version.js` and the service worker cache name before a release.
 - **Icons.** `npm run icons` regenerates the PNG icons without any image library.
-- **Tool photos.** `npm run photos` downloads the LNF wiki's tool photos that the app does not ship yet, shrinks them in headless Chrome or Edge, and adds them to `app/img/tools/`, `app/js/data/tool-photos.js` and the service worker. Run it on the UMich network or VPN (the wiki refuses other connections), then release. `npm run photos -- --archive` uses the Internet Archive's copies instead.
+- **The LNF wiki.** The app never contacts the wiki by itself: its links open in the browser when tapped. Wiki information (tools, recipes, links) reaches the app only in a release. The browser tests make the wiki unreachable, and the smoke test fails if a page even tries to contact it.
 - **Type checking (optional, not in CI).** Every JS file has `// @ts-check` and JSDoc types, so editors flag type errors. For a full check run `npx -p typescript tsc -p jsconfig.json`. This downloads TypeScript temporarily and adds nothing to the project.
 - **No dependencies.** The app and all tooling use only the browser and Node built-ins.
 - **Node version.** Use Node 22 or newer. Node 20 reached end of life in April 2026. Everything still runs on Node 20.14; the smoke test turns on Node 20's experimental WebSocket flag by itself.
@@ -184,7 +186,7 @@ Run this on an iPhone (Safari) and an Android phone (Chrome) against the HTTPS a
 
 ## Privacy
 
-All data stays in IndexedDB on your devices. The app makes no network requests other than loading its own files, checking for updates, showing a tool's photo from the LNF wiki when the app does not ship that photo, and, only if you turn on Sync, reading and writing your private GitHub repository through GitHub's API. Links to the wiki and its documents open in your browser only when you tap them. There are no analytics and no third-party scripts.
+All data stays in IndexedDB on your devices. The app makes no network requests other than loading its own files, checking for updates, and, only if you turn on Sync, reading and writing your private GitHub repository through GitHub's API. Links to the wiki and its documents open in your browser only when you tap them. There are no analytics and no third-party scripts.
 
 ## License
 

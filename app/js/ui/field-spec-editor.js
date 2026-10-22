@@ -4,7 +4,7 @@
  * entry, used by the template editor.
  */
 import { h, uid, fill } from './dom.js';
-import { button, segmented, sheet, toggle } from './components.js';
+import { button, segmented, sheet, toggle, labelRow } from './components.js';
 import { textInput } from './fields.js';
 import { validateField } from '../data/schema.js';
 import { parseNumber } from '../core/format.js';
@@ -12,6 +12,7 @@ import { DERIVED_FUNCTIONS, DERIVED_INFO } from '../core/derive.js';
 import {
   FIELD_TYPES, FIELD_TYPE_LABELS, FIELD_ROLES, ROLE_LABELS, MEASUREMENT_KINDS, KIND_LABELS,
 } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').FieldSpec} FieldSpec */
 /** @typedef {import('../core/types.js').DerivedSpec} DerivedSpec */
@@ -40,8 +41,9 @@ export function keyFromLabel(label, taken) {
  * @param {number | undefined} value
  * @param {(v: number | undefined) => void} onChange
  * @param {string} [note]
+ * @param {string} [help] the note behind its "i" button
  */
-function numberProp(label, value, onChange, note) {
+function numberProp(label, value, onChange, note, help) {
   const id = uid('prop');
   const input = /** @type {HTMLInputElement} */ (h('input', {
     id, class: 'input', type: 'text', inputmode: 'decimal', autocomplete: 'off', value: value === undefined ? '' : String(value),
@@ -52,7 +54,7 @@ function numberProp(label, value, onChange, note) {
     input.toggleAttribute('aria-invalid', !!t && n === null);
     onChange(t && n !== null ? n : undefined);
   });
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), input,
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, help), input,
     note ? h('p', { class: 'field-note' }, note) : null);
 }
 
@@ -94,30 +96,30 @@ export function editFieldSheet(o) {
     const numeric = f.type === 'number' || f.type === 'duration';
     fill(dynamic,
       numeric ? h('div', { class: 'row-wrap' },
-        numberProp('Step', f.step, (v) => { f.step = v; }),
-        numberProp('Min', f.min, (v) => { f.min = v; }),
-        numberProp('Max', f.max, (v) => { f.max = v; })) : null,
+        numberProp('Step', f.step, (v) => { f.step = v; }, undefined, HELP.fieldStep),
+        numberProp('Min', f.min, (v) => { f.min = v; }, undefined, HELP.fieldMin),
+        numberProp('Max', f.max, (v) => { f.max = v; }, undefined, HELP.fieldMax)) : null,
       f.type === 'select' ? (() => {
         const id = uid('opts');
         const ta = /** @type {HTMLTextAreaElement} */ (h('textarea', { id, class: 'input', rows: 4 }));
         ta.value = (f.options || []).join('\n');
         ta.addEventListener('input', () => { f.options = ta.value.split('\n').map((x) => x.trim()).filter(Boolean); });
-        return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Options (one per line)'), ta);
+        return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, 'Options (one per line)'), 'Options', HELP.fieldOptions), ta);
       })() : null,
       isInput ? numberProp('Lookup weight', f.weight,
-        (v) => { f.weight = v; }, `Default ${f.type === 'duration' ? 0 : 1}; 0 means lookup ignores this field.`) : null,
+        (v) => { f.weight = v; }, `Default ${f.type === 'duration' ? 0 : 1}; 0 leaves it out of the distance.`, HELP.fieldWeight) : null,
       isInput && numeric ? numberProp('Spread hint', f.spreadHint, (v) => { f.spreadHint = v; },
-        'Typical run-to-run variation, in the field’s unit. Normalises lookup distance.') : null,
+        'Typical run-to-run variation, in the field’s unit.', HELP.fieldSpread) : null,
       isInput && ['select', 'text', 'bool'].includes(f.type) ? toggle({
-        label: 'Must match exactly', hint: 'Lookup only compares runs with the same value.',
+        label: 'Must match exactly', hint: 'Lookup only compares runs with the same value.', help: HELP.fieldExact,
         checked: !!f.matchExact, onChange: (v) => { f.matchExact = v || undefined; },
       }) : null,
       isInput && f.type === 'number' ? toggle({
-        label: 'Chemistry (gas flow)', hint: 'Used by the strict chemistry filter.',
+        label: 'Chemistry (gas flow)', hint: 'Used by the strict chemistry filter.', help: HELP.fieldChemistry,
         checked: !!f.chemistry, onChange: (v) => { f.chemistry = v || undefined; },
       }) : null,
       toggle({
-        label: 'Required', hint: 'Needed before a run can be saved as open or complete.',
+        label: 'Required', hint: 'Needed before a run can be saved as open or complete.', help: HELP.fieldRequired,
         checked: !!f.required, onChange: (v) => { f.required = v || undefined; },
       }));
   };
@@ -140,21 +142,20 @@ export function editFieldSheet(o) {
   };
 
   const s = sheet(isNew ? 'New field' : `Edit ${o.field?.label}`, [
-    h('div', { class: 'field' }, h('label', { class: 'label', for: labelId }, 'Label'), labelInput.el),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: keyId }, 'Key'), keyInput,
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: labelId }, 'Label'), 'Label', HELP.fieldLabel), labelInput.el),
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: keyId }, 'Key'), 'Key', HELP.fieldKey), keyInput,
       h('p', { class: 'field-note' }, keyLocked
         ? `Used by ${o.usedBy} run${o.usedBy === 1 ? '' : 's'}, so the key cannot change.`
         : 'Stored with each run. Letters, digits and _; start with a letter.')),
     segmented({
       label: 'Type', options: FIELD_TYPES.map((t) => ({ value: t, label: FIELD_TYPE_LABELS[t].replace(' (mm:ss)', '') })),
-      value: f.type, onChange: (v) => { f.type = v || 'number'; drawDynamic(); },
+      value: f.type, onChange: (v) => { f.type = v || 'number'; drawDynamic(); }, help: HELP.fieldType,
     }),
     segmented({
       label: 'Role', options: FIELD_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] })),
-      value: f.role, onChange: (v) => { f.role = v || 'input'; drawDynamic(); },
+      value: f.role, onChange: (v) => { f.role = v || 'input'; drawDynamic(); }, help: HELP.fieldRole,
     }),
-    h('p', { class: 'field-note' }, 'Inputs drive lookup; outputs are results; context is recorded but never matched.'),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: unitId }, 'Unit'),
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: unitId }, 'Unit'), 'Unit', HELP.fieldUnit),
       textInput({ id: unitId, value: f.unit || '', autocapitalize: 'off', onChange: (v) => { f.unit = v || ''; } }).el),
     dynamic,
     errBox,
@@ -187,33 +188,33 @@ export function editDerivedSheet(o) {
   const dynamic = h('div', { class: 'stack' });
   const errBox = h('div', { class: 'field-note warn', role: 'alert' });
   const select = (/** @type {string} */ label, /** @type {{value: string, label: string}[]} */ opts,
-    /** @type {string} */ value, /** @type {(v: string) => void} */ onChange) => {
+    /** @type {string} */ value, /** @type {(v: string) => void} */ onChange, /** @type {string} */ help) => {
     const id = uid('sel');
     const el = /** @type {HTMLSelectElement} */ (h('select', { id, class: 'input' },
       opts.map((x) => h('option', { value: x.value, selected: x.value === value }, x.label))));
     el.addEventListener('change', () => onChange(el.value));
-    return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), el);
+    return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, help), el);
   };
   const drawDynamic = () => {
     const info = DERIVED_INFO[d.fn];
     fill(dynamic,
       h('p', { class: 'field-note' }, `${info.formula} (${info.unit})`),
       info.usesTime ? select('Time field', [{ value: '', label: 'First duration field' },
-        ...times.map((f) => ({ value: f.key, label: f.label }))], d.timeField || '', (v) => { d.timeField = v || undefined; }) : null,
+        ...times.map((f) => ({ value: f.key, label: f.label }))], d.timeField || '', (v) => { d.timeField = v || undefined; }, HELP.derivedTime) : null,
       d.fn === 'uniformity' || d.fn === 'uniformityStd' ? segmented({
         label: 'Measurement phase', options: [{ value: 'post', label: 'Post' }, { value: 'pre', label: 'Pre' }],
-        value: d.phase || 'post', onChange: (v) => { d.phase = v || 'post'; },
+        value: d.phase || 'post', onChange: (v) => { d.phase = v || 'post'; }, help: HELP.derivedPhase,
       }) : null,
       select('Measurement kind', MEASUREMENT_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] })),
-        d.kind || 'thickness', (v) => { d.kind = v === 'thickness' ? undefined : v; }));
+        d.kind || 'thickness', (v) => { d.kind = v === 'thickness' ? undefined : v; }, HELP.derivedKind));
   };
   drawDynamic();
   const s = sheet(o.entry ? 'Edit derived output' : 'New derived output', [
     outputs.length ? null : h('p', { class: 'field-note warn' }, 'Add an output field first.'),
     select('Function', DERIVED_FUNCTIONS.map((fn) => ({ value: fn, label: DERIVED_INFO[fn].label })), d.fn,
-      (v) => { d.fn = v; drawDynamic(); }),
+      (v) => { d.fn = v; drawDynamic(); }, HELP.derivedFunction),
     select('Stored in output', outputs.map((f) => ({ value: f.key, label: `${f.label}${f.unit ? ` (${f.unit})` : ''}` })),
-      d.output, (v) => { d.output = v; }),
+      d.output, (v) => { d.output = v; }, HELP.derivedOutput),
     dynamic,
     errBox,
     h('div', { class: 'dialog-actions' },

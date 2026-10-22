@@ -6,7 +6,8 @@
  */
 import { h, fill, uid } from './dom.js';
 import { icon, categoryIcon } from './icons.js';
-import { button, sheet, emptyState, segmented } from './components.js';
+import { button, sheet, emptyState, segmented, labelRow } from './components.js';
+import { HELP } from '../core/app-help.js';
 import { CATEGORY_LABELS, normText } from '../core/vocab.js';
 import { formatAge } from '../core/time.js';
 import { LNF_MATERIAL_WORDS } from '../data/seed-lnf.js';
@@ -67,7 +68,7 @@ export function toolTiles(o) {
   // Many tools: category chips narrow the tiles (combined with the search).
   const present = CATEGORY_ORDER.filter((c) => o.tools.some((t) => t.category === c));
   const chips = o.tools.length > 12 && present.length > 1 ? segmented({
-    label: 'Category', compact: true, allowNone: true, value: /** @type {string | null} */ (null),
+    label: 'Category', compact: true, allowNone: true, value: /** @type {string | null} */ (null), help: HELP.toolFilter,
     options: present.map((c) => ({ value: c, label: CATEGORY_LABELS[c] || c })),
     onChange: (v) => { category = v; draw(); },
   }) : null;
@@ -116,7 +117,8 @@ export function materialMatches(material, query) {
  * value; "More…" opens the full list with a box that searches it or adds a
  * new material. Tapping the selected chip clears it when allowNone.
  * @param {{label: string, value: string, options: string[], onChange: (v: string) => void,
- *   allowNone?: boolean, onAddNew?: (name: string) => void, show?: number}} o
+ *   allowNone?: boolean, onAddNew?: (name: string) => void, show?: number, help?: string | readonly string[]}} o
+ *   help adds an "i" button beside the label
  * @returns {HTMLElement}
  */
 export function materialPicker(o) {
@@ -165,7 +167,9 @@ export function materialPicker(o) {
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') useTyped(); });
     drawAll();
     const s = sheet(o.label, [
-      h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Find or add a material'),
+      h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: id }, 'Find or add a material'), 'finding or adding a material',
+          o.onAddNew ? HELP.findMaterial : HELP.findMaterialHere),
         h('div', { class: 'stepper' }, input, use)),
       chips,
     ]);
@@ -178,5 +182,5 @@ export function materialPicker(o) {
     fill(row, first.map(chipFor), button('More…', { kind: 'ghost', onClick: openAll }));
   };
   draw();
-  return h('div', { class: 'field' }, h('span', { class: 'label', id: labelId }, o.label, current), row);
+  return h('div', { class: 'field' }, labelRow(h('span', { class: 'label', id: labelId }, o.label, current), o.label, o.help), row);
 }

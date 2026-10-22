@@ -5,7 +5,7 @@
  */
 import { h, uid, append, fill } from '../ui/dom.js';
 import {
-  button, linkButton, section, badge, emptyState, toast, chip, confirmDialog, errorText,
+  button, linkButton, section, badge, emptyState, toast, chip, confirmDialog, errorText, labelRow,
 } from '../ui/components.js';
 import { textInput, renderFields } from '../ui/fields.js';
 import { editFieldSheet, editDerivedSheet } from '../ui/field-spec-editor.js';
@@ -17,6 +17,7 @@ import {
 import { validateTemplateBody } from '../data/schema.js';
 import { DERIVED_INFO } from '../core/derive.js';
 import { PROCESS_TYPES, CATEGORY_LABELS, ROLE_LABELS, FIELD_TYPE_LABELS } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').FieldSpec} FieldSpec */
 
@@ -154,10 +155,10 @@ export async function render(ctx) {
           }),
         })),
       section('Primary output and process type',
-        h('div', { class: 'field' }, h('label', { class: 'label', for: primaryId }, 'Primary output'), primSel,
-          h('p', { class: 'field-note' }, 'Shown in lists and summarised by lookup.')),
-        h('div', { class: 'field' }, h('label', { class: 'label', for: typeId }, 'Process type'), typeSel,
-          h('p', { class: 'field-note' }, 'Sets the lookup verb (etch, deposit) and which templates count as siblings.'))),
+        h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: primaryId }, 'Primary output'), 'Primary output', HELP.primaryOutput),
+          primSel),
+        h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: typeId }, 'Process type'), 'Process type', HELP.processType),
+          typeSel)),
       section('Derived outputs',
         h('p', { class: 'muted small' }, 'Computed from measurements with built-in functions. A value typed by hand overrides them.'),
         t.derived.length ? h('div', { class: 'list' }, t.derived.map((/** @type {any} */ d, /** @type {number} */ i) => {
@@ -175,7 +176,7 @@ export async function render(ctx) {
         })),
       section('Preview',
         h('p', { class: 'muted small' }, 'How the form looks when logging a run. Values typed here are not saved.'),
-        h('div', { class: 'card' }, renderFields(t.fields, previewValues, () => {}))),
+        h('div', { class: 'card' }, renderFields(t.fields, previewValues, () => {}, { template: t }))),
     );
     drawChecks();
   };
@@ -186,7 +187,8 @@ export async function render(ctx) {
       onClick: async () => { autosave.cancel(); await clearDraft(draftKey); refresh(); },
     })) : null,
     h('p', { class: 'muted' }, `Tool: ${tool.name}`),
-    section('Template', h('div', { class: 'field' }, h('label', { class: 'label', for: nameId }, 'Name'), nameInput.el)),
+    section('Template', h('div', { class: 'field' },
+      labelRow(h('label', { class: 'label', for: nameId }, 'Name'), 'Template name', HELP.templateName), nameInput.el)),
     body,
     checks,
     existing ? section('More',

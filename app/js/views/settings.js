@@ -5,12 +5,13 @@
  */
 import { h, uid, debounce, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { button, section, listRow, segmented, toast } from '../ui/components.js';
+import { button, section, listRow, segmented, toast, labelRow } from '../ui/components.js';
 import { textInput, numberStepper } from '../ui/fields.js';
 import { applyTheme } from '../ui/theme.js';
 import { checkForUpdate, updateWaiting, applyUpdate, desktopWrapper } from '../ui/pwa.js';
 import { getSettings, saveSettings, listTools } from '../data/repo.js';
 import { DEFAULTS, TUNABLE, SOURCE_URL } from '../config.js';
+import { HELP, TUNING_HELP } from '../core/app-help.js';
 import { APP_VERSION, APP_BUILD } from '../../version.js';
 
 /** @typedef {import('../data/records.js').Settings} Settings */
@@ -24,13 +25,14 @@ let pending = [];
  * @param {string | null} value
  * @param {(v: string) => void} save
  * @param {string} [hint]
+ * @param {string} [help] the note behind its "i" button
  */
-function textSetting(label, value, save, hint) {
+function textSetting(label, value, save, hint, help) {
   const id = uid('set');
   const saveSoon = debounce(save, 400);
   pending.push(saveSoon);
   const input = textInput({ id, value, onChange: (v) => saveSoon(v || ''), autocapitalize: 'words' });
-  return h('div', { class: 'field' }, h('label', { class: 'label', for: id }, label), input.el,
+  return h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, label), label, help), input.el,
     hint ? h('p', { class: 'field-note' }, hint) : null);
 }
 
@@ -58,7 +60,8 @@ function tuningEditor(settings) {
           },
         });
         return h('div', { class: 'field' },
-          h('label', { class: 'label', for: id }, t.label, t.unit ? h('span', { class: 'unit' }, ` (${t.unit})`) : null),
+          labelRow(h('label', { class: 'label', for: id }, t.label, t.unit ? h('span', { class: 'unit' }, ` (${t.unit})`) : null),
+            t.label, TUNING_HELP[t.key]),
           stepper.el,
           h('p', { class: 'field-note' }, `Default ${DEFAULTS[/** @type {keyof typeof DEFAULTS} */ (t.key)]}. Allowed ${t.min}–${t.max}.`));
       }),
@@ -126,9 +129,9 @@ export async function render(ctx) {
   append(ctx.root, [
     section('You',
       textSetting('Your name', settings.userName, (v) => saveSettings({ userName: v }),
-        'Recorded as the author of runs you log.'),
+        'Recorded as the author of runs you log.', HELP.userName),
       textSetting('Device name', settings.deviceName, (v) => saveSettings({ deviceName: v }),
-        'For example “Phone” or “Office PC”.')),
+        'For example “Phone” or “Office PC”.', HELP.deviceName)),
     section('Tools and materials',
       h('div', { class: 'list' },
         listRow({
@@ -162,7 +165,7 @@ export async function render(ctx) {
         }))),
     section('Appearance',
       segmented({
-        label: 'Theme',
+        label: 'Theme', help: HELP.theme,
         options: [{ value: 'system', label: 'System' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }],
         value: settings.theme || 'system',
         onChange: async (v) => {

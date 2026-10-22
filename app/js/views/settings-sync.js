@@ -6,19 +6,20 @@
  */
 import { h, append, uid } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { button, section, toast, badge, confirmDialog, errorText } from '../ui/components.js';
+import { button, section, toast, badge, confirmDialog, errorText, labelRow } from '../ui/components.js';
 import { refresh } from '../router.js';
 import { getSettings, saveSettings } from '../data/repo.js';
 import { githubClient, parseRepo } from '../sync/github.js';
 import { checkRepo, syncNow } from '../sync/sync.js';
 import { describeResult } from '../sync/plan.js';
 import { formatDateTime, formatAgo } from '../core/time.js';
+import { HELP } from '../core/app-help.js';
 
 const SETUP_STEPS = [
   'On github.com, create a new repository (for example lnf-runlog-data) and keep it Private. Leave it empty.',
   'Open your profile picture → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token.',
   'Repository access: Only select repositories → pick that repository. Permissions → Repository permissions → Contents: Read and write. Choose an expiration (for example one year).',
-  'Generate the token, copy it, and paste it below with the repository name.',
+  'Generate the token, copy it, and paste it above with the repository name.',
   'Labmates: share that token privately, or move the repository to a free GitHub organization so each person can make their own token for it.',
 ];
 
@@ -70,8 +71,8 @@ function setupForm(ctx, settings) {
     },
   });
   return h('div', { class: 'stack' },
-    h('div', { class: 'field' }, h('label', { class: 'label', for: repoId }, 'Private repository'), repoIn),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: tokenId }, 'Access token'), tokenIn,
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: repoId }, 'Private repository'), 'Private repository', HELP.syncRepo), repoIn),
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: tokenId }, 'Access token'), 'Access token', HELP.syncToken), tokenIn,
       h('div', null, button('Show token', {
         kind: 'ghost', onClick: (e) => {
           const show = tokenIn.type === 'password';
@@ -80,7 +81,7 @@ function setupForm(ctx, settings) {
         },
       })),
       h('p', { class: 'field-note' }, 'Stored only on this device, never in backups. It should allow “Contents: Read and write” on this one repository and nothing else.')),
-    h('div', { class: 'field' }, h('label', { class: 'label', for: nameId }, 'Name of this device'), nameIn,
+    h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: nameId }, 'Name of this device'), 'Name of this device', HELP.syncDevice), nameIn,
       h('p', { class: 'field-note' }, 'Shown in the repository’s history, so you can tell devices apart.')),
     save, status);
 }

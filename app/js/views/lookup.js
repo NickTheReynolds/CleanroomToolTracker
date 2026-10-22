@@ -6,7 +6,7 @@
  * similar runs" opens the results screen.
  */
 import { h, append, fill } from '../ui/dom.js';
-import { button, linkButton, section, chip, emptyState, toggle, toast } from '../ui/components.js';
+import { button, linkButton, section, chip, emptyState, toggle, toast, labelRow } from '../ui/components.js';
 import { renderFields, numberStepper } from '../ui/fields.js';
 import { toolTiles, templateTiles, materialPicker } from '../ui/pickers.js';
 import { recipeButton, fillMessage } from '../ui/recipes.js';
@@ -20,6 +20,7 @@ import { recipesForTool } from '../data/recipes.js';
 import { fieldsWithRole, isSet } from '../core/run-draft.js';
 import { recipeFill, undoFill, recipeFilm } from '../core/recipes.js';
 import { formatDay } from '../core/time.js';
+import { HELP } from '../core/app-help.js';
 
 /**
  * @typedef {Object} LookupDraft
@@ -160,24 +161,32 @@ async function form(ctx, toolId, templateId) {
           title: `${tool.shortName || tool.name} recipes`, recipes, template, useLabel: 'Fill planned inputs', roles: ['input'], onUse: useRecipe,
         }),
         q.recipe ? chip(`Recipe: ${q.recipe}`, { icon: 'book', actionLabel: 'Clear recipe', onClick: () => { change({ recipe: '' }); draw(); } }) : null) : null,
-      renderFields(inputs, q.params, (k, v) => change({ params: { ...q.params, [k]: v } }), { clearable: true })),
+      renderFields(inputs, q.params, (k, v) => change({ params: { ...q.params, [k]: v } }), { clearable: true, template })),
     section('Sample',
       materialPicker({
         label: 'Material', value: q.material, options: materialsByRecency(settings.materials, runs, 'material'),
-        onChange: (v) => change({ material: v }),
+        onChange: (v) => change({ material: v }), help: HELP.material,
       }),
-      h('div', { class: 'field' }, h('label', { class: 'label', for: 'lookup-target' }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),
+      h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: 'lookup-target' }, 'Target thickness', h('span', { class: 'unit' }, ' (nm, optional)')),
+          'Target thickness', HELP.lookupTarget),
         numberStepper({
           id: 'lookup-target', label: 'target thickness', value: q.targetThickness, step: 10, min: 0,
           onChange: (v) => change({ targetThickness: v }),
         }).el,
         h('p', { class: 'field-note' }, 'With a target, rate results also suggest a process time.'))),
     section('Match rules',
-      toggle({ label: 'Strict chemistry', hint: 'Only runs that used the same set of gases.', checked: q.strictChemistry, onChange: (v) => change({ strictChemistry: v }) }),
-      toggle({ label: 'Same material', hint: 'Only runs on the same material.', checked: q.sameMaterial, onChange: (v) => change({ sameMaterial: v }) }),
+      toggle({
+        label: 'Strict chemistry', hint: 'Only runs that used the same set of gases.', help: HELP.strictChemistry,
+        checked: q.strictChemistry, onChange: (v) => change({ strictChemistry: v }),
+      }),
+      toggle({
+        label: 'Same material', hint: 'Only runs on the same material.', help: HELP.sameMaterial,
+        checked: q.sameMaterial, onChange: (v) => change({ sameMaterial: v }),
+      }),
       toggle({
         label: 'Include sibling tools', hint: `Other ${tool.category} tools and templates of the same process type.`,
-        checked: q.includeSiblings, onChange: (v) => change({ includeSiblings: v }),
+        help: HELP.includeSiblings, checked: q.includeSiblings, onChange: (v) => change({ includeSiblings: v }),
       })),
   );
   draw();

@@ -139,11 +139,11 @@ Each recipe (`WikiRecipe` in `core/recipes.js`):
 - **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup.
 - **`MIGRATIONS`** in `schema.js` is the ordered list of migrations. Each step lists the stores and indexes to create and, optionally, a function that upgrades one record from the previous version. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
 
-## LNF wiki links and tool photos
+## LNF wiki links
 
-`data/lnf-wiki.js` maps each LNF tool id to its place on the LNF wiki: `{page, image?, processes?, docs?}`. That is the page title, the path of the photo on that page, the title of its process (recipe) page, and `[label, address]` pairs for the documents the page links (SOPs, system overviews, process sheets). `wikiPageUrl(title)` builds a page address. Tools you add yourself have no entry.
+`data/lnf-wiki.js` maps each LNF tool id to its place on the LNF wiki: `{page, processes?, docs?}`. That is the page title, the title of its process (recipe) page, and `[label, address]` pairs for the documents the page links (SOPs, system overviews, process sheets). `wikiPageUrl(title)` builds a page address. Tools you add yourself have no entry.
 
-The app ships tool photos in `app/img/tools/`, named after the wiki file, at most 480 px on the long edge. `data/tool-photos.js` lists them, and the service worker precaches them. A tool whose photo is not shipped shows it from the wiki when the wiki is reachable, and its category icon otherwise. `scripts/tool-photos.mjs` (`npm run photos`) fetches and shrinks the missing photos and rewrites both lists.
+The app never loads anything from the wiki: these are links, opened in the browser only when tapped (DECISIONS.md 77). New wiki information reaches the app in a release.
 
 ## Export everything
 

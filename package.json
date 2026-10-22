@@ -1,6 +1,6 @@
 {
   "name": "lnf-runlog",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Offline-first PWA for logging and looking up cleanroom process runs.",
   "license": "AGPL-3.0-or-later",
@@ -18,7 +18,6 @@
     "smoke": "node scripts/smoke-browser.mjs",
     "build:windows": "node scripts/build-windows.mjs",
     "smoke:windows": "node scripts/build-windows.mjs --smoke",
-    "build:macos": "bash desktop/macos/build-macos.sh",
-    "photos": "node scripts/tool-photos.mjs"
+    "build:macos": "bash desktop/macos/build-macos.sh"
   }
 }

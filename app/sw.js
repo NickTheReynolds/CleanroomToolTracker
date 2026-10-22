@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v1.2.0-dev';
+const CACHE_NAME = 'lnf-runlog-v1.3.0-dev';
 
 const ASSETS = [
   './',
@@ -23,20 +23,6 @@ const ASSETS = [
   'icons/icon-512.png',
   'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
-  // Tool photos (scripts/tool-photos.mjs keeps these lines).
-  'img/tools/10030.jpg',
-  'img/tools/10061.jpg',
-  'img/tools/110101.jpg',
-  'img/tools/14021.jpg',
-  'img/tools/170030.jpg',
-  'img/tools/21040.jpg',
-  'img/tools/21051.jpg',
-  'img/tools/51000.jpg',
-  'img/tools/53111.jpg',
-  'img/tools/53131.jpg',
-  'img/tools/54081.jpg',
-  'img/tools/85051.jpg',
-  // End of tool photos.
   'js/main.js',
   'js/router.js',
   'js/config.js',
@@ -58,6 +44,8 @@ const ASSETS = [
   'js/core/xlsx.js',
   'js/core/pdf.js',
   'js/core/export-all.js',
+  'js/core/field-help.js',
+  'js/core/app-help.js',
   'js/data/db.js',
   'js/data/schema.js',
   'js/data/records.js',
@@ -76,7 +64,6 @@ const ASSETS = [
   'js/data/lnf-recipes-dep.js',
   'js/data/lnf-recipes-other.js',
   'js/data/lnf-wiki.js',
-  'js/data/tool-photos.js',
   'js/sync/codec.js',
   'js/sync/github.js',
   'js/sync/plan.js',

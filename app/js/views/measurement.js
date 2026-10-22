@@ -7,7 +7,7 @@
  */
 import { h, append, fill, uid } from '../ui/dom.js';
 import {
-  button, section, segmented, emptyState, linkButton, toast, confirmDialog, errorText,
+  button, section, segmented, emptyState, linkButton, toast, confirmDialog, errorText, labelRow, helpSection,
 } from '../ui/components.js';
 import { numberStepper, textInput } from '../ui/fields.js';
 import { toolTiles, materialPicker } from '../ui/pickers.js';
@@ -21,6 +21,7 @@ import {
 import { pointStats, toCanonical, unitsFor } from '../core/derive.js';
 import { fmtNum, fmtValue } from '../core/format.js';
 import { MEASUREMENT_KINDS, KIND_LABELS } from '../core/vocab.js';
+import { HELP } from '../core/app-help.js';
 import { toMs } from '../core/time.js';
 
 /** Site presets (spec Section 7). */
@@ -154,11 +155,11 @@ export async function render(ctx) {
     const units = unitsFor(state.kind);
     if (!units) {
       const id = uid('unit');
-      fill(unitBox, h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Unit'),
+      fill(unitBox, h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: id }, 'Unit'), 'Unit', HELP.measureUnitFree),
         textInput({ id, value: state.unit, autocapitalize: 'off', onChange: (v) => { change({ unit: v || '' }); drawStats(); } }).el));
     } else if (units.length > 1) {
       fill(unitBox, segmented({
-        label: 'Unit (converted on save)', options: units.map((u) => ({ value: u, label: u })), value: state.unit, compact: true,
+        label: 'Unit (converted on save)', options: units.map((u) => ({ value: u, label: u })), value: state.unit, compact: true, help: HELP.measureUnit,
         onChange: (v) => { change({ unit: v || units[0] }); drawPoints(); drawStats(); },
       }));
     } else {
@@ -169,15 +170,16 @@ export async function render(ctx) {
   const materials = [...new Set([run.material, run.maskMaterial, ...settings.materials].filter(Boolean))];
   append(ctx.root, [
     h('p', { class: 'muted' }, `${tool ? tool.shortName || tool.name : 'Run'}${template ? ` · ${template.name}` : ''}${run.material ? ` · ${run.material}` : ''}`),
-    section('Metrology tool', metrology.length
+    helpSection('Metrology tool', HELP.measureTool, metrology.length
       ? toolTiles({ tools: metrology, lastUsed, selectedId: state.metrologyToolId, onPick: (t) => change({ metrologyToolId: t.id }) })
       : emptyState('No metrology tools yet.', linkButton('Add one', '#/settings/tool/new'))),
     segmented({
       label: 'Phase', options: [{ value: 'pre', label: 'Pre (before run)' }, { value: 'post', label: 'Post (after run)' }],
-      value: state.phase, onChange: (v) => change({ phase: v === 'post' ? 'post' : 'pre' }),
+      value: state.phase, onChange: (v) => change({ phase: v === 'post' ? 'post' : 'pre' }), help: HELP.measurePhase,
     }),
     segmented({
       label: 'Kind', options: MEASUREMENT_KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] })), value: state.kind, compact: true,
+      help: HELP.measureKind,
       onChange: (v) => {
         const kind = v || 'thickness';
         change({ kind, unit: (unitsFor(kind) || [state.unit])[0] });
@@ -187,12 +189,13 @@ export async function render(ctx) {
       },
     }),
     materialPicker({
-      label: 'Material measured', value: state.material, options: materials, show: 4,
+      label: 'Material measured', value: state.material, options: materials, show: 4, help: HELP.measureMaterial,
       onChange: (v) => change({ material: v }),
     }),
     unitBox,
     segmented({
       label: 'Sites', options: Object.entries(PRESETS).map(([value, p]) => ({ value, label: p.label })), value: state.preset, compact: true,
+      help: HELP.measureSites,
       onChange: (v) => {
         const preset = v || 'custom';
         const sites = preset === 'custom' ? state.points.map((p, i) => String(i + 1)) : PRESETS[/** @type {keyof typeof PRESETS} */ (preset)].sites;
@@ -202,12 +205,12 @@ export async function render(ctx) {
         drawStats();
       },
     }),
-    section('Points', pointsBox, stats, h('p', { class: 'field-note' }, 'Empty points are skipped. Enter moves to the next point.')),
+    helpSection('Points', HELP.measurePoints, pointsBox, stats, h('p', { class: 'field-note' }, 'Empty points are skipped. Enter moves to the next point.')),
     section('Notes', h('div', { class: 'field' },
       h('label', { class: 'visually-hidden', for: 'measure-notes' }, 'Measurement notes'),
       textInput({ id: 'measure-notes', value: state.notes, multiline: true, onChange: (v) => change({ notes: v || '' }) }).el)),
     h('details', { class: 'more' }, h('summary', null, 'Time measured'),
-      h('div', { class: 'stack' }, dateTimeField('Measured at', state.takenAt, (iso) => change({ takenAt: iso })))),
+      h('div', { class: 'stack' }, dateTimeField('Measured at', state.takenAt, (iso) => change({ takenAt: iso }), HELP.measuredAt))),
   ]);
   drawUnit();
   drawPoints();

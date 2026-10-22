@@ -434,9 +434,13 @@ function freePort() {
  */
 async function startApp(exe, data) {
   const port = await freePort();
+  const { connect, BLOCK_HOSTS_SWITCH } = await import('./cdp.mjs');
   const child = spawn(exe, [], {
     stdio: 'ignore',
-    env: { ...process.env, LNF_RUNLOG_DATA: data, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` },
+    env: {
+      ...process.env, LNF_RUNLOG_DATA: data,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} ${BLOCK_HOSTS_SWITCH}`,
+    },
   });
   const base = `http://127.0.0.1:${port}`;
   try {
@@ -449,7 +453,6 @@ async function startApp(exe, data) {
       if (Date.now() > end) throw new Error('the app did not open its page within 30 s');
       await sleep(250);
     }
-    const { connect } = await import('./cdp.mjs');
     const page = await connect((await (await fetch(`${base}/json/version`)).json()).webSocketDebuggerUrl);
     return { child, page, base };
   } catch (err) {

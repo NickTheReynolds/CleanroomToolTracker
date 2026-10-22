@@ -6,9 +6,10 @@
  */
 import { h, fill, uid } from './dom.js';
 import { icon } from './icons.js';
-import { button, sheet, segmented, emptyState, listRow, section } from './components.js';
+import { button, sheet, segmented, emptyState, listRow, section, labelRow } from './components.js';
 import { valueText, recipeFill, recipeMatches, sortRecipes } from '../core/recipes.js';
 import { formatDay } from '../core/time.js';
+import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/recipes.js').WikiRecipe} WikiRecipe */
 /** @typedef {import('../core/types.js').Template} Template */
@@ -121,7 +122,7 @@ function recipeDetail(r, o, close, back) {
     r.caveat ? h('p', { class: 'field-note warn' }, `Check this one: ${r.caveat}`) : null,
     facts.length ? h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])) : null,
     r.steps.length > 1 ? segmented({
-      label: 'Step', compact: true, value: step,
+      label: 'Step', compact: true, value: step, help: HELP.recipeStep,
       options: r.steps.map((s, i) => ({ value: i, label: s.name || `Step ${i + 1}` })),
       onChange: (v) => { if (v !== null) { step = v; draw(); } },
     }) : null,
@@ -164,7 +165,8 @@ export function openRecipeSheet(o) {
     draw();
     fill(body,
       h('p', { class: 'muted small' }, `${list.length} recipe${list.length === 1 ? '' : 's'} from the LNF wiki. Check a recipe against the tool before you rely on it.`),
-      list.length > 6 ? h('div', { class: 'field' }, h('label', { class: 'label', for: id }, 'Search recipes'), input) : null,
+      list.length > 6 ? h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: id }, 'Search recipes'), 'Search recipes', HELP.recipeSearch), input) : null,
       rows);
     /** @type {HTMLElement | null} */ (back)?.focus();
   };
