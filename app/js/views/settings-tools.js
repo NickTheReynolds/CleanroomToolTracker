@@ -16,6 +16,7 @@ import {
 import { CATEGORY_LABELS, TOOL_CATEGORIES } from '../core/vocab.js';
 import { withTuning } from '../config.js';
 import { HELP } from '../core/app-help.js';
+import { compatSection } from '../ui/tool-compat-editor.js';
 
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
@@ -129,6 +130,13 @@ async function renderTool(ctx, id) {
         label: 'Active', hint: 'Archived tools are hidden from pickers; their runs stay.',
         checked: !!state.active, onChange: (v) => change({ active: v }),
       })),
+    isNew ? null : compatSection({
+      tool: state,
+      onChange: (compat) => {
+        if (compat) change({ compat });
+        else { const { compat: _c, ...rest } = state; state = rest; dirty = true; autosave.schedule(); }
+      },
+    }),
     isNew ? null : section('Templates',
       templates.length
         ? h('div', { class: 'list' }, templates.map((t) => listRow({

@@ -6,7 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   runLinks, linkFor, projectRuns, stepStates, nextStep, progress, suggestStep, activeWafers, waferText, newWafers, newStep,
-  copyPlan, cleanLinks, defaultLink, sortProjects,
+  copyPlan, cleanLinks, defaultLink, sortProjects, processItems, stacksBefore, stepWaferIds, duplicateProject, copyPlanInto,
+  wafersOnStepChange, recipeOnStepChange,
 } from '../app/js/core/projects.js';
 import { travelerBlocks, travelerSheets, travelerFileBase } from '../app/js/core/project-report.js';
 import { normalizeRecord, validateRecord } from '../app/js/data/schema.js';
@@ -176,4 +177,120 @@ test('the traveler lists the plan, every run in order and each wafer’s path', 
   for (const col of ['Conditions', 'Substrate', 'Mask', 'Also in']) assert.ok(sheets[0].rows[0].includes(col), `the workbook has ${col}, as the PDF does`);
   assert.equal(sheets[2].rows.length, 5);
   assert.equal(travelerFileBase({ name: 'Résonateurs: batch #3' }, new Date(2026, 9, 5)), 'lnf-runlog-project-resonateurs-batch-3-2026-10-05');
+});
+
+test('wafers and masks: numbering per prefix, types copied, masks left out of "every wafer"', () => {
+  const spec = { material: 'Si', size: '100mm' };
+  const w = newWafers([], 2, 'W', { spec, specId: 'lnf-store/x' });
+  assert.deepEqual(w.map((x) => [x.label, x.spec, x.specId]), [['W1', spec, 'lnf-store/x'], ['W2', spec, 'lnf-store/x']]);
+  assert.notEqual(w[0].spec, spec, 'each wafer has its own copy');
+  const m = newWafers(w, 2, 'M', { spec: { kind: 'mask', size: 'plate5' } });
+  assert.deepEqual(m.map((x) => x.label), ['M1', 'M2'], 'masks number on their own');
+  assert.deepEqual(newWafers([...w, ...m], 1).map((x) => x.label), ['W3']);
+  const project = /** @type {any} */ ({ id: 'p', wafers: [...w, ...m], steps: [] });
+  assert.deepEqual(activeWafers(project).map((x) => x.label), ['W1', 'W2']);
+  assert.deepEqual(processItems(project).map((x) => x.label), ['W1', 'W2']);
+  assert.deepEqual(processItems(/** @type {any} */ ({ wafers: m })).map((x) => x.label), ['M1', 'M2'], 'a project of masks');
+});
+
+test('stacks: a bond joins wafers for the later steps; a debond separates them; runs follow a step’s wafers', () => {
+  const [w1, w2, g1, g2] = [...newWafers([], 2), ...newWafers([], 2, 'G')];
+  const bond = { ...newStep({ title: 'Bond' }), bonds: [{ id: 'b1', waferIds: [w1.id, g1.id] }, { id: 'b2', waferIds: [w2.id, g2.id] }] };
+  const dice = { ...newStep({ title: 'Dice', toolId: 'saw' }), waferIds: [w1.id] };
+  const debond = { ...newStep({ title: 'Debond' }), debond: true };
+  const after = { ...newStep({ title: 'Clean', toolId: 'bench' }), waferIds: [w1.id] };
+  const project = /** @type {any} */ ({ id: 'p', wafers: [w1, w2, g1, g2], steps: [bond, dice, debond, after] });
+  assert.equal(stacksBefore(project, 0).size, 0);
+  assert.deepEqual(stacksBefore(project, 1).get(w1.id), [w1.id, g1.id]);
+  assert.deepEqual(stepWaferIds(project, dice), [w1.id, g1.id], 'the stack comes whole');
+  assert.deepEqual(stepWaferIds(project, after), [w1.id], 'after the debond, one wafer');
+  assert.deepEqual(stepWaferIds(project, bond), [w1.id, w2.id, g1.id, g2.id]);
+  const link = defaultLink(project, [], 'saw');
+  assert.equal(link.stepId, dice.id);
+  assert.deepEqual(link.waferIds, [w1.id, g1.id]);
+});
+
+test('a run of the step asked for takes that step’s wafers still in process', () => {
+  const [w1, w2, w3, w4] = newWafers([], 4);
+  const s1 = { ...newStep({ title: 'Etch A', toolId: 'tool' }), waferIds: [w1.id, w2.id] };
+  const s2 = { ...newStep({ title: 'Etch B', toolId: 'tool' }), waferIds: [w3.id, w4.id] };
+  const project = /** @type {any} */ ({ id: 'p', wafers: [w1, w2, { ...w3, status: 'scrapped' }, w4], steps: [s1, s2] });
+  assert.deepEqual(defaultLink(project, [], 'tool').waferIds, [w1.id, w2.id], 'the suggested step');
+  const asked = defaultLink(project, [], 'tool', s2.id);
+  assert.equal(asked.stepId, s2.id);
+  assert.deepEqual(asked.waferIds, [w4.id], 'the asked step, without its scrapped wafer');
+  const gone = /** @type {any} */ ({ ...project, wafers: project.wafers.map((/** @type {any} */ w) => ({ ...w, status: w.id === w4.id ? 'done' : w.status })) });
+  assert.deepEqual(stepWaferIds(gone, s2), [], 'every wafer it names is finished: no wafers, not all of them');
+  const dangling = { ...newStep({ title: 'Old' }), waferIds: ['deleted-on-1.4'] };
+  assert.deepEqual(stepWaferIds(/** @type {any} */ ({ ...project, steps: [dangling] }), dangling), [w1.id, w2.id, w4.id],
+    'a step naming only wafers no longer in the project is for every wafer in process');
+});
+
+test('a new run moved to another step takes its wafers while it still has the previous step’s', () => {
+  const [w1, w2, w3, w4] = newWafers([], 4);
+  const s1 = { ...newStep({ title: 'Etch A', toolId: 'tool' }), waferIds: [w1.id, w2.id] };
+  const s2 = { ...newStep({ title: 'Etch B', toolId: 'tool' }), waferIds: [w3.id, w4.id] };
+  const bond = { ...newStep({ title: 'Bond' }), bonds: [{ id: 'b', waferIds: [w1.id, w3.id] }] };
+  const s3 = newStep({ title: 'Dice', toolId: 'saw' });
+  const project = /** @type {any} */ ({ id: 'p', wafers: [w1, w2, w3, w4], steps: [s1, s2, bond, s3] });
+  // Log this step on S2 while the form is on S1 with S1's wafers (Log run's link and its step menu alike).
+  assert.deepEqual(wafersOnStepChange(project, { stepId: s1.id, waferIds: [w1.id, w2.id] }, s2, true), [w3.id, w4.id]);
+  assert.deepEqual(wafersOnStepChange(project, { stepId: s1.id, waferIds: [w1.id] }, s2, true), [w1.id], 'chosen by hand: kept');
+  assert.deepEqual(wafersOnStepChange(project, { stepId: s1.id, waferIds: [w1.id, w2.id] }, s2, false), [w1.id, w2.id], 'a saved run never follows');
+  assert.deepEqual(wafersOnStepChange(project, { stepId: null, waferIds: [w1.id, w2.id, w3.id, w4.id] }, s1, true), [w1.id, w2.id],
+    'no step yet, every wafer in process');
+  assert.deepEqual(wafersOnStepChange(project, { stepId: s1.id, waferIds: [w1.id] }, s3, true), [w1.id, w3.id], 'after the bond, the stack');
+  // A stack partner that is scrapped stays out.
+  const scrapped = /** @type {any} */ ({ ...project, wafers: [w1, w2, { ...w3, status: 'scrapped' }, w4] });
+  assert.deepEqual(wafersOnStepChange(scrapped, { stepId: s1.id, waferIds: [w1.id] }, s3, true), [w1.id]);
+});
+
+test('a new run’s recipe follows its step while it is still the previous step’s', () => {
+  const s1 = newStep({ title: 'Piranha clean', recipe: 'Piranha 10 min' });
+  const s2 = newStep({ title: 'Oxide strip' });
+  const s3 = newStep({ title: 'Final clean', recipe: 'SC2 5 min' });
+  const project = /** @type {any} */ ({ id: 'p', wafers: [], steps: [s1, s2, s3] });
+  assert.equal(recipeOnStepChange(project, s1.id, s2, 'Piranha 10 min'), '', 'the next step has none');
+  assert.equal(recipeOnStepChange(project, s2.id, s3, ''), 'SC2 5 min');
+  assert.equal(recipeOnStepChange(project, null, s1, ''), 'Piranha 10 min', 'no step before, an empty box');
+  assert.equal(recipeOnStepChange(project, s1.id, s3, 'My recipe'), 'My recipe', 'one the person typed stays');
+});
+
+test('the traveler says what each plan note rests on', () => {
+  const { project, runs } = fixture();
+  const note = { stepId: project.steps[2].id, severity: 'stop', code: 'material', waferIds: [project.wafers[0].id], key: 'k', text: 'W1 carries Au.', source: 'general' };
+  const input = { project, projects: [project], tools: [], templates: [], runs, measurements: [], checks: [/** @type {any} */ (note)] };
+  const plan = travelerSheets(input)[1];
+  assert.equal(plan.rows[3][plan.rows[0].indexOf('Checks')], 'Not allowed: W1 carries Au. General practice, not an LNF rule.');
+  const blocks = travelerBlocks(input, { now: Date.parse('2026-10-05T12:00:00Z') });
+  assert.ok(blocks.some((b) => 'text' in b && String(b.text).includes('Not allowed: W1 carries Au. General practice, not an LNF rule.')));
+  assert.equal(travelerSheets({ ...input, checks: [{ ...note, key: 'checked' }], project: { ...project, steps: project.steps.map((s, i) => (i === 2 ? { ...s, checked: ['checked'] } : s)) } })[1].rows[3][9], '',
+    'a checked note is left out');
+});
+
+test('copies keep types, wafer choices and bonds on the new wafers', () => {
+  const [w1, w2] = newWafers([], 2, 'W', { spec: { material: 'Si' } });
+  const bond = { ...newStep({ title: 'Bond', adds: ['Au'] }), waferIds: [w1.id, w2.id], bonds: [{ id: 'b', waferIds: [w1.id, w2.id], method: 'eutectic' }], checked: ['x'] };
+  const from = /** @type {any} */ ({ id: 'a', name: 'A', wafers: [w1, { ...w2, status: 'scrapped', notes: 'broken' }], steps: [bond] });
+  const copy = duplicateProject(from, { now: T });
+  const [c1, c2] = copy.wafers;
+  assert.deepEqual([c1.label, c1.spec, c2.status, c2.notes], ['W1', { material: 'Si' }, 'active', '']);
+  assert.notEqual(c1.id, w1.id);
+  const s = copy.steps[0];
+  assert.deepEqual(s.waferIds, [c1.id, c2.id]);
+  assert.deepEqual(s.bonds.map((/** @type {any} */ b) => [b.waferIds, b.method]), [[[c1.id, c2.id], 'eutectic']]);
+  assert.notEqual(s.bonds[0].id, 'b');
+  assert.deepEqual(s.adds, ['Au']);
+  assert.equal(s.checked, undefined, 'checked notes stay with the original');
+  // Into a new project that has only its untouched W1: the wafers come too.
+  const fresh = copyPlanInto(from, newWafers([], 1), true);
+  assert.deepEqual(fresh.wafers.map((x) => x.label), ['W1', 'W2']);
+  assert.deepEqual(fresh.steps[0].waferIds, fresh.wafers.map((x) => x.id));
+  // Into a project with wafers of its own: by label; a stack missing a wafer is left out.
+  const mine = newWafers([], 1);
+  const into = copyPlanInto(from, mine, false);
+  assert.deepEqual(into.wafers, mine);
+  assert.deepEqual(into.steps[0].waferIds, [mine[0].id]);
+  assert.equal(into.steps[0].bonds, undefined);
+  assert.deepEqual(copyPlan(from).map((x) => x.waferIds), [undefined], 'without a map, no wafer choices');
 });

@@ -7,9 +7,10 @@ This is option A below, the per-device snapshot design, with a private GitHub re
 **Layout and contents**
 
 - **One file per device:** `lnf-runlog-sync/devices/<deviceId>.lnfsync`, gzip-compressed JSON, read by its magic bytes.
-- **What's in it:** `{format: "lnf-runlog-sync", version, appVersion, exportedAt, deviceId, deviceName, author, stores: {tools, templates, runs, measurements, events, projects, folders}, materials}`.
+- **What's in it:** `{format: "lnf-runlog-sync", version, appVersion, exportedAt, deviceId, deviceName, author, stores: {tools, templates, runs, measurements, events, projects, folders, wafers}, materials}`.
   - Tombstones are included.
   - `seen` (in this device's settings) lists the files already merged, with `seenStores`, the stores that covered. A device updated from 1.3 had merged other devices' files without their projects and folders, so it reads every file once more; then unchanged files are skipped as before.
+  - `wafers` (saved wafer types) arrived in version 1.5, and is optional the same way: a 1.4 device writes none and skips it when reading; the specs, bonds and tool settings on projects and tools travel inside those records, which 1.4 keeps as they are.
   - `projects` and `folders` arrived in version 1.4. A file from an older app version has neither, and still merges: those stores are optional (`OPTIONAL_STORES` in `sync/plan.js`), and nothing is removed for their absence. An older app reads a newer file's runs, keeps their project links and steps, and skips the stores it does not know, so devices on different versions keep syncing.
   - Photos and settings are left out, and the token never is in it (a test checks that).
 

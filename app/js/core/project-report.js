@@ -11,6 +11,8 @@ import { stepsText } from './run-steps.js';
 import { folderTree, pathText } from './folders.js';
 import { STATUS_LABELS, PROJECT_STATUS_LABELS, WAFER_STATUS_LABELS } from './vocab.js';
 import { toMs, localDateKey } from './time.js';
+import { specSummary } from './wafer-spec.js';
+import { SOURCE_TEXT } from './compat.js';
 
 /** @typedef {import('./pdf.js').PdfBlock} PdfBlock */
 /** @typedef {import('./xlsx.js').XlsxSheet} XlsxSheet */
@@ -24,6 +26,7 @@ import { toMs, localDateKey } from './time.js';
  * @property {any[]} runs every run
  * @property {any[]} measurements every measurement
  * @property {any[]} [folders] project folders, for the project's folder path
+ * @property {import('./compat.js').Note[]} [checks] the plan's compatibility notes
  */
 
 /** @type {Readonly<Record<string, string>>} */
@@ -66,8 +69,25 @@ function prepare(input) {
   /** @param {any} r @returns {string} the other projects this run's wafers belong to */
   const shared = (r) => list(r.projects).filter((l) => l.projectId !== p.id)
     .map((l) => projects.get(l.projectId)).filter(Boolean).map((x) => x.name).join(', ');
-  return { p, tools, templates, runs, states, name, measurements, stepText, shared };
+  const label = (/** @type {string} */ id) => list(p.wafers).find((w) => w.id === id)?.label || '?';
+  /** @param {any} s @returns {string} what a step is for, bonds and adds: "for W1, W3; bonds W1+W3 (anodic)" */
+  const extras = (s) => [
+    (s.waferIds || []).length ? `for ${waferText(p, s.waferIds)}` : '',
+    list(s.bonds).filter((b) => (b.waferIds || []).length >= 2).map((b) => `bonds ${b.waferIds.map(label).join('+')}${b.method ? ` (${b.method})` : ''}`).join(', '),
+    s.debond ? 'debond' : '', (s.adds || []).length ? `adds ${s.adds.join(', ')}` : '', (s.removes || []).length ? `removes ${s.removes.join(', ')}` : '',
+  ].filter(Boolean).join('; ');
+  /** @param {any} s @returns {string} the step's open notes, one line each, each with what it rests on */
+  const checks = (s) => (input.checks || []).filter((n) => n.stepId === s.id && !(s.checked || []).includes(n.key))
+    .map((n) => `${n.severity === 'stop' ? 'Not allowed' : 'Check'}: ${n.text} ${SOURCE_TEXT[n.source] || ''}`.trim()).join(' ');
+  return { p, tools, templates, runs, states, name, measurements, stepText, shared, extras, checks };
 }
+
+/**
+ * A wafer in one line: "W1 (in process), Si · 100 mm · <100> …: chipped edge".
+ * @param {any} w
+ * @returns {string}
+ */
+const waferLine = (w) => `${w.label} (${String(WAFER_STATUS_LABELS[w.status] || w.status).toLowerCase()})${w.spec && specSummary(w.spec) ? `, ${specSummary(w.spec)}` : ''}${w.notes ? `: ${w.notes}` : ''}`;
 
 /**
  * Each wafer's path: "Oct 3 Tempress S3T1; Oct 5 CEE 200X spinner 1; …".
@@ -102,7 +122,7 @@ export function travelerBlocks(input, o) {
   for (const [label, text] of [
     ['Folder', pathText(folderTree(list(input.folders)), p.folderId, ' / ')],
     ['Substrate', p.substrate || ''],
-    ['Wafers', wafers.map((w) => `${w.label} (${String(WAFER_STATUS_LABELS[w.status] || w.status).toLowerCase()})${w.notes ? `: ${w.notes}` : ''}`).join('; ')],
+    ['Wafers', wafers.map(waferLine).join('; ')],
     ['Notes', p.notes || ''],
   ]) if (text) out.push({ kind: 'kv', label, text });
   if (P.states.length) {
@@ -110,7 +130,7 @@ export function travelerBlocks(input, o) {
     for (const s of P.states) {
       const tool = s.step.toolId ? P.name(s.step.toolId) : '';
       const text = [STATE_TEXT[s.state], tool, s.step.recipe, s.doneAt ? `done ${localDateKey(s.doneAt)}` : '',
-        s.runs.length ? count(s.runs.length, 'run') : '', s.step.notes].filter(Boolean).join(' · ');
+        s.runs.length ? count(s.runs.length, 'run') : '', P.extras(s.step), s.step.notes, P.checks(s.step)].filter(Boolean).join(' · ');
       out.push({ kind: 'kv', label: `${s.index + 1}. ${s.step.title}`, text });
     }
   }
@@ -154,15 +174,17 @@ export function travelerSheets(input) {
     ];
   });
   const plan = P.states.map((s) => [
-    s.index + 1, s.step.title, s.step.toolId ? P.name(s.step.toolId) : '', s.step.recipe, STATE_TEXT[s.state], dateCell(s.doneAt), s.runs.length, s.step.notes,
+    s.index + 1, s.step.title, s.step.toolId ? P.name(s.step.toolId) : '', s.step.recipe, STATE_TEXT[s.state], dateCell(s.doneAt), s.runs.length,
+    P.extras(s.step), s.step.notes, P.checks(s.step),
   ]);
-  const wafers = list(p.wafers).map((w) => [w.label, WAFER_STATUS_LABELS[w.status] || w.status, w.notes, waferPath(P, w)]);
+  const wafers = list(p.wafers).map((w) => [w.label, WAFER_STATUS_LABELS[w.status] || w.status, w.spec ? specSummary(w.spec) : '', w.notes, waferPath(P, w)]);
   return [
     { name: 'Process record', rows: [['Date', 'Step', 'Tool', 'Template', 'Recipe', 'Wafers', 'Status', 'Material', 'Substrate', 'Mask',
       'Inputs', 'Steps', 'Conditions', 'Results', 'Measurements', 'Notes', 'Also in', 'Run id'], ...record],
     widths: [16, 18, 22, 16, 18, 14, 10, 14, 14, 12, 40, 30, 30, 30, 40, 30, 18, 36] },
-    { name: 'Plan', rows: [['#', 'Step', 'Tool', 'Recipe', 'State', 'Done', 'Runs', 'Notes'], ...plan], widths: [4, 24, 22, 18, 12, 16, 6, 30] },
-    { name: 'Wafers', rows: [['Wafer', 'Status', 'Notes', 'Path'], ...wafers], widths: [10, 10, 30, 80] },
+    { name: 'Plan', rows: [['#', 'Step', 'Tool', 'Recipe', 'State', 'Done', 'Runs', 'Wafers and materials', 'Notes', 'Checks'], ...plan],
+      widths: [4, 24, 22, 18, 12, 16, 6, 30, 30, 50] },
+    { name: 'Wafers', rows: [['Wafer', 'Status', 'Type', 'Notes', 'Path'], ...wafers], widths: [10, 10, 40, 30, 80] },
   ];
 }
 

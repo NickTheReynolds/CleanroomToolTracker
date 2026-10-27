@@ -269,3 +269,30 @@ test('projects and their folders sync; a snapshot from an older version without 
   assert.equal(merged.put.projects.length + merged.put.folders.length, 0, 'nothing is removed');
   assert.deepEqual(validateSnapshot({ ...snap, stores: { ...snap.stores, projects: 'x' } }), ['no projects list']);
 });
+
+test('saved wafer types, wafer specs, bonds and tool settings sync; a 1.4 snapshot without them still merges', () => {
+  const type = normalizeRecord('wafers', {
+    id: 'S', createdAt: T(1), updatedAt: T(2), deleted: false, deviceId: 'bbb', author: 'Ana', name: 'Si DSP', spec: { material: 'Si', size: '100mm' },
+  });
+  const project = normalizeRecord('projects', {
+    id: 'P', createdAt: T(1), updatedAt: T(2), deleted: false, deviceId: 'bbb', author: 'Ana', name: 'Bonded', startedAt: T(1),
+    wafers: [{ id: 'w1', label: 'W1', spec: { material: 'Si' }, specId: 'S' }, { id: 'g1', label: 'G1', spec: { material: 'Glass' } }],
+    steps: [{ id: 's1', title: 'Bond', bonds: [{ id: 'b', waferIds: ['w1', 'g1'], method: 'anodic' }], checked: ['bond:g1,w1'] }],
+  });
+  const tool = normalizeRecord('tools', { id: 'T', createdAt: T(1), updatedAt: T(2), deleted: false, deviceId: 'bbb', author: 'Ana', name: 'Tube', compat: { sizes: ['150mm'] } });
+  const snap = buildSnapshot({
+    records: { runs: [], projects: [project], folders: [], wafers: [type], tools: [tool] }, materials: [],
+    deviceId: 'bbb', deviceName: 'PC', author: 'Ana', appVersion: '1.5.0', now: T(9),
+  });
+  assert.ok(SYNC_STORES.includes('wafers'));
+  assert.deepEqual(validateSnapshot(snap), []);
+  const plan = planMerge({ runs: [], projects: [], folders: [], wafers: [], tools: [] }, snap, []);
+  assert.equal(plan.counts.wafers.added, 1);
+  assert.deepEqual(plan.put.projects[0].wafers[0].spec, { material: 'Si' });
+  assert.deepEqual(plan.put.projects[0].steps[0].bonds, [{ id: 'b', waferIds: ['w1', 'g1'], method: 'anodic' }]);
+  assert.deepEqual(plan.put.tools[0].compat, { sizes: ['150mm'] });
+  const old = { ...snap, stores: { ...snap.stores } };
+  delete old.stores.wafers;
+  assert.deepEqual(validateSnapshot(old), [], 'a device still on 1.4 writes no wafers list');
+  assert.equal(planMerge({ wafers: [type] }, old, []).put.wafers.length, 0, 'nothing is removed');
+});

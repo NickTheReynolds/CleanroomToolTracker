@@ -2,6 +2,27 @@
 
 One entry per milestone (spec Section 16).
 
+## M9: Wafer and mask types, bonding, and plan checks
+
+Version 1.5.0.
+
+- **Wafer types.** Say what a project's wafers are: material, size (2 in to 200 mm, pieces), thickness and tolerance, orientation, cut, polish, doping and dopant, resistivity, grade, and the films already on them.
+  - **Settings → Wafer types** keeps your own types and lists the **LNF store's** 13 single wafers and mask plates, with the store's own names and descriptions and the prices seen on Oct 22, 2026. **Copy to your types** makes an editable copy.
+  - **Add wafers** asks how many and of which type, in one sheet. Four store wafers in a new project take four taps and become W1–W4.
+  - Each wafer's type is one button on its row. Choose a type for one wafer or for all those without one, or edit the details and save them as a new type.
+  - Each wafer keeps its own copy of its type, so editing a type later never changes a project's history.
+- **Masks are wafers of kind mask.** They are numbered M1, M2, use plate sizes (4 to 7 in) and have mask fields (coating, resist on the blank, polarity, design and layer). Runs and checks leave them out of "every wafer" unless a step names them.
+- **Bonding.** A step on a bonder bonds wafers into stacks, and one on the Sample mounting station mounts them on a carrier (a temporary bond): **Pair them** proposes pairs in one tap, or tap the wafers of each stack yourself, and choose the bond method once. After the bond, a step or run that names one wafer takes the whole stack (tapping one wafer of a stack in a run picks the stack). A later step can debond; a debond in a solvent takes the mount's adhesive off, a dry one leaves it for a later clean.
+- **Plan checks.** Each step is checked against what its tool takes: wafer size and pieces (with carriers), thickness (a stack's adds up), substrate, the materials on the wafers, how clean they are (metal on a wafer, a step on an evaporator, sputter or plating tool even for a dielectric, dicing, and metals-class and non-CMOS solvent benches leave wafers out of CMOS-clean tools for good), the last wet bench before the PFC clean, and KOH waiting to be cleaned off.
+  - The facts come from the **LNF wiki notes** the app already ships (the furnace tubes' sizes, silicon only and the PFC Bench 01 clean right before; PFC Bench 01 taking no wafers from wet benches other than Acid 02 or RCA 81; KOH cleaning in order, Piranha and SC2 at Acid 92 then RCA at RCA 81, and a KOH developer at Base Bench 63 keeping wafers out of clean tools; carriers on the P5000 PECVD, Synapse and Pegasus 6; mask plates on the mask maker and mask bench) and from **general practice** (evaporator, sputter and plating tools; the bond methods; a mask plate wider than the wafer). Every note says which, and the LNF's rules and the tool engineer come first.
+  - Notes show on each plan step while you edit, on the project page (the next step's card, badges on the plan, the step's sheet), on **Log run** under the project's step, and in the traveler export. Each starts with **Not allowed** or **Check** and ends with what it rests on.
+  - **Mark as checked** quiets a note; **Add the PFC Bench 01 clean before this step** fixes the most common one in a tap.
+  - Nothing unknown raises a note, and notes never stop you saving.
+- **Log run follows the step.** **Log this step** and the step menu move a new run to the chosen step the same way: its wafers while they are still the previous step's, its recipe while it is still the previous step's.
+- **What each tool takes.** **Settings → Tools → a tool → Compatibility** shows what the checks know about the tool and lets you change the sizes (your choice replaces the LNF notes' size limits), pieces, thickest wafer or stack, mask plates and materials not allowed; **Reset** undoes it.
+- **No run costs yet.** They come once the LNF wiki's tool pricing is read; the store prices show on the wafer types.
+- **Under the hood.** IndexedDB version 4 (the `wafers` store). The record format is still 1, so 1.4 devices keep syncing: checked against the 1.4.1 code both ways, they refuse nothing and keep every new field. New tests cover wafer specs and material classes, the LNF store list, the checks on real LNF tools (sizes, carriers, cleanliness, KOH, bonds, masks), copies and stacks, and sync of the new store; the smoke test adds store wafers to a project and fixes a check note.
+
 ## 1.4.1: Tool photos
 
 - **Each tool's photo from the LNF wiki comes with the app.**

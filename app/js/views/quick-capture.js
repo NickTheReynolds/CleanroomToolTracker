@@ -54,7 +54,7 @@ export async function render(ctx) {
     const strip = photoStrip({ runId: state.runId, onChange: (ids) => change({ photoIds: ids }) });
     photos = strip;
     const projectBox = projectLinks({
-      projects, runs, toolId: tool.id, links: state.projects || [], title: 'Projects', onChange: (links) => change({ projects: links }),
+      projects, runs, toolId: tool.id, links: state.projects || [], title: 'Projects', onChange: (links) => change({ projects: links }), newRun: true,
     });
     fill(body,
       h('div', { class: 'spread card' }, h('strong', null, tool.name),

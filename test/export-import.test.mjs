@@ -60,10 +60,11 @@ test('buildBackup writes the envelope, keeps only materials and tuning, and adds
   });
   assert.deepEqual(Object.keys(b), [
     'format', 'version', 'appVersion', 'exportedAt', 'tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders',
-    'settings',
+    'wafers', 'settings',
   ]);
   assert.deepEqual(b.projects, [], 'no projects given: an empty list');
   assert.deepEqual(b.folders, [], 'no folders given: an empty list');
+  assert.deepEqual(b.wafers, [], 'no saved wafers given: an empty list');
   assert.equal(b.format, 'lnf-runlog');
   assert.equal(b.version, SCHEMA_VERSION);
   assert.equal(b.appVersion, '1.2.3');
@@ -194,6 +195,7 @@ test('planImport merges every store and unions the materials list', () => {
     photos: { added: 1, updated: 0, skipped: 0, invalid: 0 },
     projects: { added: 0, updated: 0, skipped: 0, invalid: 0 },
     folders: { added: 0, updated: 0, skipped: 0, invalid: 0 },
+    wafers: { added: 0, updated: 0, skipped: 0, invalid: 0 },
   });
   assert.deepEqual(plan.put.runs.map((r) => [r.id, r.notes]), [['A', 'edited on the PC'], ['B', '']]);
   assert.equal(plan.errors.length, 1);
@@ -351,18 +353,31 @@ test('round trip: backup -> JSON -> import into an empty device reproduces every
     projects: [{
       id: 'P', createdAt: T1, updatedAt: T2, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Résonateurs batch 3', goal: 'Release',
       status: 'active', startedAt: T1, endedAt: null, substrate: 'Si', notes: 'α', folderId: 'F2',
-      wafers: [{ id: 'w1', label: 'W1', status: 'active', notes: '' }, { id: 'w2', label: 'W2', status: 'scrapped', notes: 'chipped' }],
-      steps: [{ id: 's1', title: 'Etch', toolId: tool.id, templateId: null, recipe: '', notes: '', doneAt: null, skipped: false }],
+      wafers: [
+        { id: 'w1', label: 'W1', status: 'active', notes: '', spec: { material: 'Si', size: '100mm', orientation: '<100>' }, specId: 'lnf-store/wafer-4in-p-10-20' },
+        { id: 'w2', label: 'W2', status: 'scrapped', notes: 'chipped' },
+        { id: 'm1', label: 'M1', status: 'active', notes: '', spec: { kind: 'mask', size: 'plate5', design: 'Résonateur, layer 1' }, specId: null },
+      ],
+      steps: [
+        { id: 's1', title: 'Etch', toolId: tool.id, templateId: null, recipe: '', notes: '', doneAt: null, skipped: false, waferIds: ['w1', 'm1'], checked: ['size:w1'] },
+        { id: 's2', title: 'Bond', toolId: null, templateId: null, recipe: '', notes: '', doneAt: null, skipped: false,
+          bonds: [{ id: 'b1', waferIds: ['w1', 'w2'], method: 'anodic' }], adds: ['Au'], removes: ['Photoresist'], debond: false },
+      ],
     }],
     folders: [
       { id: 'F1', createdAt: T1, updatedAt: T1, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Thèse', parentId: null },
       { id: 'F2', createdAt: T1, updatedAt: T2, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Chapitre 3', parentId: 'F1' },
       { id: 'F3', createdAt: T1, updatedAt: T3, deleted: true, deviceId: 'dev-b', author: 'Ben', name: 'Old', parentId: null },
     ],
+    wafers: [
+      { id: 'S1', createdAt: T1, updatedAt: T2, deleted: false, deviceId: 'dev-a', author: 'Ana', name: 'Si 100 mm DSP',
+        spec: { material: 'Si', size: '100mm', polish: 'dsp', films: [{ material: 'SiO2 (thermal)', thicknessNm: 2000 }] } },
+      { id: 'S2', createdAt: T1, updatedAt: T3, deleted: true, deviceId: 'dev-b', author: 'Ben', name: 'Old mask', spec: { kind: 'mask', size: 'plate5' } },
+    ],
   };
   const text = JSON.stringify(buildBackup({
     tools: data.tools, templates: data.templates, runs: data.runs, measurements: data.measurements, events: data.events,
-    photos: data.photos, projects: data.projects, folders: data.folders, settings, appVersion: '1.0.0', exportedAt: EXPORTED,
+    photos: data.photos, projects: data.projects, folders: data.folders, wafers: data.wafers, settings, appVersion: '1.0.0', exportedAt: EXPORTED,
   }));
   const plan = planImport(emptyDb(), JSON.parse(text), []);
   assert.deepEqual(plan.errors, []);

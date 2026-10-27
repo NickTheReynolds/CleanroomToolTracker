@@ -25,6 +25,7 @@ import { ageDays, formatDateTime } from '../core/time.js';
 const STORE_LABELS = Object.freeze([
   ['tools', 'Tools'], ['templates', 'Templates'], ['runs', 'Runs'], ['measurements', 'Measurements'],
   ['events', 'Tool events'], ['photos', 'Photos'], ['projects', 'Projects'], ['folders', 'Project folders'],
+  ['wafers', 'Saved wafers and masks'],
 ]);
 
 /**
@@ -67,7 +68,7 @@ function backupSection(settings, photos, photoEstimate) {
     onSaved: async () => { last.textContent = lastExportText(await markExported()); },
   });
   return section('Backup',
-    h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, projects and their folders, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
+    h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, projects and their folders, saved wafers and masks, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
     last,
     toggle({
       label: 'Include photos', help: HELP.includePhotos,

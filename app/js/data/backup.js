@@ -14,6 +14,7 @@ import {
   buildBackup, backupFileName, planImport, runsCsv, measurementsCsv, eventsCsv, encodePhoto, bytesToBase64,
   base64ToBytes,
 } from './export-import.js';
+import { planChecks } from './plan-checks.js';
 import { allRunsCsv, allSheets, reportBlocks, localStamp } from '../core/export-all.js';
 import { travelerBlocks, travelerSheets, travelerFileBase } from '../core/project-report.js';
 import { xlsxBytes } from '../core/xlsx.js';
@@ -82,7 +83,7 @@ export async function makeBackupFile(opts = {}) {
   const now = new Date();
   const json = JSON.stringify(buildBackup({
     tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements, events: all.events,
-    projects: all.projects, folders: all.folders, settings, appVersion: APP_VERSION, exportedAt: now.toISOString(),
+    projects: all.projects, folders: all.folders, wafers: all.wafers, settings, appVersion: APP_VERSION, exportedAt: now.toISOString(),
   }));
   /** @type {BlobPart[]} */
   const parts = [json];
@@ -165,9 +166,10 @@ export async function makeTravelerExport(projectId, format, now = new Date()) {
   const [all, settings] = await Promise.all([readStores(['tools', 'templates', 'runs', 'measurements', 'projects', 'folders']), getSettings()]);
   const project = all.projects.find((p) => p.id === projectId && !p.deleted);
   if (!project) throw new Error('This project no longer exists.');
+  const checks = (await planChecks(project, all.tools.filter((t) => !t.deleted), all.templates.filter((t) => !t.deleted))).notes;
   const input = {
     project, projects: all.projects, tools: all.tools, templates: all.templates, runs: all.runs, measurements: all.measurements,
-    folders: all.folders,
+    folders: all.folders, checks,
   };
   const base = travelerFileBase(project, now);
   if (format === 'xlsx') return [xlsxFile(travelerSheets(input), `${base}.xlsx`)];

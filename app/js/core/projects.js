@@ -9,6 +9,7 @@
  */
 import { toMs } from './time.js';
 import { uuid } from './ids.js';
+import { isMask } from './wafer-spec.js';
 
 /** @typedef {import('./types.js').Run} Run */
 /** @typedef {import('./types.js').Project} Project */
@@ -129,11 +130,118 @@ export function suggestStep(states, toolId) {
 }
 
 /**
+ * What a project's runs process: its wafers, or its masks when it has only
+ * masks (a project that makes masks). Masks in a project with wafers are
+ * used by steps that name them, not processed with every run.
  * @param {Project} project
- * @returns {Wafer[]} wafers still in process
+ * @returns {Wafer[]}
+ */
+export function processItems(project) {
+  const all = list(project.wafers);
+  const wafers = all.filter((w) => !isMask(w));
+  return wafers.length ? wafers : all;
+}
+
+/**
+ * @param {Project} project
+ * @returns {Wafer[]} wafers still in process (masks only in a project of masks)
  */
 export function activeWafers(project) {
-  return list(project.wafers).filter((w) => w.status !== 'done' && w.status !== 'scrapped');
+  return processItems(project).filter((w) => w.status !== 'done' && w.status !== 'scrapped');
+}
+
+/**
+ * The stacks bonded before a step: for each wafer in one, all the wafers of
+ * its stack. Bonds come from the steps before (skipped ones left out); a
+ * step that debonds separates the stacks among its wafers.
+ * @param {Project} project
+ * @param {number} index the step's position in the plan
+ * @returns {Map<string, string[]>}
+ */
+export function stacksBefore(project, index) {
+  const known = new Set(list(project.wafers).map((w) => w.id));
+  /** @type {Map<string, string[]>} */
+  const of = new Map();
+  const steps = list(project.steps);
+  for (let i = 0; i < Math.min(index, steps.length); i++) {
+    const s = steps[i];
+    if (!s || s.skipped) continue;
+    for (const b of list(s.bonds)) {
+      const ids = [...new Set(list(b && b.waferIds).filter((id) => known.has(id)).flatMap((id) => of.get(id) || [id]))];
+      if (ids.length < 2) continue;
+      for (const id of ids) of.set(id, ids);
+    }
+    if (s.debond) {
+      const named = list(s.waferIds).filter((id) => known.has(id));
+      for (const id of named.length ? named : [...of.keys()]) {
+        for (const m of of.get(id) || []) of.delete(m);
+      }
+    }
+  }
+  return of;
+}
+
+/** @param {Wafer | undefined} w @returns {boolean} still in process (not done, not scrapped) */
+const inProcess = (w) => !!w && w.status !== 'done' && w.status !== 'scrapped';
+
+/**
+ * The wafers a run of this step processes, as far as they are still in
+ * process: the ones the step names (none left, no wafers), else every wafer
+ * in process; a wafer in a stack brings the whole stack. A step that names
+ * only wafers no longer in the project counts as naming none.
+ * @param {Project} project
+ * @param {PlanStep} step
+ * @returns {string[]}
+ */
+export function stepWaferIds(project, step) {
+  const wafers = list(project.wafers);
+  const byId = new Map(wafers.map((w) => [w.id, w]));
+  const named = list(step.waferIds).filter((id) => byId.has(id));
+  const base = named.length ? named.filter((id) => inProcess(byId.get(id))) : activeWafers(project).map((w) => w.id);
+  const stacks = stacksBefore(project, list(project.steps).findIndex((s) => s.id === step.id));
+  const ids = new Set(base.flatMap((id) => stacks.get(id) || [id]));
+  return wafers.filter((w) => ids.has(w.id) && inProcess(w)).map((w) => w.id);
+}
+
+/**
+ * A run's wafers when its link moves to another step. A new run still on
+ * the previous step's wafers (every wafer in process, without a step)
+ * takes the new step's; otherwise the wafers stay as chosen, and a wafer
+ * bonded before the new step brings its stack. The Log run form and its
+ * step menu both use this, so they agree.
+ * @param {Project} project
+ * @param {{stepId: string | null, waferIds: string[]}} link the link as it is now
+ * @param {PlanStep} step the step it moves to
+ * @param {boolean} newRun a run being logged (a saved run's wafers never follow the step)
+ * @returns {string[]}
+ */
+export function wafersOnStepChange(project, link, step, newRun) {
+  const steps = list(project.steps);
+  const prev = steps.find((s) => s.id === link.stepId) || null;
+  const prevDefault = prev ? stepWaferIds(project, prev) : activeWafers(project).map((w) => w.id);
+  const held = list(link.waferIds);
+  const same = held.length === prevDefault.length && held.every((id) => prevDefault.includes(id));
+  if (newRun && same) return stepWaferIds(project, step);
+  const stacks = stacksBefore(project, steps.findIndex((s) => s.id === step.id));
+  const byId = new Map(list(project.wafers).map((w) => [w.id, w]));
+  // A partner that is done or scrapped stays out, as it does from a step's own wafers.
+  return [...new Set(held.flatMap((id) => (stacks.get(id) || [id]).filter((x) => x === id || inProcess(byId.get(x)))))];
+}
+
+/**
+ * A new run's recipe when its link moves to another step: the step's recipe
+ * while the form's is still the previous step's (an empty one included),
+ * otherwise the one the person typed or chose. Log this step and the step
+ * menu both use this, so they agree.
+ * @param {Project} project
+ * @param {string | null} prevStepId the step the link had (null: none)
+ * @param {PlanStep} step the step it moves to
+ * @param {string} recipe the form's recipe now
+ * @returns {string}
+ */
+export function recipeOnStepChange(project, prevStepId, step, recipe) {
+  const prev = list(project.steps).find((s) => s.id === prevStepId) || null;
+  return String(recipe || '') === String(prev?.recipe || '') ? String(step.recipe || '') : recipe;
 }
 
 /**
@@ -175,23 +283,32 @@ export function waferText(project, waferIds) {
 }
 
 /**
- * New wafers that continue the project's numbering: "W1".."Wn", or after
- * the highest number already used.
+ * New wafers that continue the project's numbering for their prefix:
+ * "W1".."Wn" for wafers, "M1".."Mn" for masks, after the highest number
+ * already used with that prefix. With a type they get a copy of its spec
+ * and say where it came from.
  * @param {readonly Wafer[]} existing
  * @param {number} count
- * @param {string} [prefix]
+ * @param {string} [prefix] letters only
+ * @param {{spec?: import('./types.js').WaferSpec, specId?: string | null}} [type]
  * @returns {Wafer[]}
  */
-export function newWafers(existing, count, prefix = 'W') {
+export function newWafers(existing, count, prefix = 'W', type = {}) {
   let top = 0;
+  const p = prefix.toLowerCase();
   for (const w of existing) {
-    const m = /(\d+)$/.exec(String(w.label));
-    if (m) top = Math.max(top, Number(m[1]));
+    const label = String(w.label).trim().toLowerCase();
+    const m = /^(\D*)(\d+)$/.exec(label);
+    if (m && m[1] === p) top = Math.max(top, Number(m[2]));
   }
   /** @type {Wafer[]} */
   const out = [];
   for (let i = 1; i <= Math.max(0, Math.floor(count)); i++) {
-    out.push({ id: uuid(), label: `${prefix}${top + i}`, status: 'active', notes: '' });
+    /** @type {Wafer} */
+    const w = { id: uuid(), label: `${prefix}${top + i}`, status: 'active', notes: '' };
+    if (type.spec) w.spec = structuredClone(type.spec);
+    if (type.specId) w.specId = type.specId;
+    out.push(w);
   }
   return out;
 }
@@ -202,20 +319,78 @@ export function newWafers(existing, count, prefix = 'W') {
  * @returns {PlanStep}
  */
 export function newStep(s = {}) {
-  return {
+  /** @type {PlanStep} */
+  const out = {
     id: uuid(), title: String(s.title || '').trim(), toolId: s.toolId || null, templateId: s.templateId || null,
     recipe: String(s.recipe || '').trim(), notes: String(s.notes || '').trim(), doneAt: null, skipped: false,
   };
+  if (list(s.adds).length) out.adds = [...list(s.adds)];
+  if (list(s.removes).length) out.removes = [...list(s.removes)];
+  if (s.debond) out.debond = true;
+  return out;
 }
 
 /**
- * A copy of another project's plan for a new project: the same steps with
- * new ids and no marks.
+ * A copy of another project's plan: the same steps with new ids and no
+ * marks. With `waferMap` (old wafer id to new one) the steps keep which
+ * wafers they are for and the stacks they bond; wafers not in the map are
+ * left out (a stack needs two of them to stay).
  * @param {Project} from
+ * @param {ReadonlyMap<string, string>} [waferMap]
  * @returns {PlanStep[]}
  */
-export function copyPlan(from) {
-  return list(from.steps).map((s) => newStep(s));
+export function copyPlan(from, waferMap) {
+  return list(from.steps).map((s) => {
+    const step = newStep(s);
+    if (!waferMap) return step;
+    /** @param {unknown} ids @returns {string[]} */
+    const map = (ids) => [...new Set(list(ids).map((id) => waferMap.get(id) || '').filter(Boolean))];
+    const waferIds = map(s.waferIds);
+    if (waferIds.length) step.waferIds = waferIds;
+    const bonds = list(s.bonds).map((b) => ({ id: uuid(), waferIds: map(b && b.waferIds), ...(b && b.method ? { method: b.method } : {}) }))
+      .filter((b) => b.waferIds.length >= 2);
+    if (bonds.length) step.bonds = bonds;
+    return step;
+  });
+}
+
+/**
+ * Another project's plan for this one ("Copy the plan of"). When this one
+ * still has only its untouched first wafer, the other project's wafers come
+ * too (labels and types, nothing done); otherwise steps find their wafers by
+ * label.
+ * @param {Project} from
+ * @param {readonly Wafer[]} wafers this project's wafers
+ * @param {boolean} replaceWafers this project's wafers are an untouched default
+ * @returns {{wafers: Wafer[], steps: PlanStep[]}}
+ */
+export function copyPlanInto(from, wafers, replaceWafers) {
+  if (replaceWafers && list(from.wafers).length) {
+    const copied = list(from.wafers).map((w) => copyWafer(w));
+    const map = new Map(list(from.wafers).map((w, i) => [w.id, copied[i].id]));
+    return { wafers: copied, steps: copyPlan(from, map) };
+  }
+  const byLabel = new Map(wafers.map((w) => [String(w.label).trim().toLowerCase(), w.id]));
+  /** @type {Map<string, string>} */
+  const map = new Map();
+  for (const w of list(from.wafers)) {
+    const to = byLabel.get(String(w.label).trim().toLowerCase());
+    if (to) map.set(w.id, to);
+  }
+  return { wafers: [...wafers], steps: copyPlan(from, map) };
+}
+
+/**
+ * A wafer for a copy: the same label and type, a new id, in process, no note.
+ * @param {Wafer} w
+ * @returns {Wafer}
+ */
+function copyWafer(w) {
+  /** @type {Wafer} */
+  const out = { id: uuid(), label: w.label, status: 'active', notes: '' };
+  if (w.spec) out.spec = structuredClone(w.spec);
+  if (w.specId) out.specId = w.specId;
+  return out;
 }
 
 /**
@@ -243,6 +418,8 @@ export function copyName(name, taken = []) {
  * @returns {Record<string, any>} the new project's fields, not stored yet
  */
 export function duplicateProject(from, o = {}) {
+  const wafers = list(from.wafers).map((w) => copyWafer(w));
+  const map = new Map(list(from.wafers).map((w, i) => [w.id, wafers[i].id]));
   return {
     name: copyName(from.name, o.taken),
     goal: from.goal || '',
@@ -252,8 +429,8 @@ export function duplicateProject(from, o = {}) {
     substrate: from.substrate || '',
     notes: from.notes || '',
     folderId: from.folderId || null,
-    wafers: list(from.wafers).map((w) => ({ id: uuid(), label: w.label, status: 'active', notes: '' })),
-    steps: copyPlan(from),
+    wafers,
+    steps: copyPlan(from, map),
   };
 }
 
@@ -282,16 +459,20 @@ export function cleanLinks(links, projects) {
 }
 
 /**
- * A link for a project as a new run joins it: its wafers still in process
- * and the suggested step for the run's tool.
+ * A link for a project as a new run joins it: the step asked for, else the
+ * suggested step for the run's tool, and that step's wafers still in
+ * process (every wafer in process without a step).
  * @param {Project} project
  * @param {readonly Run[]} runs
  * @param {string} toolId
+ * @param {string | null} [stepId] the step the person asked for ("Log this step")
  * @returns {ProjectLink}
  */
-export function defaultLink(project, runs, toolId) {
-  const step = suggestStep(stepStates(project, runs), toolId);
-  return { projectId: project.id, waferIds: activeWafers(project).map((w) => w.id), stepId: step ? step.id : null };
+export function defaultLink(project, runs, toolId, stepId = null) {
+  const asked = stepId ? list(project.steps).find((s) => s.id === stepId) || null : null;
+  const step = asked || suggestStep(stepStates(project, runs), toolId);
+  const waferIds = step ? stepWaferIds(project, step) : activeWafers(project).map((w) => w.id);
+  return { projectId: project.id, waferIds, stepId: step ? step.id : null };
 }
 
 /**

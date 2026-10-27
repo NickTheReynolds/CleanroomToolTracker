@@ -16,9 +16,9 @@ export const SYNC_FORMAT = 'lnf-runlog-sync';
 export const SYNC_DIR = 'lnf-runlog-sync/devices';
 export const SYNC_EXT = '.lnfsync';
 /** Stores that sync. Photos are too large and stay on the device that took them. */
-export const SYNC_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders']);
+export const SYNC_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'projects', 'folders', 'wafers']);
 /** Stores a snapshot may lack: devices on an app version from before they existed write none. */
-const OPTIONAL_STORES = Object.freeze(['projects', 'folders']);
+const OPTIONAL_STORES = Object.freeze(['projects', 'folders', 'wafers']);
 
 /**
  * @param {string} deviceId

@@ -7,7 +7,8 @@
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { badge, listRow } from './components.js';
-import { stepStates, nextStep, progress, projectRuns, lastActivity, activeWafers } from '../core/projects.js';
+import { stepStates, nextStep, progress, projectRuns, lastActivity, activeWafers, processItems } from '../core/projects.js';
+import { isMask } from '../core/wafer-spec.js';
 import { PROJECT_STATUS_LABELS } from '../core/vocab.js';
 import { formatAgo } from '../core/time.js';
 
@@ -56,8 +57,14 @@ export function projectCard(p, runs, tools) {
   const mine = projectRuns(runs, p.id);
   const next = nextStepText(p, mine, tools);
   const inProcess = activeWafers(p).length;
+  const items = processItems(p);
+  // A project of masks counts its masks; one with wafers counts wafers and names its masks apart.
+  const maskOnly = items.length > 0 && items.every(isMask);
+  const masks = maskOnly ? 0 : p.wafers.filter(isMask).length;
+  const noun = maskOnly ? 'mask' : 'wafer';
   const facts = [
-    p.wafers.length ? `${inProcess} of ${p.wafers.length} wafer${p.wafers.length === 1 ? '' : 's'} in process` : '',
+    items.length ? `${inProcess} of ${items.length} ${noun}${items.length === 1 ? '' : 's'} in process` : '',
+    masks ? `${masks} mask${masks === 1 ? '' : 's'}` : '',
     `${mine.length} run${mine.length === 1 ? '' : 's'}`,
     `last activity ${formatAgo(lastActivity(p, mine), Date.now())}`,
   ].filter(Boolean).join(' · ');

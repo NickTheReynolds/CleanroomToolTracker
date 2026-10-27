@@ -14,14 +14,16 @@ import { isIsoDate } from '../core/time.js';
 export const DB_NAME = 'lnf-runlog';
 /**
  * IndexedDB structural version (object stores and indexes): 2 added the
- * projects store, 3 the folders that organise projects.
+ * projects store, 3 the folders that organise projects, 4 the saved wafers
+ * and masks.
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 /**
  * Record format version, stored in meta and in backups. Still 1: projects,
- * their folders and the runs' steps and project links only add to the format, and older
- * app versions keep fields they do not know and skip stores they do not
- * know, so devices on different versions keep syncing.
+ * their folders, the runs' steps and project links, saved wafers and masks,
+ * wafer specs, bonds and tool compatibility settings only add to the format,
+ * and older app versions keep fields they do not know and skip stores they
+ * do not know, so devices on different versions keep syncing.
  */
 export const SCHEMA_VERSION = 1;
 /**
@@ -30,7 +32,7 @@ export const SCHEMA_VERSION = 1;
  */
 export const SEED_VERSION = 3;
 /** Stores holding user records (meta excluded). */
-export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos', 'projects', 'folders']);
+export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos', 'projects', 'folders', 'wafers']);
 export const MAX_REQUIRED_FIELDS = 5;
 
 /**
@@ -64,6 +66,12 @@ export const DB_LAYOUT = Object.freeze([
     version: 3,
     stores: {
       folders: { keyPath: 'id', indexes: [] },
+    },
+  },
+  {
+    version: 4,
+    stores: {
+      wafers: { keyPath: 'id', indexes: [] },
     },
   },
 ]);
@@ -121,6 +129,7 @@ const DEFAULTS = {
     folderId: () => null,
   },
   folders: { parentId: () => null },
+  wafers: { spec: () => ({}) },
 };
 
 /** Defaults inside the lists a record holds: a run's project links, a project's wafers and plan steps. */
@@ -283,6 +292,42 @@ function checkSteps(steps, errs) {
 }
 
 /**
+ * Optional lists of text, checked only when present: older records lack them.
+ * @param {any} obj
+ * @param {string[]} keys
+ * @returns {string[]}
+ */
+function optionalTextLists(obj, keys) {
+  return keys.map((k) => (isNullish(obj[k]) || (Array.isArray(obj[k]) && obj[k].every(isStr)) ? '' : `${k} must be a list of text`));
+}
+
+/**
+ * The optional parts of a project's wafer (its spec and where it came from)
+ * and of a plan step (wafers, bonds, masks, materials). They are new in
+ * 1.5 and checked only for their type, so anything 1.4 writes stays valid.
+ * @param {any} w
+ * @returns {string[]}
+ */
+function waferExtras(w) {
+  return [
+    !isNullish(w.spec) && !isObj(w.spec) ? 'spec must be an object' : '',
+    !isNullish(w.specId) && !isStr(w.specId) ? 'specId must be text' : '',
+  ];
+}
+
+/** @param {any} s @returns {string[]} */
+function stepExtras(s) {
+  const bondsOk = isNullish(s.bonds) || (Array.isArray(s.bonds)
+    && s.bonds.every((/** @type {any} */ b) => isObj(b) && isStr(b.id) && Array.isArray(b.waferIds) && b.waferIds.every(isStr)
+      && (isNullish(b.method) || isStr(b.method))));
+  return [
+    ...optionalTextLists(s, ['waferIds', 'adds', 'removes', 'checked']),
+    bondsOk ? '' : 'bonds must be a list of {id, waferIds, method}',
+    !isNullish(s.debond) && !isBool(s.debond) ? 'debond must be true or false' : '',
+  ];
+}
+
+/**
  * A list of objects with unique ids, each checked by `check`.
  * @param {any} items
  * @param {string} what "wafer", "step"
@@ -311,6 +356,13 @@ const CHECKS = {
     if (!isNullish(r.defaultTemplateId) && !isStr(r.defaultTemplateId)) errs.push('defaultTemplateId must be text');
     if (!isNullish(r.halfLifeDays) && !(isNum(r.halfLifeDays) && r.halfLifeDays > 0)) errs.push('halfLifeDays must be a positive number');
     if (!isStr(r.notes)) errs.push('notes must be text');
+    if (!isNullish(r.compat)) {
+      if (!isObj(r.compat)) errs.push('compat must be an object');
+      else {
+        for (const e of optionalTextLists(r.compat, ['sizes', 'askSizes', 'masks', 'excludes'])) if (e) errs.push(`compat: ${e}`);
+        for (const k of ['maxThicknessUm', 'maxDiameterMm']) if (!isNullish(r.compat[k]) && !isNum(r.compat[k])) errs.push(`compat: ${k} must be a number`);
+      }
+    }
   },
   templates(r, errs) {
     if (!isStr(r.toolId) || !r.toolId) errs.push('toolId is required');
@@ -348,6 +400,7 @@ const CHECKS = {
       !isStr(w.label) || !w.label.trim() ? 'needs a label' : '',
       !WAFER_STATUSES.includes(w.status) ? `status must be one of ${WAFER_STATUSES.join(', ')}` : '',
       !isStr(w.notes) ? 'notes must be text' : '',
+      ...waferExtras(w),
     ]);
     checkList(r.steps, 'step', errs, (s) => [
       !isStr(s.title) || !s.title.trim() ? 'needs a title' : '',
@@ -356,7 +409,13 @@ const CHECKS = {
       !isStr(s.recipe) || !isStr(s.notes) ? 'recipe and notes must be text' : '',
       !isNullish(s.doneAt) && !isIsoDate(s.doneAt) ? 'doneAt must be a date' : '',
       !isBool(s.skipped) ? 'skipped must be true or false' : '',
+      ...stepExtras(s),
     ]);
+  },
+  wafers(r, errs) {
+    if (!isStr(r.name) || !r.name.trim()) errs.push('name is required');
+    if (!isObj(r.spec)) errs.push('spec must be an object');
+    else if (!isNullish(r.spec.kind) && r.spec.kind !== 'wafer' && r.spec.kind !== 'mask') errs.push('spec.kind must be wafer or mask');
   },
   folders(r, errs) {
     if (!isStr(r.name) || !r.name.trim()) errs.push('name is required');
@@ -428,6 +487,7 @@ export function validateBackupEnvelope(obj) {
   if (!isNullish(obj.photos) && !Array.isArray(obj.photos)) errs.push('The backup photos entry is not a list.');
   if (!isNullish(obj.projects) && !Array.isArray(obj.projects)) errs.push('The backup projects entry is not a list.');
   if (!isNullish(obj.folders) && !Array.isArray(obj.folders)) errs.push('The backup folders entry is not a list.');
+  if (!isNullish(obj.wafers) && !Array.isArray(obj.wafers)) errs.push('The backup wafers entry is not a list.');
   if (!isNullish(obj.settings) && !isObj(obj.settings)) errs.push('The backup settings entry is not an object.');
   return errs;
 }

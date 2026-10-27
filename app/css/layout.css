@@ -51,6 +51,41 @@
 .row-badges .badge { white-space: normal; }
 .badge .icon { flex: none; }
 
+/* Wafer types and plan checks */
+.compat-notes { display: flex; flex-direction: column; gap: 6px; }
+.compat-notes:empty { display: none; }
+.compat-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border-left: 4px solid var(--warn);
+  background: var(--warn-soft);
+  color: var(--text);
+}
+.compat-note > .icon { flex: none; margin-top: 2px; color: var(--warn); }
+.compat-note.note-stop { border-left-color: var(--danger); background: var(--danger-soft); }
+.compat-note.note-stop > .icon { color: var(--danger); }
+.compat-note.note-checked { border-left-color: var(--border-strong); background: var(--surface-2); color: var(--text-2); }
+.compat-note.note-checked > .icon { color: var(--text-2); }
+.compat-note-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.compat-note-word { font-weight: 800; }
+.compat-note-src { font-size: 0.85rem; color: var(--text-2); }
+.compat-note .btn { align-self: flex-start; }
+.spec-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.spec-row > .field { flex: 1 1 150px; min-width: 0; }
+.film-row { display: flex; gap: 8px; align-items: center; }
+.film-row > .input:first-child { flex: 2; min-width: 0; }
+.film-row > .input:nth-child(2) { flex: 1; min-width: 0; }
+.wafer-type { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wafer-type .btn { max-width: 100%; }
+.wafer-type .btn > span { overflow-wrap: anywhere; text-align: left; }
+.stack-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-summary { display: flex; gap: 6px; align-items: flex-start; margin: 0 0 8px; }
+.plan-summary > .icon { flex: none; margin-top: 2px; color: var(--warn); }
+
 /* Folders */
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 0.95rem; color: var(--text-2); }
 .crumbs a { display: inline-flex; align-items: center; gap: 4px; color: var(--brand); font-weight: 650; text-decoration: none; padding: 6px 0; }

@@ -50,6 +50,7 @@ export const MAX_ERRORS = 5;
  * @property {any[]} events
  * @property {any[]} [projects]
  * @property {any[]} [folders] project folders
+ * @property {any[]} [wafers] saved wafers and masks
  * @property {Record<string, any> | null} [settings] full settings; only materials and tuning are kept
  * @property {any[]} [photos] encoded photos (see encodePhoto); omit to leave photos out
  * @property {string} appVersion
@@ -93,6 +94,7 @@ export function buildBackup(input) {
     events: list(input.events),
     projects: list(input.projects),
     folders: list(input.folders),
+    wafers: list(input.wafers),
     settings: exportableSettings(input.settings),
   };
   if (Array.isArray(input.photos)) out.photos = input.photos;

@@ -8,7 +8,8 @@
 import { h, fill, uid } from './dom.js';
 import { icon } from './icons.js';
 import { labelRow } from './components.js';
-import { stepStates, defaultLink, activeWafers } from '../core/projects.js';
+import { noteLine } from './compat-notes.js';
+import { stepStates, defaultLink, activeWafers, wafersOnStepChange, stacksBefore } from '../core/projects.js';
 import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').Project} Project */
@@ -34,9 +35,11 @@ function toggleChip(text, on, onClick, key, label) {
 
 /**
  * @param {{projects: Project[], runs: Run[], toolId: string, links: ProjectLink[],
- *   onChange: (links: ProjectLink[]) => void, title?: string, openLinks?: boolean}} o
+ *   onChange: (links: ProjectLink[]) => void, title?: string, openLinks?: boolean,
+ *   stepNotes?: (project: Project, stepId: string) => import('../core/compat.js').Note[], newRun?: boolean}} o
  *   projects: the active projects plus any the run already links to; openLinks: each linked
- *   project's name opens its page
+ *   project's name opens its page; stepNotes: the plan's open notes for a step, shown under it;
+ *   newRun: a run being logged, whose wafers may follow the step chosen (never a saved run's)
  * @returns {HTMLElement | null} null when there is no project to offer
  */
 export function projectLinks(o) {
@@ -64,14 +67,22 @@ export function projectLinks(o) {
       if (!p) return null;
       const wafers = p.wafers.filter((w) => w.status === 'active' || l.waferIds.includes(w.id));
       const update = (/** @type {Partial<ProjectLink>} */ patch) => set(links.map((x) => (x.projectId === l.projectId ? { ...x, ...patch } : x)));
-      const allOn = wafers.length > 0 && wafers.every((w) => l.waferIds.includes(w.id));
+      const items = activeWafers(p);
+      const allOn = items.length > 0 && items.every((w) => l.waferIds.includes(w.id));
       const states = stepStates(p, o.runs);
       const selId = uid('step');
       const sel = /** @type {HTMLSelectElement} */ (h('select', { id: selId, class: 'input', dataset: { key: `s:${p.id}` } },
         h('option', { value: '' }, 'Not a planned step'),
         states.map((s) => h('option', { value: s.step.id, selected: s.step.id === l.stepId },
           `${MARK[s.state]}${s.index + 1}. ${s.step.title}`))));
-      sel.addEventListener('change', () => update({ stepId: sel.value || null }));
+      sel.addEventListener('change', () => {
+        const step = p.steps.find((s) => s.id === sel.value) || null;
+        update({ stepId: step ? step.id : null, waferIds: step ? wafersOnStepChange(p, l, step, !!o.newRun) : l.waferIds });
+      });
+      // After a bond the stack goes through as one: a wafer's chip takes its whole stack (as at the step).
+      const stacks = stacksBefore(p, l.stepId ? p.steps.findIndex((s) => s.id === l.stepId) : -1);
+      const shown = new Set(wafers.map((w) => w.id));
+      const notes = l.stepId && o.stepNotes ? o.stepNotes(p, l.stepId) : [];
       const waferId = uid('wafers');
       return h('div', { class: 'card stack' },
         o.openLinks ? h('a', { class: 'project-open', href: `#/project/${encodeURIComponent(p.id)}` }, icon('project', { size: 18 }), p.name, icon('chevron', { size: 16 }))
@@ -83,10 +94,13 @@ export function projectLinks(o) {
               `a:${p.id}`, 'All wafers') : null,
             wafers.map((w) => {
               const on = l.waferIds.includes(w.id);
-              return toggleChip(w.label, on, () => update({ waferIds: on ? l.waferIds.filter((x) => x !== w.id) : [...l.waferIds, w.id] }),
-                `w:${p.id}:${w.id}`);
+              const group = (stacks.get(w.id) || [w.id]).filter((x) => x === w.id || shown.has(x));
+              return toggleChip(w.label, on, () => update({
+                waferIds: on ? l.waferIds.filter((x) => !group.includes(x)) : [...new Set([...l.waferIds, ...group])],
+              }), `w:${p.id}:${w.id}`);
             }))) : null,
-        states.length ? h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: selId }, 'Step of the plan'), 'Step of the plan', HELP.runPlanStep), sel) : null);
+        states.length ? h('div', { class: 'field' }, labelRow(h('label', { class: 'label', for: selId }, 'Step of the plan'), 'Step of the plan', HELP.runPlanStep), sel) : null,
+        notes.length ? h('div', { class: 'compat-notes' }, notes.map((n) => noteLine(n))) : null);
     });
     fill(box,
       h('div', { class: 'picker', role: 'group', 'aria-label': o.title || 'Projects' }, chips),

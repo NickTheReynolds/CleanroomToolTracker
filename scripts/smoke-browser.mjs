@@ -221,7 +221,15 @@ async function main() {
     await page.evaluate(`location.hash = '#/project/new'`);
     await page.waitFor(`__t.btn('Add wafers')`);
     await t(`__t.labelled('Name', 'Smoke batch')`);
+    // Two wafers of an LNF store type: they replace the new project's untouched W1.
     await t(`__t.click('Add wafers')`);
+    await page.waitFor(`document.querySelector('dialog.sheet [role="radiogroup"] .row')`);
+    await t(`[...document.querySelectorAll('dialog.sheet .row')].find((r) => r.textContent.includes('Double Side Polished')).click()`);
+    await t(`__t.click('2')`);
+    await checkLabels('add-wafers');
+    await t(`__t.click('Add 2 wafers')`);
+    await page.waitFor(`!document.querySelector('dialog.sheet') && document.querySelectorAll('.wafer-row').length === 2
+      && __t.btn('W1 type: Si · 100 mm · p · DSP') && __t.btn('W2 type: Si · 100 mm · p · DSP')`);
     await t(`__t.click('Add step')`);
     await page.waitFor(`__t.btn('Choose a tool (optional)')`);
     await t(`__t.labelled('What happens', 'Etch the oxide')`);
@@ -229,6 +237,19 @@ async function main() {
     await page.waitFor(`document.querySelector('dialog.sheet .tile')`);
     await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`!document.querySelector('dialog.sheet') && __t.btn(${JSON.stringify(TOOL_NAME)})`);
+    // A furnace step without the pre-furnace clean before it: the plan's checks say so, and fix it in one tap.
+    await t(`__t.click('Add step')`);
+    await page.waitFor(`__t.btn('Choose a tool (optional)')`);
+    await t(`__t.click('Choose a tool (optional)')`);
+    await page.waitFor(`document.querySelector('dialog.sheet .tile')`);
+    await t(`__t.type('dialog.sheet input[type=search]', 'S3T2')`);
+    await page.waitFor(`[...document.querySelectorAll('dialog.sheet .tile')].some((x) => x.textContent.includes('Tempress S3T2'))`);
+    await t(`__t.tile('Tempress S3T2 - Wet Oxide')`);
+    await page.waitFor(`document.querySelector('.compat-note.note-stop') && __t.btn('Add the PFC Bench 01 clean before this step')`, 10000);
+    await snap('project-edit-checks');
+    await t(`__t.click('Add the PFC Bench 01 clean before this step')`);
+    await page.waitFor(`document.querySelectorAll('.plan-step').length === 3 && !document.querySelector('.compat-note')
+      && document.querySelector('#plan-checks').textContent.startsWith('No notes')`, 10000);
     await checkLabels('project-edit');
     await snap('project-edit');
     await t(`__t.click('Save')`);
@@ -314,6 +335,8 @@ async function main() {
       ['#/settings/data', '.section'], ['#/install', '.section'], [`#/settings/tool/${ICP[0]}`, '.section'],
       [`#/template/${ICP[1]}`, '.section'], ['#/event', '.tiles'], ['#/capture', '.tiles'],
       ['#/projects', '.view .list'], ['#/project/new', '.view .field'], ['#/settings/my-tools', '.list'], [`#/tool/${ICP[0]}`, '.section'],
+      ['#/settings/wafer-types', '.view .list'], ['#/settings/wafer-type/new', '.view .field'],
+      ['#/settings/wafer-type/new?from=lnf-store%2Fmask-plate-5in-master-low-bow', '.view .field'],
     ]) {
       await page.evaluate(`location.hash = ${JSON.stringify(hash)}`);
       await page.waitFor(`document.querySelector(${JSON.stringify(ready)})`, 10000);

@@ -17,6 +17,7 @@ export * from './records.js';
 export * from './runs.js';
 export * from './projects.js';
 export * from './folders.js';
+export * from './wafers.js';
 
 /** @typedef {import('../core/types.js').Tool} Tool */
 /** @typedef {import('../core/types.js').Template} Template */

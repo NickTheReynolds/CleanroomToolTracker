@@ -10,7 +10,8 @@ import { button, section, listRow, segmented, toast, labelRow } from '../ui/comp
 import { textInput, numberStepper } from '../ui/fields.js';
 import { applyTheme } from '../ui/theme.js';
 import { checkForUpdate, updateWaiting, applyUpdate, desktopWrapper } from '../ui/pwa.js';
-import { getSettings, saveSettings, listTools } from '../data/repo.js';
+import { getSettings, saveSettings, listTools, listSavedWafers } from '../data/repo.js';
+import { LNF_STORE } from '../data/lnf-store.js';
 import { DEFAULTS, TUNABLE, SOURCE_URL } from '../config.js';
 import { HELP, TUNING_HELP } from '../core/app-help.js';
 import { APP_VERSION, APP_BUILD } from '../../version.js';
@@ -126,7 +127,7 @@ function aboutBlock() {
 export async function render(ctx) {
   ctx.setTitle('Settings');
   pending = [];
-  const [settings, tools] = await Promise.all([getSettings(), listTools({ includeArchived: true })]);
+  const [settings, tools, waferTypes] = await Promise.all([getSettings(), listTools({ includeArchived: true }), listSavedWafers()]);
   append(ctx.root, [
     section('You',
       textSetting('Your name', settings.userName, (v) => saveSettings({ userName: v }),
@@ -151,6 +152,11 @@ export async function render(ctx) {
           title: 'Materials', lead: icon('list'),
           subtitle: `${settings.materials.length} in the material and substrate pickers. Search, add, remove.`,
           href: '#/settings/materials',
+        }),
+        listRow({
+          title: 'Wafer types', lead: icon('wafer'),
+          subtitle: `${waferTypes.length ? `${waferTypes.length} of yours and` : 'Yours and'} the LNF store’s ${LNF_STORE.length}. Pick one when you add wafers or masks to a project.`,
+          href: '#/settings/wafer-types',
         }))),
     section('Data and devices',
       h('div', { class: 'list' },

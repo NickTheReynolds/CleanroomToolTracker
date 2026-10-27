@@ -1,6 +1,6 @@
 # Data model
 
-LNF Run Log stores everything in one IndexedDB database named `lnf-runlog` on the device. There are nine object stores. Tool **templates** drive every form and the lookup.
+LNF Run Log stores everything in one IndexedDB database named `lnf-runlog` on the device. There are ten object stores. Tool **templates** drive every form and the lookup.
 
 The code that defines this model:
 
@@ -10,7 +10,7 @@ The code that defines this model:
 
 ## Common fields
 
-Every record in the eight data stores (`meta` excluded) has:
+Every record in the nine data stores (`meta` excluded) has:
 
 | Field | Type | Meaning |
 |---|---|---|
@@ -33,6 +33,7 @@ Every record in the eight data stores (`meta` excluded) has:
 | `photos` | `runId`, `blob` (JPEG), `width`, `height`, `caption`, `takenAt` | `runId` |
 | `projects` | `name`, `goal`, `status` (active, paused, done), `startedAt`, `endedAt`, `substrate`, `notes`, `folderId` (or null), `wafers[]`, `steps[]` (see Projects) | `status` |
 | `folders` | `name`, `parentId` (a folder, or null for the top level) | none |
+| `wafers` | Saved wafer types: `name`, `spec` (a WaferSpec, see Wafer types). Masks are kept here too, with `spec.kind: "mask"`. | none |
 | `meta` | keyed by `key`: `schemaVersion`, `settings`, and `draft:<form>` entries | none |
 
 ### Values in `params` and `results`
@@ -53,6 +54,15 @@ A value is a number, text, `true`/`false`, or `null`. Durations are stored in se
 ### Run steps
 
 A run with several steps (a breakthrough, the main etch and an over-etch, or the layers of a stack) lists them in `steps`, in order: `{name, main: true}` for the main step and `{name, params}` for each other step. Exactly one step is the main step, and its values are the run's `params`. So Lookup, the derived results and every export keep reading `params`, and a one-step run simply has `steps: []`. Steps are stored tidy: names trimmed (a blank one becomes "Step n") and empty values dropped (`tidySteps`). Using a multi-step LNF recipe in a run form fills every step; the step chosen in the recipe sheet becomes the main step. A recipe with one step or none fills the main step and keeps the run's other steps. Duplicating a run or prefilling from the last run copies the steps, keeping only the input and condition fields the template knows. Exports write the steps as one text column (`stepsText` in `core/run-steps.js`).
+
+### Wafer types, wafer specs and bonds
+
+- A **WaferSpec** says what a wafer or mask is. Every field is optional and empty means not known: `kind` (`mask`, or left out for a wafer), `material`, `size` (`50mm`, `76mm`, `100mm`, `150mm`, `200mm`, `300mm`, `piece`; mask plates `plate4` to `plate7`), `pieceSize`, `thicknessUm` and `thicknessTolUm` (µm), `orientation`, `cut`, `polish` (`ssp`, `dsp`, `none`), `doping` (`p`, `n`, `undoped`), `dopant`, `resistivity` (text as stated), `grade`, `films` (`[{material, thicknessNm}]` already on it), and for masks `coating`, `resist`, `polarity` (`clear`, `dark`), `design`; then `vendor`, `partNo`, `notes`. `cleanSpec` in `core/wafer-spec.js` tidies one for storage and keeps fields it does not know.
+- The **wafers** store holds the person's types. The LNF store's single items are not stored: they ship in `data/lnf-store.js` (from the owner's screenshots of the store on 2026-10-22, names and descriptions verbatim, prices with that date, no stock) and change only in a release.
+- A project's wafer may carry `spec` (its own copy, so editing a type later does not rewrite a project's history) and `specId` (the type's id or `lnf-store/<slug>`, where it came from).
+- A plan step may carry `waferIds` (which wafers and masks it is for; none means every wafer in process, masks left out when the project has wafers), `bonds` (`[{id, waferIds, method}]`: the stacks it bonds), `debond` (the stacks among its wafers come apart), `adds` and `removes` (material names), and `checked` (the compatibility notes marked as checked, by `noteKey`).
+- A tool may carry `compat`: the person's settings for the plan's checks (`sizes`, `pieces`, `maxThicknessUm`, `masks`, `excludes`, and `accepts`/`marks`), field by field over the profile the app ships (`data/compat-lnf.js`). `null` means "no check" for that field. Choosing sizes also stores `maxDiameterMm` and `askSizes` as `null`, setting the LNF notes' size limits aside; a thinnest wafer from the LNF notes (`minThicknessUm`) has no setting.
+- None of these fields gets a default when records are read or normalised: readers treat a missing one as not set, so records written by 1.4 stay exactly as they were.
 
 ### Projects and folders
 
@@ -154,8 +164,8 @@ Each recipe (`WikiRecipe` in `core/recipes.js`):
 
 ## Versions and migrations
 
-- **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes): 1 is the first layout, 2 added `projects`, 3 added `folders`. `DB_LAYOUT` in `schema.js` lists the stores and indexes each version adds; opening the database creates whatever an older one lacks.
-- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup. It is still 1: run steps, project links, projects and folders only add to the format, every new field has a default, and an older app version keeps the fields it does not know and skips the stores it does not know. So devices on different versions keep syncing, and a backup from this version imports into an older one (without its projects).
+- **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes): 1 is the first layout, 2 added `projects`, 3 added `folders`, 4 added `wafers`. `DB_LAYOUT` in `schema.js` lists the stores and indexes each version adds; opening the database creates whatever an older one lacks.
+- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup. It is still 1: run steps, project links, projects, folders, wafer types, wafer specs, bonds and tool compatibility settings only add to the format: every new field either has a default or is optional (a missing one reads as not set), and an older app version keeps the fields it does not know and skips the stores it does not know. So devices on different versions keep syncing, and a backup from this version imports into an older one, without the stores that version lacks (projects and folders before 1.4, saved wafer types before 1.5).
 - **`MIGRATIONS`** in `schema.js` is the ordered list of record migrations: a function that upgrades one record from the previous format. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
 
 ## LNF wiki links

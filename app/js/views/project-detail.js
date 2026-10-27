@@ -21,7 +21,10 @@ import {
   moveProjects, restoreChange,
 } from '../data/repo.js';
 import { makeTravelerExport } from '../data/backup.js';
+import { planChecks } from '../data/plan-checks.js';
+import { noteLine, notesSummary, openNotes, toggleChecked } from '../ui/compat-notes.js';
 import { stepStates, nextStep, progress, projectRuns, linkFor, waferText } from '../core/projects.js';
+import { specShort } from '../core/wafer-spec.js';
 import { folderTree, pathText, projectFolderId } from '../core/folders.js';
 import { PROJECT_STATUS_LABELS, WAFER_STATUS_LABELS, STATUS_LABELS } from '../core/vocab.js';
 import { formatDay, formatDateTime } from '../core/time.js';
@@ -71,6 +74,7 @@ export async function render(ctx) {
   const [runs, tools, templates, folders] = await Promise.all([
     listRuns(), listTools({ includeArchived: true }), listTemplates(), listFolders(),
   ]);
+  const checks = await planChecks(p, tools, templates);
   const tree = folderTree(folders);
   const folderId = projectFolderId(tree, p);
   const L = lookups(tools, templates);
@@ -99,6 +103,13 @@ export async function render(ctx) {
   facts.push(['Started', formatDay(p.startedAt, Date.now())]);
   if (p.endedAt) facts.push(['Finished', formatDay(p.endedAt, Date.now())]);
   if (p.substrate) facts.push(['Substrate', p.substrate]);
+  // The wafers grouped by type: "W1–W4: Si · 100 mm · p · DSP".
+  /** @type {Map<string, string[]>} */
+  const byType = new Map();
+  for (const w of p.wafers) if (w.spec) byType.set(specShort(w.spec), [...(byType.get(specShort(w.spec)) || []), w.id]);
+  if ([...byType.keys()].some(Boolean)) {
+    facts.push(['Types', [...byType].filter(([k]) => k).map(([k, ids]) => `${waferText(p, ids)}: ${k}`).join('; ')]);
+  }
   facts.push(['Runs', String(mine.length)]);
   const header = h('div', { class: 'card stack project-head' },
     h('div', { class: 'spread' }, h('h2', { class: 'project-title' }, p.name),
@@ -111,12 +122,24 @@ export async function render(ctx) {
     prog.total ? h('div', { class: 'stack' }, progressBar(prog.done, prog.total),
       h('p', { class: 'small muted' }, `${prog.done} of ${prog.total} planned steps done`)) : null);
 
-  // The next step, one tap from logging it.
+  /** Mark a step's note as checked, or not, on the stored project. */
+  const setChecked = async (/** @type {PlanStep} */ step, /** @type {string} */ key, /** @type {boolean} */ on, /** @type {(() => void) | undefined} */ close) => {
+    close?.();
+    await save({ steps: p.steps.map((x) => (x.id === step.id ? { ...x, checked: toggleChecked(x, key, on) } : x)) },
+      on ? 'Marked as checked.' : 'The note counts again.');
+  };
+  /** @param {PlanStep} step @param {() => void} [close] */
+  const noteLines = (step, close) => (checks.byStep.get(step.id) || []).map((n) => noteLine(n, {
+    checked: (step.checked || []).includes(n.key), onCheck: (on) => setChecked(step, n.key, on, close),
+  }));
+  // The next step, one tap from logging it, with its notes first.
+  const nextOpen = next ? openNotes(checks.byStep.get(next.step.id) || [], next.step) : [];
   const nextCard = next ? h('div', { class: 'card stack next-step' },
     h('span', { class: 'label' }, 'Next step'),
     h('strong', { class: 'next-step-title' }, `${next.index + 1}. ${next.step.title}`),
     h('p', { class: 'muted small' }, [toolName(next.step.toolId), next.step.recipe, next.state === 'active' ? 'a run is in progress' : '']
       .filter(Boolean).join(' · ') || 'No tool chosen for this step.'),
+    nextOpen.length ? h('div', { class: 'compat-notes' }, h('p', { class: 'small' }, h('strong', null, 'Before you log this step:')), noteLines(next.step)) : null,
     linkButton('Log this step', logHref(p, next.step, live), { kind: 'primary', icon: 'plus', big: true })) : null;
 
   // The plan: a row per step; a row opens the step's sheet.
@@ -126,10 +149,22 @@ export async function render(ctx) {
       sh.close();
       await save({ steps: p.steps.map((x) => (x.id === s.step.id ? { ...x, ...patch } : x)) }, message);
     };
+    const bonds = (s.step.bonds || []).filter((b) => (b.waferIds || []).length >= 2);
+    const label = (/** @type {string} */ wid) => p.wafers.find((w) => w.id === wid)?.label || '?';
+    /** @type {[string, string][]} */
+    const stepFacts = [['Tool', toolName(s.step.toolId) || 'Any'], ['Recipe', s.step.recipe || '–']];
+    if ((s.step.waferIds || []).length) stepFacts.push(['Wafers', waferText(p, s.step.waferIds || []) || '–']);
+    if (bonds.length) {
+      stepFacts.push(['Bonds', `${bonds.map((b) => b.waferIds.map(label).join('+')).join(', ')}${bonds[0].method ? ` (${bonds[0].method})` : ''}`]);
+    }
+    if (s.step.debond) stepFacts.push(['Debond', 'The stacks come apart here']);
+    if ((s.step.adds || []).length) stepFacts.push(['Adds', (s.step.adds || []).join(', ')]);
+    if ((s.step.removes || []).length) stepFacts.push(['Removes', (s.step.removes || []).join(', ')]);
+    stepFacts.push(['Notes', s.step.notes || '–']);
     const sh = sheet(`${s.index + 1}. ${s.step.title}`, [
       h('p', null, badge(st.text, st.kind, st.icon)),
-      h('dl', { class: 'facts' }, [['Tool', toolName(s.step.toolId) || 'Any'], ['Recipe', s.step.recipe || '–'], ['Notes', s.step.notes || '–']]
-        .map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
+      h('dl', { class: 'facts' }, stepFacts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
+      (checks.byStep.get(s.step.id) || []).length ? h('div', { class: 'compat-notes' }, noteLines(s.step, () => sh.close())) : null,
       s.runs.length ? h('div', { class: 'list' }, s.runs.map((r) => listRow({
         title: `${formatDateTime(r.startedAt, Date.now())} · ${toolName(r.toolId)}`,
         subtitle: [STATUS_LABELS[r.status], waferText(p, linkFor(r, p.id)?.waferIds || []), primaryText(r, L)].filter(Boolean).join(' · '),
@@ -146,13 +181,21 @@ export async function render(ctx) {
       h('p', { class: 'muted small' }, 'A step is done when a complete run in this project is linked to it. Link a run to a step in the run’s Project section.'),
     ]);
   };
-  const plan = states.length ? section('Plan', h('div', { class: 'list' }, states.map((s) => listRow({
-    lead: icon(STATE[s.state].icon),
-    title: `${s.index + 1}. ${s.step.title}`,
-    subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text]
-      .filter(Boolean).join(' · '),
-    onClick: () => stepSheet(s),
-  })))) : null;
+  const counts = (/** @type {PlanStep} */ step) => { const st = states.find((x) => x.step.id === step.id); return !!st && st.state !== 'done'; };
+  const summary = notesSummary(checks.byStep, p.steps, counts);
+  const plan = states.length ? section('Plan',
+    summary ? h('p', { class: 'small plan-summary' }, icon('alert', { size: 16 }), h('span', null, summary)) : null,
+    h('div', { class: 'list' }, states.map((s) => {
+      const open = s.state === 'done' || s.state === 'skipped' ? [] : openNotes(checks.byStep.get(s.step.id) || [], s.step);
+      return listRow({
+        lead: icon(STATE[s.state].icon),
+        title: `${s.index + 1}. ${s.step.title}`,
+        subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text]
+          .filter(Boolean).join(' · '),
+        badges: open.some((n) => n.severity === 'stop') ? [badge('Not allowed', 'danger', 'ban')] : open.length ? [badge('Check', 'warn', 'alert')] : [],
+        onClick: () => stepSheet(s),
+      });
+    }))) : null;
 
   // The traveler: runs in process order, for all wafers or one.
   const recordBox = h('div', { class: 'stack' });

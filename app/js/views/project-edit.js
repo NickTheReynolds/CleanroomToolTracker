@@ -1,27 +1,36 @@
 // @ts-check
 /**
  * New or edit project: name, folder, goal, start date and substrate, the
- * wafers (added in one go, renamed, finished or scrapped one by one) and an
- * optional plan of steps, each with a tool and a recipe. "?copy=<id>"
- * starts from a copy of another project, "?folder=<id>" in a folder.
- * Autosaves as a draft until saved, like the other editors.
+ * wafers and masks (added in one go with their type, renamed, finished or
+ * scrapped one by one) and an optional plan of steps, each with a tool and
+ * a recipe, which wafers it is for, the stacks it bonds and what it adds or
+ * removes. Each step shows the plan's compatibility notes, kept up to date
+ * as the plan changes. "?copy=<id>" starts from a copy of another project,
+ * "?folder=<id>" in a folder. Autosaves as a draft until saved.
  */
-import { h, append, fill, uid } from '../ui/dom.js';
+import { h, append, fill, uid, debounce } from '../ui/dom.js';
 import {
   button, section, segmented, emptyState, toast, chip, confirmDialog, errorText, labelRow, sheet,
 } from '../ui/components.js';
-import { textInput, numberStepper } from '../ui/fields.js';
+import { textInput } from '../ui/fields.js';
 import { materialPicker, toolTiles, mineOf } from '../ui/pickers.js';
 import { recipeButton } from '../ui/recipes.js';
 import { chooseFolder } from '../ui/folder-picker.js';
 import { createAutosave } from '../ui/autosave.js';
+import { openAddWafers, openWaferType, typeButton } from '../ui/wafer-types.js';
+import { stepExtras } from '../ui/plan-step-extras.js';
+import { noteLine, notesSummary, toggleChecked } from '../ui/compat-notes.js';
 import { navigate, refresh } from '../router.js';
 import {
   getProject, saveProject, listProjects, listRuns, listTools, listTemplates, getDraft, saveDraft, clearDraft, getSettings,
-  lastUsedByTool, listFolders,
+  lastUsedByTool, listFolders, listSavedWafers, saveSavedWafer, saveSettings,
 } from '../data/repo.js';
-import { recipesForTool } from '../data/recipes.js';
-import { newWafers, newStep, copyPlan, projectRuns, linkFor, duplicateProject } from '../core/projects.js';
+import { recipesForTool, allRecipes } from '../data/recipes.js';
+import { planChecksWith, recipeAdds } from '../data/plan-checks.js';
+import { lnfType, LNF_COMPAT } from '../data/compat-lnf.js';
+import { newWafers, newStep, copyPlanInto, projectRuns, linkFor, duplicateProject, stepStates } from '../core/projects.js';
+import { isMask, labelPrefix, specShort, specEmpty } from '../core/wafer-spec.js';
+import { normText } from '../core/vocab.js';
 import { folderTree, pathText } from '../core/folders.js';
 import { recipesFor } from '../core/recipes.js';
 import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, WAFER_STATUSES, WAFER_STATUS_LABELS } from '../core/vocab.js';
@@ -30,6 +39,51 @@ import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').PlanStep} PlanStep */
 /** @typedef {import('../core/types.js').Wafer} Wafer */
+/** @typedef {import('../ui/wafer-types.js').TypeChoice} TypeChoice */
+
+/** The type last added in this session, offered first next time. @type {TypeChoice | null} */
+let lastType = null;
+/** PFC Bench 01, the RCA pre-furnace clean the CMOS-clean tubes need right before. */
+const PFC_ID = 'ff0c929c-9d8d-4cce-b327-dc92429353fa';
+
+/** @param {unknown} v @returns {any[]} */
+const list = (v) => (Array.isArray(v) ? v : []);
+
+/**
+ * A three-way merge of two sets that started equal: what either side added
+ * is in, what either side took out is out.
+ * @param {string[]} base
+ * @param {string[]} mine
+ * @param {string[]} theirs
+ * @returns {string[]}
+ */
+function merge3(base, mine, theirs) {
+  const b = new Set(base);
+  const m = new Set(mine);
+  const t = new Set(theirs);
+  const out = new Set(base.filter((k) => m.has(k) && t.has(k)));
+  for (const k of [...mine, ...theirs]) if (!b.has(k)) out.add(k);
+  return [...out];
+}
+
+/**
+ * A step as saved: wafer choices and bonds that name removed wafers are
+ * dropped (a stack needs two), and empty extras are left out.
+ * @param {PlanStep} s
+ * @param {ReadonlySet<string>} ids the project's wafer ids
+ * @returns {PlanStep}
+ */
+function tidyStep(s, ids) {
+  /** @type {Record<string, any>} */
+  const out = { ...s };
+  const named = list(s.waferIds).filter((id) => ids.has(id));
+  if (named.length) out.waferIds = named; else delete out.waferIds;
+  const bonds = list(s.bonds).map((b) => ({ ...b, waferIds: list(b.waferIds).filter((id) => ids.has(id)) })).filter((b) => b.waferIds.length >= 2);
+  if (bonds.length) out.bonds = bonds; else delete out.bonds;
+  for (const k of ['adds', 'removes', 'checked']) if (!list(out[k]).length) delete out[k];
+  if (!out.debond) delete out.debond;
+  return /** @type {PlanStep} */ (out);
+}
 
 /**
  * A labelled text box.
@@ -59,9 +113,11 @@ export async function render(ctx) {
     return;
   }
   const draftKey = source ? `project:copy:${source.id}` : `project:${id}`;
-  const [draft, projects, runs, tools, templates, settings, folders] = await Promise.all([
-    getDraft(draftKey), listProjects(), listRuns(), listTools(), listTemplates(), getSettings(), listFolders(),
+  const [draft, projects, runs, tools, templates, settings, folders, savedTypes, recipes, allTools] = await Promise.all([
+    getDraft(draftKey), listProjects(), listRuns(), listTools(), listTemplates(), getSettings(), listFolders(), listSavedWafers(),
+    allRecipes().catch(() => /** @type {import('../core/recipes.js').WikiRecipe[]} */ ([])), listTools({ includeArchived: true }),
   ]);
+  if (!ctx.isCurrent()) return;
   let tree = folderTree(folders);
   const inFolder = ctx.query.get('folder');
   // The project page (a pause, a finish, a move) or another device may have changed the project since these
@@ -79,13 +135,22 @@ export async function render(ctx) {
   }
   /** @type {Record<string, any>} */
   let p = restored || (existing ? {
-    ...structuredClone(existing), _base: { status: existing.status, endedAt: existing.endedAt ?? null, folderId: existing.folderId ?? null },
+    ...structuredClone(existing),
+    // What the form started from: for the stale-draft merge, and the marks of checked notes for Save's three-way merge.
+    _base: {
+      status: existing.status, endedAt: existing.endedAt ?? null, folderId: existing.folderId ?? null,
+      checked: Object.fromEntries(existing.steps.map((s) => [s.id, list(s.checked)])),
+    },
   } : source ? duplicateProject(source, { taken: projects.map((x) => x.name) }) : {
     name: '', goal: '', status: 'active', startedAt: new Date().toISOString(), endedAt: null, substrate: '', notes: '',
     wafers: newWafers([], 1), steps: [], folderId: inFolder && tree.byId.has(inFolder) ? inFolder : null,
   });
   const autosave = createAutosave(() => saveDraft(draftKey, p));
   let dirty = !!restored;
+  /** Compatibility notes for the plan as it stands (archived tools too, as on the project page); painted into each step's slot. */
+  let checks = { notes: /** @type {import('../core/compat.js').Note[]} */ ([]), byStep: new Map() };
+  const computeChecks = () => { checks = planChecksWith(/** @type {any} */ (p), allTools, templates, recipes); };
+  const recheck = debounce(() => { computeChecks(); paintChecks(); }, 250);
   /**
    * @param {Record<string, any>} patch
    * @param {boolean} [redraw]
@@ -95,14 +160,116 @@ export async function render(ctx) {
     p = { ...p, ...patch };
     dirty = true;
     autosave.schedule();
-    if (redraw) draw(focus);
+    // A redraw paints the notes at once, so no button of an old note (add the PFC clean) is left to tap twice.
+    if (redraw) {
+      computeChecks();
+      draw(focus);
+    } else {
+      recheck();
+    }
   };
   // Wafers and steps that runs name cannot be removed: finish or scrap a wafer, skip a step.
   const linked = existing ? projectRuns(runs, existing.id).map((r) => linkFor(r, existing.id)) : [];
   const usedWafers = new Set(linked.flatMap((l) => (l ? l.waferIds : [])));
   const usedSteps = new Set(linked.map((l) => (l ? l.stepId : null)).filter(Boolean));
   const toolMap = new Map(tools.map((t) => [t.id, t]));
+  const tplMap = new Map(templates.map((t) => [t.id, t]));
   const lastUsed = lastUsedByTool(runs);
+  /** Open folds and wafers tapped for a stack, by step id, kept across redraws. */
+  const openExtras = new Set();
+  /** @type {Map<string, string[]>} */
+  const picking = new Map();
+  const addMaterial = async (/** @type {string} */ name) => {
+    const s = await getSettings();
+    if (!s.materials.some((m) => normText(m) === normText(name))) await saveSettings({ materials: [...s.materials, name] });
+  };
+  /** Plan steps name this wafer: as one of the step's wafers or in a stack. */
+  const namedBySteps = (/** @type {string} */ wid) => p.steps.some((/** @type {PlanStep} */ s) => list(s.waferIds).includes(wid)
+    || list(s.bonds).some((b) => list(b.waferIds).includes(wid)));
+  /** The project still has only the W1 every new project starts with, untouched. */
+  // Only a project not stored yet: a stored one's W1 may be named by runs on another device or in a draft.
+  const untouchedDefault = () => !existing && p.wafers.length === 1 && !usedWafers.has(p.wafers[0].id) && !namedBySteps(p.wafers[0].id)
+    && !p.wafers[0].spec && !String(p.wafers[0].notes || '').trim()
+    && p.wafers[0].status === 'active' && /^w1$/i.test(String(p.wafers[0].label).trim());
+  const setTypes = (/** @type {string[]} */ ids, /** @type {any} */ spec, /** @type {string | null} */ specId) => {
+    const pick = new Set(ids);
+    change({
+      wafers: p.wafers.map((/** @type {Wafer} */ w) => {
+        if (!pick.has(w.id)) return w;
+        const { spec: _s, specId: _i, ...rest } = w;
+        return spec ? { ...rest, spec: structuredClone(spec), ...(specId ? { specId } : {}) } : rest;
+      }),
+    }, true, `#wtype-${ids[0]}`);
+  };
+  const chooseType = (/** @type {Wafer} */ w) => openWaferType({
+    wafer: w, saved: savedTypes, materials: settings.materials, onAddMaterial: addMaterial,
+    others: p.wafers.filter((/** @type {Wafer} */ x) => x.id !== w.id && specEmpty(x.spec) && isMask(x) === isMask(w)),
+    onApply: setTypes,
+    onSaveType: async (spec) => {
+      try {
+        const saved = await saveSavedWafer({ name: specShort(spec) || `${w.label} type`, spec });
+        savedTypes.push(saved);
+        toast(`Saved as the wafer type “${saved.name}”.`);
+      } catch (err) {
+        toast(errorText(err), { kind: 'error' });
+      }
+    },
+  });
+  const addWafers = () => openAddWafers({
+    saved: savedTypes, lastType,
+    onAdd: (count, kind, type) => {
+      lastType = type;
+      /** @type {import('../core/types.js').WaferSpec | undefined} */
+      const spec = type.spec ? { ...type.spec, ...(kind === 'mask' ? { kind: /** @type {'mask'} */ ('mask') } : {}) } : kind === 'mask' ? { kind: 'mask' } : undefined;
+      // A new project's untouched W1 gives way, so four typed wafers are W1–W4.
+      const base = kind === 'wafer' && untouchedDefault() ? [] : p.wafers;
+      const added = newWafers(base, count, labelPrefix(kind), { spec, specId: type.specId });
+      change({ wafers: [...base, ...added] }, true, added.length ? `#wafer-${added[0].id}` : '#add-wafers');
+    },
+  });
+  /** Paint the notes into each step's slot and the plan's summary, without redrawing the form. */
+  const paintChecks = () => {
+    // A note's button may have focus (a repaint after typing can come just as it is reached): keep it there.
+    const active = document.activeElement;
+    const had = active && body.contains(active) && active.closest('.compat-notes') ? focusKey(active) : null;
+    for (const s of /** @type {PlanStep[]} */ (p.steps)) {
+      const slot = body.querySelector(`#checks-${CSS.escape(s.id)}`);
+      if (!slot) continue;
+      const notes = checks.byStep.get(s.id) || [];
+      const checked = new Set(list(s.checked));
+      const i = p.steps.findIndex((/** @type {PlanStep} */ x) => x.id === s.id);
+      fill(/** @type {HTMLElement} */ (slot), notes.map((n, k) => noteLine(n, {
+        checked: checked.has(n.key), checkId: `check-${s.id}-${k}`,
+        onCheck: (on) => change({ steps: p.steps.map((/** @type {PlanStep} */ x) => (x.id === s.id ? { ...x, checked: toggleChecked(x, n.key, on) } : x)) },
+          true, `#check-${CSS.escape(s.id)}-${k}`),
+        action: n.code === 'preclean' && toolMap.has(PFC_ID) && !checked.has(n.key) ? Object.assign(button('Add the PFC Bench 01 clean before this step', {
+          icon: 'plus',
+          onClick: () => {
+            // The clean is for the same wafers as the furnace step.
+            const clean = { ...newStep({ title: 'RCA pre-furnace clean', toolId: PFC_ID, templateId: liveTemplate(PFC_ID, null) }),
+              ...(list(s.waferIds).length ? { waferIds: [...list(s.waferIds)] } : {}) };
+            change({ steps: [...p.steps.slice(0, i), clean, ...p.steps.slice(i)] }, true, `#step-title-${clean.id}`);
+          },
+        }), { id: `pfc-${s.id}` }) : null,
+      })));
+    }
+    // Steps done (by hand or by a complete linked run) do not count, as on the project page.
+    const done = new Set(stepStates(/** @type {any} */ (p), runs).filter((x) => x.state === 'done').map((x) => x.step.id));
+    const summary = body.querySelector('#plan-checks');
+    // Notes on done or skipped steps, or marked as checked, still show on their steps but leave nothing to act on.
+    if (summary) {
+      summary.textContent = notesSummary(checks.byStep, p.steps, (s) => !done.has(s.id))
+        || (checks.notes.length ? 'No notes left for the steps still to do.'
+          : p.steps.some((/** @type {PlanStep} */ s) => s.toolId) ? 'No notes for the plan as it stands. The checks cover only what the app knows.' : '');
+    }
+    const gap = body.querySelector('#plan-checks-gap');
+    if (gap) {
+      const ruled = p.steps.some((/** @type {PlanStep} */ s) => s.toolId && LNF_COMPAT[s.toolId]);
+      const untyped = p.wafers.some((/** @type {Wafer} */ w) => w.status === 'active' && !isMask(w) && (!w.spec?.size || !(w.spec?.material || p.substrate)));
+      gap.textContent = ruled && untyped ? 'Checks need each wafer’s size and material: set the type under Wafers and masks.' : '';
+    }
+    if (had) /** @type {HTMLElement | null} */ (body.querySelector(had))?.focus();
+  };
   const withTemplates = tools.filter((t) => templates.some((x) => x.toolId === t.id));
   const body = h('div', { class: 'view' });
 
@@ -131,6 +298,8 @@ export async function render(ctx) {
   };
 
   const waferRow = (/** @type {Wafer} */ w, /** @type {number} */ i) => {
+    const typeBtn = typeButton(w, () => chooseType(w), `${w.label || `Wafer ${i + 1}`} type: ${specShort(w.spec) || 'not set'}`);
+    typeBtn.id = `wtype-${w.id}`;
     const update = (/** @type {Partial<Wafer>} */ patch) => change({ wafers: p.wafers.map((/** @type {Wafer} */ x, /** @type {number} */ j) => (j === i ? { ...x, ...patch } : x)) });
     const labelId = `wafer-${w.id}`;
     const statusId = `wstatus-${w.id}`;
@@ -142,7 +311,8 @@ export async function render(ctx) {
         h('label', { class: 'visually-hidden', for: labelId }, `Wafer ${i + 1} label`),
         textInput({ id: labelId, value: w.label, autocapitalize: 'characters', onChange: (v) => update({ label: v || '' }) }).el,
         h('label', { class: 'visually-hidden', for: statusId }, `${w.label || `Wafer ${i + 1}`} status`), status,
-        usedWafers.has(w.id) ? null : button('', {
+        // A wafer that runs or plan steps name stays: finish or scrap it, or take it off the steps first.
+        usedWafers.has(w.id) || namedBySteps(w.id) ? null : button('', {
           kind: 'ghost', icon: 'trash', ariaLabel: `Remove ${w.label || `wafer ${i + 1}`}`,
           onClick: () => {
             const near = p.wafers[i + 1] || p.wafers[i - 1];
@@ -150,6 +320,7 @@ export async function render(ctx) {
               near ? `#wafer-${near.id}` : '#add-wafers');
           },
         })),
+      h('div', { class: 'wafer-type' }, typeBtn),
       textField(`${w.label || `Wafer ${i + 1}`} note`, w.notes, (v) => update({ notes: v }), { hidden: true, placeholder: 'Note, e.g. test wafer or chipped edge' }));
   };
 
@@ -180,6 +351,18 @@ export async function render(ctx) {
       });
     }
     const withId = (/** @type {HTMLElement} */ el, /** @type {string} */ elId) => { el.id = elId; return el; };
+    // A tool with LNF mounting recipes (the Sample mounting station) mounts samples on carriers: a temporary bond.
+    const mounts = !!tool && recipes.some((r) => r.tool === tool.id && /\bmounting\b/i.test(r.name));
+    const bonder = !!tool && (mounts || lnfType(tool.id) === 'wafer-bonder'
+      || own.some((t) => t.fields.some((f) => f.key === 'method' && list(f.options).includes('Anodic'))));
+    const extras = stepExtras({
+      project: /** @type {any} */ (p), step: s, current: () => p.steps.find((/** @type {PlanStep} */ x) => x.id === s.id) || s,
+      index: i, bonder, defaultMethod: mounts ? 'temporary' : '', fromRecipe: recipeAdds(s, toolMap, tplMap, recipes),
+      open: openExtras.has(s.id), onToggle: (v) => { if (v) openExtras.add(s.id); else openExtras.delete(s.id); },
+      update: (patch, redraw = false, focus = null) => { openExtras.add(s.id); update(patch, redraw, focus); },
+      picking: picking.get(s.id) || [],
+      setPicking: (ids) => { picking.set(s.id, ids); openExtras.add(s.id); draw(); },
+    });
     return h('div', { class: 'card stack plan-step', id: `step-${s.id}` },
       h('div', { class: 'spread' }, h('strong', null, `Step ${i + 1}`), h('div', { class: 'row-wrap' },
         withId(button('', { icon: 'up', ariaLabel: `Move step ${i + 1} up`, disabled: i === 0, onClick: () => move(-1) }), `step-up-${s.id}`),
@@ -203,7 +386,9 @@ export async function render(ctx) {
         onChange: (v) => update({ templateId: v }, true),
       }) : null,
       textField('Recipe', s.recipe, (v) => update({ recipe: v }), { help: HELP.planStepRecipe }), recipeSlot,
-      textField('Step notes', s.notes, (v) => update({ notes: v }), { help: HELP.planStepNotes, placeholder: 'e.g. aim for 500 nm, check the mask first' }));
+      textField('Step notes', s.notes, (v) => update({ notes: v }), { help: HELP.planStepNotes, placeholder: 'e.g. aim for 500 nm, check the mask first' }),
+      extras,
+      h('div', { class: 'compat-notes', id: `checks-${s.id}`, 'aria-live': 'polite' }));
   };
 
   const chooseProjectFolder = () => chooseFolder({
@@ -226,7 +411,6 @@ export async function render(ctx) {
     const card = el.closest('.plan-step');
     return card && el.getAttribute('role') === 'radio' ? `#${CSS.escape(card.id)} [role="radio"][aria-checked="true"]` : null;
   };
-  let addCount = 1;
   const draw = (/** @type {string | null} */ focus = null) => {
     const refocus = focus || focusKey(document.activeElement);
     const startInput = /** @type {HTMLInputElement} */ (h('input', { id: 'project-start', class: 'input', type: 'date', value: localDateKey(p.startedAt) }));
@@ -248,23 +432,15 @@ export async function render(ctx) {
           options: PROJECT_STATUSES.map((s) => ({ value: s, label: PROJECT_STATUS_LABELS[s] })),
           onChange: (v) => change({ status: v || 'active', endedAt: v === 'done' ? p.endedAt || new Date().toISOString() : null }),
         })),
-      section(`Wafers (${p.wafers.length})`,
-        h('p', { class: 'muted small' }, 'Each wafer gets its own path through the process; a run says which wafers it processed. No wafers: runs join the project as a whole.'),
+      section(`Wafers and masks (${p.wafers.length})`,
+        h('p', { class: 'muted small' }, 'Each wafer gets its own path through the process; a run says which wafers it processed. No wafers: runs join the project as a whole. Give them a type to have the plan checked.'),
         p.wafers.length ? h('div', { class: 'stack' }, p.wafers.map(waferRow)) : null,
         h('div', { class: 'add-wafers' },
-          h('label', { class: 'visually-hidden', for: 'add-wafer-count' }, 'Number of wafers to add'),
-          numberStepper({
-            id: 'add-wafer-count', label: 'wafers to add', value: addCount, step: 1, min: 1, max: 50, onChange: (v) => { addCount = v || 1; },
-          }).el,
-          Object.assign(button('Add wafers', {
-            icon: 'plus',
-            onClick: () => {
-              const added = newWafers(p.wafers, addCount);
-              change({ wafers: [...p.wafers, ...added] }, true, added.length ? `#wafer-${added[0].id}` : null);
-            },
-          }), { id: 'add-wafers' }))),
+          Object.assign(button('Add wafers', { icon: 'plus', onClick: addWafers }), { id: 'add-wafers' }))),
       section(`Plan (${p.steps.length} step${p.steps.length === 1 ? '' : 's'})`,
         h('p', { class: 'muted small' }, 'Optional. List the steps in order; a complete run linked to a step marks it done.'),
+        p.steps.length ? h('div', { class: 'field' }, labelRow(h('span', { class: 'label' }, 'Checks'), 'Checks', HELP.planChecks),
+          h('p', { class: 'small', id: 'plan-checks', 'aria-live': 'polite' }), h('p', { class: 'muted small', id: 'plan-checks-gap' })) : null,
         p.steps.map(stepCard),
         h('div', { class: 'row-wrap' },
           Object.assign(button('Add step', {
@@ -281,12 +457,13 @@ export async function render(ctx) {
             sel.addEventListener('change', () => {
               const from = others.find((x) => x.id === sel.value);
               if (!from) return;
-              const steps = copyPlan(from);
-              change({ steps }, true, steps.length ? `#step-title-${steps[0].id}` : '#add-step');
+              const { wafers, steps } = copyPlanInto(from, p.wafers, untouchedDefault());
+              change({ wafers, steps }, true, steps.length ? `#step-title-${steps[0].id}` : '#add-step');
             });
             return h('div', { class: 'field' }, h('label', { class: 'visually-hidden', for: selId }, 'Copy the plan of another project'), sel);
           })() : null)),
       section('Notes', textField('Project notes', p.notes, (v) => change({ notes: v }), { multiline: true, help: HELP.projectNotes })));
+    paintChecks();
     const target = refocus ? /** @type {HTMLElement | null} */ (body.querySelector(refocus)) : null;
     if (target && !(/** @type {HTMLButtonElement} */ (target)).disabled) target.focus();
   };
@@ -298,6 +475,7 @@ export async function render(ctx) {
     })) : null,
     body,
   ]);
+  computeChecks();
   draw();
 
   const save = async () => {
@@ -311,7 +489,9 @@ export async function render(ctx) {
       templateId: s.toolId ? liveTemplate(s.toolId, s.templateId) : null,
     }));
     // A step without a title is dropped only when it is empty: one with content, or one runs use, needs a title.
-    if (titled.some((/** @type {PlanStep} */ s) => !s.title && (usedSteps.has(s.id) || s.toolId || String(s.recipe || '').trim() || String(s.notes || '').trim()))) {
+    const hasContent = (/** @type {PlanStep} */ s) => usedSteps.has(s.id) || s.toolId || String(s.recipe || '').trim() || String(s.notes || '').trim()
+      || list(s.waferIds).length || list(s.bonds).length || s.debond || list(s.adds).length || list(s.removes).length;
+    if (titled.some((/** @type {PlanStep} */ s) => !s.title && hasContent(s))) {
       toast('Give every step a title: say what happens in it.', { kind: 'error' });
       return;
     }
@@ -324,15 +504,24 @@ export async function render(ctx) {
       message: 'This project changed since you started editing it, on this device or another. Save your version anyway? Steps marked done or skipped keep their marks.',
     })) return;
     const marks = new Map((cur ? cur.steps : []).map((s) => [s.id, s]));
+    const concurrent = !!cur && cur.updatedAt !== p.updatedAt;
+    const ids = new Set(p.wafers.map((/** @type {Wafer} */ w) => w.id));
     const steps = titled.filter((/** @type {PlanStep} */ s) => s.title).map((/** @type {PlanStep} */ s) => {
       const m = marks.get(s.id);
-      return m ? { ...s, doneAt: m.doneAt ?? null, skipped: !!m.skipped } : s;
+      // Checked notes: when the project changed meanwhile, a three-way merge with what the form started from,
+      // so a mark added or taken off on either side wins (without that start, both sides' marks).
+      const base = p._base && p._base.checked ? p._base.checked[s.id] : null;
+      const checked = concurrent && m ? (base ? merge3(list(base), list(s.checked), list(m.checked)) : [...new Set([...list(m.checked), ...list(s.checked)])])
+        : list(s.checked);
+      return tidyStep(m ? { ...s, doneAt: m.doneAt ?? null, skipped: !!m.skipped, checked } : s, ids);
     });
     try {
       const saved = await saveProject({
         ...(cur || p), name, goal: String(p.goal || '').trim(), notes: String(p.notes || '').trim(), steps,
         startedAt: p.startedAt, substrate: p.substrate || '', status: p.status, endedAt: p.endedAt ?? null, folderId: p.folderId ?? null,
-        wafers: p.wafers.map((/** @type {Wafer} */ w, /** @type {number} */ i) => ({ ...w, label: labels[i], notes: String(w.notes || '').trim() })),
+        wafers: p.wafers.map((/** @type {Wafer} */ w, /** @type {number} */ i) => ({
+          ...w, label: labels[i], notes: String(w.notes || '').trim(),
+        })),
       });
       autosave.cancel();
       await clearDraft(draftKey);

@@ -36,11 +36,13 @@ import { HELP } from '../core/app-help.js';
  * fills its parameters (the caller applies them; with allSteps, every step
  * of a multi-step recipe).
  * @param {{value: string, onChange: (v: string) => void, recipes: WikiRecipe[], template: Template | null,
- *   title: string, useLabel?: string, roles?: string[], onUse: (r: WikiRecipe, step: number) => void, allSteps?: boolean}} o
+ *   title: string, useLabel?: string, roles?: string[], onUse: (r: WikiRecipe, step: number) => void, allSteps?: boolean,
+ *   id?: string}} o
+ *   id: a stable id for the box, so the form can set it without a redraw
  * @returns {HTMLElement}
  */
 export function recipeField(o) {
-  const id = uid('recipe');
+  const id = o.id || uid('recipe');
   const pick = recipeButton({
     title: o.title, recipes: o.recipes, template: o.template, useLabel: o.useLabel || 'Use recipe', roles: o.roles, onUse: o.onUse,
     allSteps: o.allSteps,

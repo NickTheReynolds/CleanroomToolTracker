@@ -27,7 +27,9 @@ import {
   saveRun, purgeUnsavedPhotos, getSettings, saveSettings, lastUsedByTool, materialsByRecency,
   LOG_DRAFT as DRAFT, setAsideLogDraft, getProject, listProjects, logTimerRunning,
 } from '../data/repo.js';
-import { recipesForTool } from '../data/recipes.js';
+import { recipesForTool, allRecipes } from '../data/recipes.js';
+import { planChecksWith } from '../data/plan-checks.js';
+import { openNotes } from '../ui/compat-notes.js';
 import {
   blankDraft, prefillFrom, clearPrefill, missingRequired, hasAnyOutput, draftToRun, timerField, fieldsWithRole,
 } from '../core/run-draft.js';
@@ -35,7 +37,7 @@ import { recipesFor, undoFill } from '../core/recipes.js';
 import {
   mainIndex, stepValues, withStepValues, addStep, removeStep, setMain, renameStep, recipeForForm,
 } from '../core/run-steps.js';
-import { defaultLink } from '../core/projects.js';
+import { defaultLink, wafersOnStepChange, recipeOnStepChange } from '../core/projects.js';
 import { uuid } from '../core/ids.js';
 import { formatDay, formatDateTime } from '../core/time.js';
 import { normText } from '../core/vocab.js';
@@ -147,9 +149,10 @@ async function pickTemplate(ctx, toolId) {
  * The run joins the project a project page named (with its wafers still in
  * process and the step, else the suggested one), and takes the step's
  * recipe name while the form is untouched. A form already in the project
- * only moves to the step asked for. The caller keeps this out of the stored
- * draft until the person changes something, so leaving the form untouched
- * leaves no link behind.
+ * moves to the step asked for: its wafers follow as the step menu's do
+ * (wafersOnStepChange), and its recipe while it is still the previous
+ * step's. The caller keeps this out of the stored draft until the person
+ * changes something, so leaving the form untouched leaves no link behind.
  * @param {RunDraft} d
  * @param {URLSearchParams} query
  * @param {import('../core/types.js').Run[]} runs
@@ -166,14 +169,36 @@ async function joinProject(d, query, runs) {
   if (linked) {
     if (!asked || linked.stepId === asked.id) return d;
     return {
-      ...d, recipe: asked.recipe && !d.touched ? asked.recipe : d.recipe,
-      projects: links.map((l) => (l.projectId === id ? { ...l, stepId: asked.id } : l)),
+      ...d, recipe: d.touched ? recipeOnStepChange(p, linked.stepId, asked, d.recipe) : asked.recipe || d.recipe,
+      projects: links.map((l) => (l.projectId === id ? { ...l, stepId: asked.id, waferIds: wafersOnStepChange(p, l, asked, true) } : l)),
     };
   }
-  const link = defaultLink(p, runs, d.toolId);
+  const link = defaultLink(p, runs, d.toolId, asked ? asked.id : null);
   const step = asked || p.steps.find((s) => s.id === link.stepId) || null;
-  const recipe = step && step.recipe && !d.touched ? step.recipe : d.recipe;
+  // As the project's chip and step menu would: a changed form keeps a recipe it has, an empty one takes the step's.
+  const recipe = !step ? d.recipe : !d.touched ? step.recipe || d.recipe : recipeOnStepChange(p, null, step, d.recipe);
   return { ...d, recipe, projects: [...links, { ...link, stepId: step ? step.id : null }] };
+}
+
+/**
+ * A new run's recipe after its links moved from one set of steps to
+ * another: each link whose step changed brings that step's recipe while
+ * the recipe is still the previous step's (recipeOnStepChange).
+ * @param {import('../core/types.js').Project[]} projects
+ * @param {import('../core/types.js').ProjectLink[]} from
+ * @param {import('../core/types.js').ProjectLink[]} to
+ * @param {string} recipe
+ * @returns {string}
+ */
+function followSteps(projects, from, to, recipe) {
+  let out = recipe;
+  for (const l of to) {
+    const before = from.find((x) => x.projectId === l.projectId);
+    const p = projects.find((x) => x.id === l.projectId);
+    const step = p && l.stepId && l.stepId !== (before ? before.stepId : null) ? p.steps.find((s) => s.id === l.stepId) : null;
+    if (p && step) out = recipeOnStepChange(p, before ? before.stepId : null, step, out);
+  }
+  return out;
 }
 
 /**
@@ -182,11 +207,21 @@ async function joinProject(d, query, runs) {
  * @param {string} templateId
  */
 async function form(ctx, toolId, templateId) {
-  const [tool, template, settings, runs, recipes, toolTemplates, projects] = await Promise.all([
+  const [tool, template, settings, runs, recipes, toolTemplates, projects, allTools, allTemplates, everyRecipe] = await Promise.all([
     getTool(toolId), getTemplate(templateId), getSettings(), listRuns(), recipesForTool(toolId), listTemplates(toolId), listProjects(),
+    listTools({ includeArchived: true }), listTemplates(), allRecipes().catch(() => /** @type {import('../core/recipes.js').WikiRecipe[]} */ ([])),
   ]);
   // The person may have moved on while this loaded: then leave the address alone.
   if (!ctx.isCurrent()) return;
+  // The plan's open notes for a linked step, so they show at the tool.
+  /** @type {Map<string, ReturnType<typeof planChecksWith>>} */
+  const checksOf = new Map();
+  const stepNotes = (/** @type {import('../core/types.js').Project} */ p, /** @type {string} */ stepId) => {
+    const c = checksOf.get(p.id) || planChecksWith(p, allTools, allTemplates, everyRecipe);
+    checksOf.set(p.id, c);
+    const step = p.steps.find((x) => x.id === stepId);
+    return step ? openNotes(c.byStep.get(stepId) || [], step) : [];
+  };
   ctx.setTitle('Log run');
   // A deleted template (a plan step can still name one): choose another of the tool's templates.
   if (tool && !tool.deleted && (!template || template.deleted) && toolTemplates.length) {
@@ -252,7 +287,7 @@ async function form(ctx, toolId, templateId) {
   /** @type {{close: () => void} | null} */
   let undoToast = null;
   const useRecipe = (/** @type {WikiRecipe} */ r, /** @type {number} */ step) => {
-    const before = { recipe: draft.recipe, params: draft.params, material: draft.material, steps: draft.steps };
+    const before = { recipe: draft.recipe, params: draft.params, material: draft.material, steps: draft.steps, projects: draft.projects };
     const res = recipeForForm(draft, r, template, step, settings.materials);
     change(res.patch);
     active = Math.max(0, mainIndex(res.patch.steps));
@@ -267,7 +302,9 @@ async function form(ctx, toolId, templateId) {
         label: 'Undo',
         fn: () => {
           if (!ctx.isCurrent()) return;
-          change({ recipe: before.recipe, params: undoFill(draft.params, before.params, res.fill.values), material: before.material, steps: before.steps });
+          // The fill's name comes off only while it is still there, and a step chosen since then has its say.
+          const recipe = draft.recipe === r.name ? followSteps(projects, before.projects, draft.projects, before.recipe || '') : draft.recipe;
+          change({ recipe, params: undoFill(draft.params, before.params, res.fill.values), material: before.material, steps: before.steps });
           active = Math.max(0, mainIndex(before.steps));
           draw();
         },
@@ -339,7 +376,16 @@ async function form(ctx, toolId, templateId) {
       },
     });
     const projectBox = projectLinks({
-      projects, runs, toolId, links: draft.projects, title: 'Projects', onChange: (links) => change({ projects: links }),
+      projects, runs, toolId, links: draft.projects, title: 'Projects', stepNotes, newRun: true,
+      onChange: (links) => {
+        // A step chosen in the menu brings its recipe, as Log this step does, while the form's is still the previous step's.
+        const recipe = followSteps(projects, draft.projects, links, draft.recipe || '');
+        const moved = recipe !== (draft.recipe || '');
+        change({ projects: links, ...(moved ? { recipe } : {}) });
+        // Shown at once, without redrawing the form under the person's finger.
+        const box = /** @type {HTMLInputElement | null} */ (body.querySelector('#run-recipe'));
+        if (moved && box) box.value = recipe;
+      },
     });
     fill(body,
       toolCard({
@@ -353,7 +399,7 @@ async function form(ctx, toolId, templateId) {
       timer.el,
       projectBox ? section('Project', projectBox) : null,
       section('Recipe', recipeField({
-        value: draft.recipe, onChange: (v) => change({ recipe: v }), recipes: shownRecipes, template, allSteps: true,
+        id: 'run-recipe', value: draft.recipe, onChange: (v) => change({ recipe: v }), recipes: shownRecipes, template, allSteps: true,
         title: `${tool.shortName || tool.name} recipes`, onUse: useRecipe,
       })),
       inputs.length ? section('Inputs', steps,
