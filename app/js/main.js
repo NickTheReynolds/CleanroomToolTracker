@@ -1,16 +1,18 @@
 // @ts-check
 /**
  * Boot: open and seed the database, apply the theme, run the hash router,
- * then register the service worker and ask for persistent storage.
+ * start the run timers' clock, then register the service worker and ask
+ * for persistent storage.
  */
 import { setDbNotifier } from './data/db.js';
-import { ensureSeeded, getSettings, saveSettings, getDraft, LOG_DRAFT, logTimerRunning } from './data/repo.js';
-import { matchRoute, parseHash, consumeReplace, track, canGoBack } from './router.js';
+import { ensureSeeded, getSettings, saveSettings } from './data/repo.js';
+import { matchRoute, parseHash, consumeReplace, track, canGoBack, parentOf } from './router.js';
 import { h, clear } from './ui/dom.js';
 import { toast, button, linkButton, errorText } from './ui/components.js';
 import { initShell, setTitle, setBack, setActions, setNavActive } from './ui/shell.js';
 import { applyTheme } from './ui/theme.js';
 import { initPwa, requestPersist, desktopWrapper } from './ui/pwa.js';
+import { initTimers, loadTimers } from './ui/timers.js';
 
 const main = /** @type {HTMLElement} */ (document.getElementById('view'));
 let token = 0;
@@ -44,7 +46,7 @@ async function render() {
   const match = matchRoute(path);
   setActions([]);
   setNavActive(path);
-  setBack(path === '/' ? null : match ? match.route.parent : '/', canGoBack);
+  setBack(path === '/' ? null : match ? parentOf(match.route, match.params) : '/', canGoBack);
   const root = h('div', { class: 'view' });
   clear(main).append(root);
   window.scrollTo(0, 0);
@@ -89,6 +91,8 @@ async function render() {
   if (isCurrent() && (!document.activeElement || document.activeElement === document.body)) {
     main.focus({ preventScroll: true });
   }
+  // A screen may have started, stopped or synced a timer: the clock in the app bar follows.
+  loadTimers().catch((err) => console.error('Could not read the run timers', err));
 }
 
 async function boot() {
@@ -113,30 +117,12 @@ async function boot() {
   applyTheme(settings.theme);
   window.addEventListener('hashchange', render);
   await render();
-  resumeAlarm();
+  initTimers();
   initPwa();
   if (!settings.persistAsked && !desktopWrapper()) {
     await requestPersist();
     await saveSettings({ persistAsked: true });
   }
-}
-
-/**
- * After a reload, a countdown still running in the Log run form keeps its
- * alarm, whichever screen the app opened on.
- */
-async function resumeAlarm() {
-  try {
-    /** @type {import('./core/run-draft.js').RunDraft | null} */
-    const d = await getDraft(LOG_DRAFT);
-    if (!d || !d.timerStartedAt || !d.timerTarget) return;
-    const startedAt = d.timerStartedAt;
-    const { armAlarm } = await import('./ui/timer.js');
-    armAlarm({
-      startedAt, target: d.timerTarget, href: `#/log/${encodeURIComponent(d.toolId)}/${encodeURIComponent(d.templateId)}`,
-      stillRunning: () => logTimerRunning(startedAt),
-    });
-  } catch (err) { console.error('Could not resume the run timer', err); }
 }
 
 boot();

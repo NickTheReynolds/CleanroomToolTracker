@@ -17,7 +17,12 @@
  */
 
 /** @typedef {{render: (ctx: ViewContext) => Promise<(() => void | Promise<void>) | void>}} ViewModule */
-/** @typedef {{pattern: string, load: () => Promise<ViewModule>, parent: string | null}} Route */
+/**
+ * A route. `parent` is where Back goes without an earlier in-app page: a
+ * path, or a function of the route's parameters (a step's page goes back to
+ * its project).
+ * @typedef {{pattern: string, load: () => Promise<ViewModule>, parent: string | null | ((params: Record<string, string>) => string)}} Route
+ */
 
 /** @type {Route[]} */
 export const ROUTES = [
@@ -54,7 +59,18 @@ export const ROUTES = [
   { pattern: '/project/new', load: () => import('./views/project-edit.js'), parent: '/projects' },
   { pattern: '/project/:id', load: () => import('./views/project-detail.js'), parent: '/projects' },
   { pattern: '/project/:id/edit', load: () => import('./views/project-edit.js'), parent: '/projects' },
+  { pattern: '/project/:id/step/:stepId', load: () => import('./views/project-step.js'), parent: (p) => `/project/${encodeURIComponent(p.id)}` },
 ];
+
+/**
+ * Where Back goes from a route without an earlier in-app page.
+ * @param {Route} route
+ * @param {Record<string, string>} params
+ * @returns {string | null}
+ */
+export function parentOf(route, params) {
+  return typeof route.parent === 'function' ? route.parent(params) : route.parent;
+}
 
 /**
  * Split a location hash into path and query.

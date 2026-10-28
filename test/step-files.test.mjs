@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isExposureStep, cleanGds, webLink, gdsText, filesText, withFile, withoutFile, fileInUse, downloadName, stepFilesRoute, MAX_FILE_BYTES,
+  isExposureStep, cleanGds, webLink, gdsText, filesText, withFile, withoutFile, fileInUse, downloadName, stepFilesRoute, stepRoute, MAX_FILE_BYTES,
 } from '../app/js/core/attachments.js';
 import { newStep, newWafers, duplicateProject } from '../app/js/core/projects.js';
 import { travelerBlocks, travelerSheets } from '../app/js/core/project-report.js';
@@ -68,7 +68,9 @@ test('a stored file stays while any step names it', () => {
 });
 
 test('after a complete run, the offer goes to the step it carries out', () => {
-  assert.equal(stepFilesRoute({ projects: [{ projectId: 'p 1', stepId: null }, { projectId: 'p2', stepId: 's/2' }] }), '/project/p2?step=s%2F2');
+  assert.equal(stepFilesRoute({ projects: [{ projectId: 'p 1', stepId: null }, { projectId: 'p2', stepId: 's/2' }] }), '/project/p2/step/s%2F2?files=1');
+  assert.equal(stepRoute({ projects: [{ projectId: 'p 1', stepId: null }, { projectId: 'p2', stepId: 's/2' }] }), '/project/p2/step/s%2F2');
+  assert.equal(stepRoute({ projects: [{ projectId: 'p1', stepId: null }] }), null);
   assert.equal(stepFilesRoute({ projects: [{ projectId: 'p1', stepId: null }] }), null);
   assert.equal(stepFilesRoute({}), null);
 });

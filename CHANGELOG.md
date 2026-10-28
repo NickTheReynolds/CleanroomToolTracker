@@ -2,6 +2,19 @@
 
 One entry per milestone (spec Section 16).
 
+## 2.0.0: Projects first
+
+The first round of alpha testing asked for one frame instead of two (runs beside projects), each tool as its own page inside the project, timers on several tools at once, a way to change past runs, and quieter screens. This release reshapes the app around the project.
+
+- **Home leads with your projects.** Each active project shows its progress bar and the step in progress or next, with **Start** or **Continue**, which opens that step's page. Running timers show above them. Look up, Log a run (outside a project), Open runs and Tool event follow as smaller tiles.
+- **A project is a hub.** Its page shows the next step with Continue, then the plan as a list of steps, each a tap away. Wafers, the traveler, notes, export and the project's actions wait under folds.
+- **Every step has its own page on its tool.** The project's name stays at the top while you scroll, and the tool's banner takes the colour of its category (etch, deposition, thermal, lithography, metrology), so a tool's page looks unlike the project's. **Start this step** saves a run for the step, prefilled from your last run on that tool, with the step's recipe and wafers. Then: the recipe, the inputs, the timer, the results; everything else under **More details**. The step's pictures, files and GDS layout are here too, as are Mark done without a run and Skip.
+- **Finish step asks where next.** When a step is finished, a sheet names the next step with **Go to step n**, or offers to mark the project finished once every step is done. Add picture or file is there too.
+- **Several timers at once.** A timer belongs to its run, so one can run on each tool you have going. The app bar shows a clock with the soonest countdown (and how many timers run); tap it for all of them, with Stop. Home and the project page list them as well. The alarm at zero rings on the device that started the countdown, on any screen, and a reload or another device loses no timer.
+- **Change a past run.** A finished step (and a complete run) opens as a summary of its recipe, settings, time and results, with **Edit values**: adjust the time or any setting later, and the derived results follow.
+- **Quieter screens.** Run pages show the recipe and inputs first, then the timer and results; sample, conditions, projects and wafers, photos, notes and tags, the run's own steps and times fold under More details. Log run does the same. **Save and start** on Log run saves the run and opens its page with the timer running.
+- **Older versions keep syncing.** The timer is one more field on the run; a device on 1.8 or before keeps it and ignores it.
+
 ## 1.8.0: Failed projects in red, finished ones in green
 
 - **Mark a project failed.** On the project page, **Mark failed** asks what went wrong (optional) and ends the project. The editor's Status has **Failed** too, with the same box.

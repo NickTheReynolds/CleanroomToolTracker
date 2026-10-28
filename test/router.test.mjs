@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseHash, matchRoute, ROUTES, track, canGoBack, navigate } from '../app/js/router.js';
+import { parseHash, matchRoute, ROUTES, track, canGoBack, navigate, parentOf } from '../app/js/router.js';
 
 const APP_JS = join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'js');
 
@@ -39,7 +39,8 @@ test('every route points to an existing view module with a render export', () =>
     const file = join(APP_JS, m[1]);
     assert.ok(existsSync(file), `${r.pattern}: ${m[1]} is missing`);
     assert.match(readFileSync(file, 'utf8'), /export async function render\(/, `${m[1]} has no render()`);
-    if (r.parent) assert.ok(matchRoute(r.parent), `${r.pattern}: parent ${r.parent} is not a route`);
+    const parent = parentOf(r, { id: 'a', stepId: 'b', runId: 'c', toolId: 'd', templateId: 'e' });
+    if (parent) assert.ok(matchRoute(parent), `${r.pattern}: parent ${parent} is not a route`);
   }
 });
 

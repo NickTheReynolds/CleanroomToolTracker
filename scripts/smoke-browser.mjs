@@ -3,9 +3,10 @@
 /**
  * Browser smoke test (spec Section 15): in headless Chrome or Edge, load the
  * app, log a run, add pre and post measurements, run a lookup, fill a run
- * form from an LNF wiki recipe, follow a project's wafers through a run and
- * file the project in a folder, export a backup, then stop the server and
- * reload offline. Uses Node built-ins
+ * form from an LNF wiki recipe, follow a project's wafers through a step on
+ * its own page (start, time, finish, on to the next step) and file the
+ * project in a folder, export a backup, then stop the server and reload
+ * offline. Uses Node built-ins
  * only; needs a Chromium-based browser (set CHROME_PATH if it is not found)
  * and a global WebSocket (Node 22+, or Node 20 with --experimental-websocket).
  *
@@ -138,7 +139,7 @@ async function main() {
     await snap('home');
   });
   await step('log a run', async () => {
-    await t(`__t.click('Log run')`);
+    await t(`__t.click('Log a run')`);
     await page.waitFor(`document.querySelectorAll('.tile').length > 3`);
     await t(`__t.tile(${JSON.stringify(TOOL_NAME)})`);
     await page.waitFor(`document.querySelector('.field[data-key="icpPower"]')`);
@@ -253,15 +254,22 @@ async function main() {
     await checkLabels('project-edit');
     await snap('project-edit');
     await t(`__t.click('Save')`);
-    await page.waitFor(`location.hash.startsWith('#/project/') && __t.btn('Log this step')`);
-    await t(`__t.click('Log this step')`);
-    await page.waitFor(`[...document.querySelectorAll('.project-links .pick-btn[aria-pressed="true"]')].some((b) => b.textContent.includes('Smoke batch'))`);
-    await checkLabels('log-form-project');
-    await t(`__t.click('Save')`);
-    await page.waitFor(`location.hash.startsWith('#/run/') && document.querySelector('.project-open')`);
-    await t(`document.querySelector('.project-open').click()`);
-    await page.waitFor(`document.querySelectorAll('.traveler-no').length === 1 && __t.text().includes('In progress')`);
+    // The project's hub: the next step with Start, which opens the step's own page on its tool.
+    await page.waitFor(`location.hash.startsWith('#/project/') && __t.btn('Start this step')`);
     await snap('project-detail');
+    await t(`__t.click('Start this step')`);
+    await page.waitFor(`location.hash.includes('/step/') && document.querySelector('.project-strip') && document.querySelector('.tool-banner')
+      && [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Start this step')`);
+    await checkLabels('step-not-started');
+    // Start saves a run for the step, linked to the project, its wafers and the step; the editor and timer appear.
+    await t(`__t.click('Start this step')`);
+    await page.waitFor(`document.querySelector('.run-editor') && document.querySelector('.timer-card')
+      && [...document.querySelectorAll('.project-links .pick-btn[aria-pressed="true"]')].some((b) => b.textContent.includes('Smoke batch'))`);
+    await snap('step-page');
+    await t(`document.querySelector('.project-strip').click()`);
+    await page.waitFor(`document.querySelector('.next-step') && __t.text().includes('In progress')`);
+    await t(`[...document.querySelectorAll('details.fold')].find((d) => d.textContent.includes('Traveler')).open = true`);
+    await page.waitFor(`document.querySelectorAll('.traveler-no').length === 1`);
     await page.evaluate(`location.hash = '#/projects'`);
     await page.waitFor(`__t.btn('New folder')`);
     await t(`__t.click('New folder')`);
@@ -277,6 +285,30 @@ async function main() {
     await t(`__t.click('Smoke folder')`);
     await page.waitFor(`[...document.querySelectorAll('a.row')].some((r) => r.textContent.includes('Smoke folder') && r.textContent.includes('1 project (1 active)'))`);
     await snap('projects-folders');
+  });
+  await step('finish a step, go on to the next; the done step shows its values with Edit values', async () => {
+    const ids = JSON.parse(await page.evaluate(`(async () => { const p = (await (await import('./js/data/repo.js')).listProjects()).find((x) => x.name === 'Smoke batch');
+      return JSON.stringify({ p: p.id, s: p.steps[0].id, s2: p.steps[1].id }); })()`));
+    await page.evaluate(`location.hash = '#/project/${ids.p}/step/${ids.s}'`);
+    await page.waitFor(`document.querySelector('.run-editor') && __t.btn('Finish step')`);
+    // A countdown on the step's run: the app bar shows the clock; Stop puts the time in the form.
+    await t(`__t.type('.field[data-key="time"] .dur-min', '0') && __t.type('.field[data-key="time"] .dur-sec', '2')`);
+    await page.waitFor(`[...document.querySelectorAll('.timer-card button')].some((b) => b.textContent.trim() === 'Count down 0:02')`);
+    await t(`__t.click('Count down 0:02')`);
+    await page.waitFor(`!document.getElementById('nav-timers').hidden && document.querySelector('.timer-card .btn-danger')`, 5000);
+    await page.waitFor(`document.getElementById('nav-timers').classList.contains('timer-over')`, 8000);
+    await t(`__t.click('Stop')`);
+    await page.waitFor(`document.getElementById('nav-timers').hidden && document.querySelector('.field[data-key="time"] .dur-sec').value !== '02'`, 5000);
+    await t(`__t.click('Finish step')`);
+    await page.waitFor(`document.querySelector('dialog.dialog:not(.sheet)[open]')`);
+    await t(`[...document.querySelectorAll('dialog.dialog:not(.sheet)[open] button')].find((b) => b.textContent.trim() === 'Finish').click()`);
+    await page.waitFor(`document.querySelector('dialog.sheet[open] .next-step')`);
+    await snap('next-step-prompt');
+    await t(`__t.click('Go to step 2')`);
+    await page.waitFor(`location.hash === '#/project/${ids.p}/step/${ids.s2}' && document.querySelector('.project-strip')`);
+    await page.evaluate(`location.hash = '#/project/${ids.p}/step/${ids.s}'`);
+    await page.waitFor(`document.querySelector('.run-summary') && __t.btn('Edit values') && __t.text().includes('Done')`);
+    await snap('step-done');
   });
   await step('a project marked failed turns red and says what went wrong; Reopen undoes it', async () => {
     const id = await page.evaluate(`(async () => (await (await import('./js/data/repo.js')).listProjects()).find((p) => p.name === 'Smoke batch').id)()`);
@@ -377,7 +409,8 @@ async function main() {
     await new Promise((r) => { server.closeAllConnections?.(); server.close(() => r(undefined)); });
     await page.evaluate(`location.hash = ${JSON.stringify(runHash)}`);
     await page.reload();
-    await page.waitFor(`[...document.querySelectorAll('.big-value')].some((e) => e.textContent.trim() === '85 nm/min')`, 15000);
+    // The run is complete, so it opens as a summary of its values. (The reload dropped the page helpers.)
+    await page.waitFor(`document.querySelector('.run-summary') && document.querySelector('#view').innerText.includes('85 nm/min')`, 15000);
     await page.evaluate(`location.hash = '#/results'`);
     await page.waitFor(`document.querySelector('.summary-card .headline')`, 15000);
     await snap('offline-results');

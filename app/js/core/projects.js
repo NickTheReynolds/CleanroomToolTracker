@@ -107,6 +107,20 @@ export function nextStep(states) {
 }
 
 /**
+ * The step to go on to once step `stepId` is done: the first step after it
+ * that is still to do (or in progress), else the first such step before it
+ * (a plan done out of order), else null when every step is done or skipped.
+ * @param {StepState[]} states
+ * @param {string} stepId
+ * @returns {StepState | null}
+ */
+export function stepAfter(states, stepId) {
+  const i = states.findIndex((s) => s.step.id === stepId);
+  const open = (/** @type {StepState} */ s) => s.step.id !== stepId && (s.state === 'todo' || s.state === 'active');
+  return states.slice(i + 1).find(open) || states.slice(0, Math.max(i, 0)).find(open) || null;
+}
+
+/**
  * Plan progress: done steps out of the steps not skipped.
  * @param {StepState[]} states
  * @returns {{done: number, total: number}}

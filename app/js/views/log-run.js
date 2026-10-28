@@ -3,18 +3,21 @@
  * Log run: pick a tool (your tools first) -> pick a template (skipped when
  * the tool has one) -> fill the form, prefilled from the last run with the
  * same tool and template. An LNF recipe can fill the inputs, every step of
- * a multi-step recipe included. "?project=<id>&step=<id>" (from a project's
- * "Log this step") puts the run in that project. Every change autosaves to
- * IndexedDB.
+ * a multi-step recipe included. "?project=<id>&step=<id>" (from a project)
+ * puts the run in that project. The recipe and inputs come first; the rest
+ * waits under More details. Every change autosaves to IndexedDB; starting
+ * the timer saves the run and opens its page, where the timer runs (2.0).
  */
 import { h, append, fill } from '../ui/dom.js';
+import { icon } from '../ui/icons.js';
 import {
   button, linkButton, section, chip, emptyState, toast, confirmDialog, errorText,
 } from '../ui/components.js';
 import { renderFields } from '../ui/fields.js';
 import { toolTiles, templateTiles, mineOf } from '../ui/pickers.js';
 import { recipeField, sampleFields, notesFields, dateTimeField } from '../ui/run-form.js';
-import { timerCard, disarmAlarm } from '../ui/timer.js';
+import { timerCard } from '../ui/timer.js';
+import { startRunTimer } from '../ui/timers.js';
 import { stepControls } from '../ui/run-steps.js';
 import { projectLinks } from '../ui/project-picker.js';
 import { fillMessage } from '../ui/recipes.js';
@@ -25,22 +28,22 @@ import { navigate } from '../router.js';
 import {
   listTools, listTemplates, getTool, getTemplate, listRuns, lastRunFor, getDraft, saveDraft, clearDraft,
   saveRun, purgeUnsavedPhotos, getSettings, saveSettings, lastUsedByTool, materialsByRecency,
-  LOG_DRAFT as DRAFT, setAsideLogDraft, getProject, listProjects, logTimerRunning,
+  LOG_DRAFT as DRAFT, setAsideLogDraft, getProject, listProjects,
 } from '../data/repo.js';
 import { recipesForTool, allRecipes } from '../data/recipes.js';
 import { planChecksWith } from '../data/plan-checks.js';
 import { openNotes } from '../ui/compat-notes.js';
 import {
-  blankDraft, prefillFrom, clearPrefill, missingRequired, hasAnyOutput, draftToRun, timerField, fieldsWithRole,
+  blankDraft, prefillFrom, clearPrefill, missingRequired, hasAnyOutput, draftToRun, fieldsWithRole,
 } from '../core/run-draft.js';
 import { recipesFor, undoFill } from '../core/recipes.js';
 import {
   mainIndex, stepValues, withStepValues, addStep, removeStep, setMain, renameStep, recipeForForm,
 } from '../core/run-steps.js';
 import { defaultLink, wafersOnStepChange, recipeOnStepChange } from '../core/projects.js';
-import { stepFilesRoute } from '../core/attachments.js';
+import { stepFilesRoute, stepRoute } from '../core/attachments.js';
 import { uuid } from '../core/ids.js';
-import { formatDay, formatDateTime } from '../core/time.js';
+import { formatDay, formatDateTime, formatMmSs } from '../core/time.js';
 import { normText } from '../core/vocab.js';
 import { HELP } from '../core/app-help.js';
 
@@ -106,7 +109,6 @@ async function pickTool(ctx) {
           onClick: async () => {
             if (!await confirmDialog({ title: 'Discard the unsaved run?', message: 'Its values and photos will be deleted.', confirmLabel: 'Discard', danger: true })) return;
             await clearDraft(DRAFT);
-            disarmAlarm();
             await purgeUnsavedPhotos(draft.runId);
             resume?.remove();
           },
@@ -237,7 +239,6 @@ async function form(ctx, toolId, templateId) {
   let d = await getDraft(DRAFT);
   if (d && (d.toolId !== toolId || d.templateId !== templateId)) {
     if (await setAsideLogDraft()) toast('Your other unsaved run was kept in Open runs as a draft.');
-    disarmAlarm();
     d = null;
   }
   if (!d) {
@@ -245,8 +246,6 @@ async function form(ctx, toolId, templateId) {
     const last = await lastRunFor(toolId, templateId);
     if (last) d = prefillFrom(d, last, template);
   }
-  // An alarm armed for a form that was set aside (from another screen) must not keep the screen awake.
-  if (!d.timerStartedAt || !d.timerTarget) disarmAlarm();
   // Stored before joining a project: the link is saved with the person's first change, so an untouched form
   // leaves nothing behind. Applied once: Back, Forward or a reload cannot bring a removed link back.
   await saveDraft(DRAFT, d);
@@ -273,7 +272,6 @@ async function form(ctx, toolId, templateId) {
     if (!s.materials.some((m) => normText(m) === normText(name))) await saveSettings({ materials: [...s.materials, name] });
   };
   const shownRecipes = recipesFor(recipes, template, toolTemplates);
-  const timeKey = timerField(template);
   const photos = photoStrip({
     runId: draft.runId,
     onChange: (ids) => { if (ids.join() !== draft.photoIds.join()) change({ photoIds: ids }); },
@@ -283,6 +281,8 @@ async function form(ctx, toolId, templateId) {
   // The step whose inputs the form shows (the main step at first).
   let active = Math.max(0, mainIndex(draft.steps));
   const body = h('div', { class: 'view' });
+  // More details stays open across redraws once opened.
+  let moreOpen = false;
   // An LNF recipe fills its values (every step's, for a multi-step recipe) and the material when that is
   // unambiguous. Undo takes back only what the recipe changed, and goes away with the form.
   /** @type {{close: () => void} | null} */
@@ -327,26 +327,22 @@ async function form(ctx, toolId, templateId) {
 
   const draw = () => {
     timer?.dispose();
-    const secs = timeKey && typeof draft.params[timeKey] === 'number' ? /** @type {number} */ (draft.params[timeKey]) : null;
-    const runningSince = draft.timerStartedAt || '';
+    // Starting the timer saves the run (as Save does) and opens its page, where the clock runs with the run.
     timer = timerCard({
-      state: { startedAt: draft.timerStartedAt, target: draft.timerTarget ?? null, ran: !!draft.timerRan },
-      formSeconds: secs,
-      href: `#/log/${encodeURIComponent(toolId)}/${encodeURIComponent(templateId)}`,
-      stillRunning: () => logTimerRunning(runningSince),
+      run: { params: draft.params, timer: null, endedAt: null }, template, startLabel: 'Save and start',
       fills: draft.steps.length ? 'the main step’s (★) time' : 'the time field',
-      onStart: (target) => {
-        const now = new Date().toISOString();
-        change({ timerStartedAt: now, timerTarget: target, timerRan: false, startedAt: now, endedAt: null });
-        draw();
+      onStart: async (target) => {
+        const saved = await save('open', { quiet: true });
+        if (!saved) return;
+        try {
+          await startRunTimer(saved, target);
+          toast(target ? `Run saved; counting down ${formatMmSs(target)}.` : 'Run saved; the timer is running.');
+        } catch (err) {
+          toast(errorText(err), { kind: 'error' });
+        }
+        navigate(stepRoute(saved) || `/run/${saved.id}`, { replace: true });
       },
-      onStop: (s) => {
-        change({
-          timerStartedAt: null, timerTarget: null, timerRan: true, endedAt: new Date().toISOString(),
-          params: timeKey ? { ...draft.params, [timeKey]: s } : draft.params,
-        });
-        draw();
-      },
+      onStop: () => {},
     });
     const inputs = fieldsWithRole(template, ['input']);
     const context = fieldsWithRole(template, ['context']);
@@ -397,54 +393,63 @@ async function form(ctx, toolId, templateId) {
         icon: 'copy', actionLabel: 'Clear',
         onClick: () => { draft = { ...clearPrefill(draft), touched: true }; active = 0; autosave.schedule(); draw(); },
       })) : null,
-      timer.el,
       projectBox ? section('Project', projectBox) : null,
       section('Recipe', recipeField({
         id: 'run-recipe', value: draft.recipe, onChange: (v) => change({ recipe: v }), recipes: shownRecipes, template, allSteps: true,
         title: `${tool.shortName || tool.name} recipes`, onUse: useRecipe,
       })),
-      inputs.length ? section('Inputs', steps,
+      inputs.length ? section('Inputs', draft.steps.length ? steps : null,
         renderFields(inputs, values, setParam, { template, collapseGases: true })) : null,
-      section('Sample', h('div', { class: 'fields' }, sampleFields(draft, {
-        lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
-        showMask: template.derived.some((x) => x.fn === 'selectivity'), showRecipe: false,
-      }))),
-      context.length ? section('Conditions', renderFields(context, values, setParam, { template })) : null,
-      outputs.length ? h('details', { class: 'more card', open: hasAnyOutput(template, draft.results) || undefined },
-        h('summary', null, 'Results now (optional)'),
-        renderFields(outputs, draft.results, (k, v) => change({ results: { ...draft.results, [k]: v } }), { template })) : null,
-      section('Photos', photos.el),
-      section('Notes and tags', h('div', { class: 'fields' }, notesFields(draft, (p) => change(p)))),
-      h('details', { class: 'more' }, h('summary', null, 'Start time'),
-        h('div', { class: 'stack' }, dateTimeField('Started', draft.startedAt, (iso) => change({ startedAt: iso }), HELP.started))),
+      timer.el,
+      h('details', {
+        class: 'more fold', open: moreOpen || undefined,
+        onToggle: (/** @type {Event} */ e) => { moreOpen = /** @type {HTMLDetailsElement} */ (e.target).open; },
+      }, h('summary', null, icon('down', { size: 18 }), 'More details'), h('div', { class: 'stack' },
+        section('Sample', h('div', { class: 'fields' }, sampleFields(draft, {
+          lists, onChange: (p) => change(p), onAddMaterial: addMaterial,
+          showMask: template.derived.some((x) => x.fn === 'selectivity'), showRecipe: false,
+        }))),
+        context.length ? section('Conditions', renderFields(context, values, setParam, { template })) : null,
+        outputs.length ? h('details', { class: 'more card', open: hasAnyOutput(template, draft.results) || undefined },
+          h('summary', null, 'Results now (optional)'),
+          renderFields(outputs, draft.results, (k, v) => change({ results: { ...draft.results, [k]: v } }), { template })) : null,
+        section('Photos', photos.el),
+        section('Notes and tags', h('div', { class: 'fields' }, notesFields(draft, (p) => change(p)))),
+        draft.steps.length ? null : section('Steps of this run', steps),
+        section('Start time', dateTimeField('Started', draft.startedAt, (iso) => change({ startedAt: iso }), HELP.started)))),
     );
   };
 
-  const save = async (/** @type {'open' | 'complete'} */ status) => {
-    let dd = draft;
-    if (dd.timerStartedAt && timeKey) {
-      const secs = Math.max(0, Math.round((Date.now() - Date.parse(dd.timerStartedAt)) / 1000));
-      dd = { ...dd, timerStartedAt: null, endedAt: new Date().toISOString(), params: { ...dd.params, [timeKey]: dd.params[timeKey] ?? secs } };
-    }
-    const missing = missingRequired(template, dd.params, dd.results);
+  /**
+   * Save the run. Quiet: no message and no navigation (the timer's Save and
+   * start says and does its own).
+   * @param {'open' | 'complete'} status
+   * @param {{quiet?: boolean}} [o]
+   * @returns {Promise<import('../core/types.js').Run | null>} the saved run, or null when it was not saved
+   */
+  const save = async (status, o = {}) => {
+    const missing = missingRequired(template, draft.params, draft.results);
     if (missing.length) {
       toast(`Fill in: ${missing.join(', ')}`, { kind: 'error' });
-      return;
+      return null;
     }
     try {
       autosave.cancel();
       undoToast?.close();
-      const saved = await saveRun(draftToRun(dd, status));
+      const saved = await saveRun(draftToRun(draft, status));
       await clearDraft(DRAFT);
-      disarmAlarm();
+      if (o.quiet) return saved;
       // A complete run that carries out a plan step offers that step's pictures and files.
       const files = status === 'complete' ? stepFilesRoute(saved) : null;
       toast(status === 'complete' ? 'Run saved as complete.' : 'Run saved. Add measurements when you have them.',
         files ? { action: { label: 'Add picture or file', fn: () => navigate(files) }, timeout: 10000 } : {});
-      navigate(`/run/${saved.id}`, { replace: true });
+      // A run on a project's step opens on the step's page, the rest on the run's.
+      navigate(stepRoute(saved) || `/run/${saved.id}`, { replace: true });
+      return saved;
     } catch (err) {
       autosave.schedule();
       toast(errorText(err), { kind: 'error' });
+      return null;
     }
   };
   const completeBtn = button('Save complete', { icon: 'check', onClick: () => save('complete') });

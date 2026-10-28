@@ -251,18 +251,6 @@ export async function purgeUnsavedPhotos(runId) {
 }
 
 /**
- * Whether the Log run form's timer that started at `startedAt` still runs:
- * the form was not saved, discarded or set aside since, and not stopped.
- * @param {string} startedAt
- * @returns {Promise<boolean>}
- */
-export async function logTimerRunning(startedAt) {
-  /** @type {import('../core/run-draft.js').RunDraft | null} */
-  const d = await getDraft(LOG_DRAFT);
-  return !!d && d.timerStartedAt === startedAt;
-}
-
-/**
  * Move the current Log run form out of the way without losing typed data:
  * a form the person changed becomes a draft run in Open runs; an untouched
  * one is dropped with its unsaved photos.

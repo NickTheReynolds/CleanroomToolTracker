@@ -32,9 +32,6 @@ export { isSet, compactValues };
  * @property {string[]} photoIds
  * @property {string} startedAt
  * @property {string | null} endedAt
- * @property {string | null} timerStartedAt
- * @property {number | null} [timerTarget] seconds a running countdown counts down from; null counts up
- * @property {boolean} [timerRan] the timer ran and was stopped in this form
  * @property {RunStep[]} [steps] the steps of a run with several; empty for one step
  * @property {ProjectLink[]} [projects] the projects the run belongs to
  * @property {{runId: string, startedAt: string} | null} copiedFrom
@@ -62,9 +59,6 @@ export function blankDraft(o) {
     photoIds: [],
     startedAt: o.now,
     endedAt: null,
-    timerStartedAt: null,
-    timerTarget: null,
-    timerRan: false,
     steps: [],
     projects: [],
     copiedFrom: null,
@@ -215,7 +209,7 @@ export function timerField(t) {
 }
 
 /**
- * Seconds shown by a running timer.
+ * Seconds a timer has run since it started (never negative).
  * @param {string | null} startedAt
  * @param {number} nowMs
  * @returns {number}

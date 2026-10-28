@@ -121,15 +121,27 @@ export function fileInUse(projects, fileId) {
 }
 
 /**
- * Where to add pictures and files after a run is complete: the project page
- * with the sheet of the plan step the run carries out, or null when it
- * carries out none.
+ * The page of the plan step a run carries out, or null when it carries out
+ * none: "/project/<id>/step/<id>" (2.0; before, the project page opened the
+ * step's sheet).
  * @param {{projects?: {projectId: string, stepId: string | null}[]}} run
- * @returns {string | null} a route, e.g. "/project/abc?step=def"
+ * @returns {string | null}
+ */
+export function stepRoute(run) {
+  const link = list(run.projects).find((l) => l && l.projectId && l.stepId);
+  return link ? `/project/${encodeURIComponent(link.projectId)}/step/${encodeURIComponent(link.stepId)}` : null;
+}
+
+/**
+ * Where to add pictures and files after a run is complete: the page of the
+ * plan step the run carries out, opened at its pictures and files, or null
+ * when it carries out none.
+ * @param {{projects?: {projectId: string, stepId: string | null}[]}} run
+ * @returns {string | null} a route, e.g. "/project/abc/step/def?files=1"
  */
 export function stepFilesRoute(run) {
-  const link = list(run.projects).find((l) => l && l.projectId && l.stepId);
-  return link ? `/project/${encodeURIComponent(link.projectId)}?step=${encodeURIComponent(link.stepId)}` : null;
+  const route = stepRoute(run);
+  return route ? `${route}?files=1` : null;
 }
 
 /**

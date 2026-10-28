@@ -27,7 +27,7 @@ Every record in the nine data stores (`meta` excluded) has:
 |---|---|---|
 | `tools` | `name`, `shortName`, `category` (etch, deposition, thermal, litho, metrology, other), `kind` (process, metrology), `active`, `defaultTemplateId` (or null), `halfLifeDays` (null means use the setting), `notes` | `category` |
 | `templates` | `toolId`, `name`, `processType` (same values as category), `fields[]`, `derived[]`, `primaryOutput` (an output key, or null) | `toolId` |
-| `runs` | `toolId`, `templateId` (null for an untyped quick capture), `material`, `substrate`, `maskMaterial`, `status` (draft, open, complete), `startedAt`, `endedAt`, `params` {key: value}, `results` {key: value}, `derivedKeys[]`, `targetThickness` (nm or null), `recipe`, `notes`, `tags[]`, `photoIds[]`, `steps[]` (see Run steps), `projects[]` (see Projects) | `toolId`, `toolTemplate` = [toolId, templateId], `startedAt`, `status` |
+| `runs` | `toolId`, `templateId` (null for an untyped quick capture), `material`, `substrate`, `maskMaterial`, `status` (draft, open, complete), `startedAt`, `endedAt`, `params` {key: value}, `results` {key: value}, `derivedKeys[]`, `targetThickness` (nm or null), `recipe`, `notes`, `tags[]`, `photoIds[]`, `steps[]` (see Run steps), `projects[]` (see Projects), and optionally `timer` (see Run timers) | `toolId`, `toolTemplate` = [toolId, templateId], `startedAt`, `status` |
 | `measurements` | `runId`, `metrologyToolId`, `kind` (thickness, stepHeight, cd, sheetResistance, refractiveIndex, stress, other), `phase` (pre, post), `material`, `unit`, `points[]` {site, value}, `takenAt`, `notes` | `runId` |
 | `events` | `toolId`, `type` (pm, clean, seasoning, targetChange, gasChange, fault, other), `major`, `at`, `notes` | `toolAt` = [toolId, at] |
 | `photos` | `runId` (the run, or since 1.6 the plan step, it belongs to), `blob` (JPEG; a step's file as picked), `width`, `height`, `caption`, `takenAt`; a step's picture or file also has `name` and `type` | `runId` |
@@ -54,6 +54,10 @@ A value is a number, text, `true`/`false`, or `null`. Durations are stored in se
 ### Run steps
 
 A run with several steps (a breakthrough, the main etch and an over-etch, or the layers of a stack) lists them in `steps`, in order: `{name, main: true}` for the main step and `{name, params}` for each other step. Exactly one step is the main step, and its values are the run's `params`. So Lookup, the derived results and every export keep reading `params`, and a one-step run simply has `steps: []`. Steps are stored tidy: names trimmed (a blank one becomes "Step n") and empty values dropped (`tidySteps`). Using a multi-step LNF recipe in a run form fills every step; the step chosen in the recipe sheet becomes the main step. A recipe with one step or none fills the main step and keeps the run's other steps. Duplicating a run or prefilling from the last run copies the steps, keeping only the input and condition fields the template knows. Exports write the steps as one text column (`stepsText` in `core/run-steps.js`).
+
+### Run timers
+
+A timer belongs to a saved run (2.0): `timer` is `{startedAt, target, deviceId}` while it runs and null (or absent) otherwise. `target` is the seconds a countdown counts down from, null to count up; `deviceId` is the device that started it, the only one that rings when a countdown reaches zero (the field syncs with the run, and the clock shows on every device). Several runs can have a timer at once. Stop writes the time that passed into the main step's time field (the template's `timerField`: the time field of its first rate derivation, else its first duration input) and sets `endedAt`; marking a run complete while its timer runs does the same but keeps a time already typed. `core/timers.js` holds the pure parts; `ui/timers.js` the registry, alarms and the clock in the app bar. Older versions accept the field, keep it when they save the run and ignore it.
 
 ### Wafer types, wafer specs and bonds
 
@@ -135,7 +139,7 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 
 ## Drafts (`meta` keys `draft:<form>`)
 
-Every in-progress form autosaves its state about 300 ms after each change, and immediately when the page is hidden. Each form has its own key: `log`, `capture`, `lookup`, `history`, `event:<id>`, `measure:<id>`, `tool:<id>`, `template:<id>`, `project:<id>` (`project:new` for a new one) and `project:copy:<id>` for a copy of project `<id>`. The Log run draft also keeps the timer (`timerStartedAt`, `timerTarget` for a countdown, `timerRan`), and `touched`: only a form someone changed is offered for resuming or kept as a draft run. A run being logged gets its id when the form opens, so photos taken before Save are stored at once under that id. Discarding the form removes those photos.
+Every in-progress form autosaves its state about 300 ms after each change, and immediately when the page is hidden. Each form has its own key: `log`, `capture`, `lookup`, `history`, `event:<id>`, `measure:<id>`, `tool:<id>`, `template:<id>`, `project:<id>` (`project:new` for a new one) and `project:copy:<id>` for a copy of project `<id>`. The Log run draft also keeps `touched`: only a form someone changed is offered for resuming or kept as a draft run. A run being logged gets its id when the form opens, so photos taken before Save are stored at once under that id. Discarding the form removes those photos. Since 2.0 the draft holds no timer: starting the timer saves the run, and the timer lives on it (see Run timers). A saved run on a project's step page or Run detail is edited in place, with the same autosave, and never goes through a draft.
 
 ## Seed data
 

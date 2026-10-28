@@ -111,13 +111,18 @@
  * which planned step it carries out.
  * @typedef {{projectId: string, waferIds: string[], stepId: string|null}} ProjectLink
  *
+ * A timer running on a saved run (2.0): when it started, how long it counts
+ * down (null counts up) and the device that started it, which is the one
+ * that rings (core/timers.js). Several runs can have one at once.
+ * @typedef {{startedAt: string, target: number|null, deviceId: string}} RunTimer
+ *
  * @typedef {BaseRecord & {
  *   toolId: string, templateId: string|null, material: string, substrate: string,
  *   maskMaterial?: string, status: 'draft'|'open'|'complete', startedAt: string,
  *   endedAt: string|null, params: Record<string, FieldValue>,
  *   results: Record<string, FieldValue>, derivedKeys: string[],
  *   targetThickness?: number|null, recipe: string, notes: string, tags: string[],
- *   photoIds: string[], steps: RunStep[], projects: ProjectLink[]
+ *   photoIds: string[], steps: RunStep[], projects: ProjectLink[], timer?: RunTimer|null
  * }} Run
  *
  * A project's wafer or mask. `spec` is a copy of what it is (editing the

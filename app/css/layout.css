@@ -149,6 +149,99 @@
 .timer-card .timer-clock { flex: 1 0 auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .timer-buttons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .timer-card.timer-over .timer-clock { color: var(--warn); }
+/* The timers running elsewhere: a pill per run on Home and a project's page, each a link to its run. */
+.timer-strip { display: flex; flex-direction: column; gap: 8px; }
+.timer-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--brand);
+  background: var(--brand-soft);
+  color: var(--text);
+  text-decoration: none;
+}
+.timer-pill > .icon { flex: none; color: var(--brand); }
+.timer-pill-clock { flex: none; font-family: var(--mono); font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.timer-pill-text { flex: 1; min-width: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+.timer-pill.timer-over { border-color: var(--warn); background: var(--warn-soft); }
+.timer-pill.timer-over > .icon, .timer-pill.timer-over .timer-pill-clock { color: var(--warn); }
+.timer-row { gap: 8px; }
+.timer-row .row-tap { flex: 1; min-width: 0; color: inherit; text-decoration: none; }
+.timer-row .row-tap:hover .row-title { text-decoration: underline; }
+.timer-row-clock { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.timer-row .timer-over { color: var(--warn); }
+
+/* A project's step page (2.0): the project stays at the top as the page scrolls; the tool's banner takes its
+   category's colour, so a tool's page looks unlike the project's. */
+.project-strip {
+  position: sticky;
+  top: calc(56px + var(--safe-top));
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  margin: -14px calc(-1 * max(16px, var(--safe-right))) 0 calc(-1 * max(16px, var(--safe-left)));
+  padding: 6px max(16px, var(--safe-right)) 6px max(16px, var(--safe-left));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  text-decoration: none;
+}
+.project-strip > .icon { flex: none; color: var(--brand); }
+.project-strip-name { flex: 1; min-width: 0; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-strip-step { flex: none; font-size: 0.88rem; color: var(--text-2); white-space: nowrap; }
+.tool-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 10px 14px 16px;
+  border-radius: var(--radius);
+  background: var(--cat-color, var(--brand));
+  color: var(--cat-ink);
+  box-shadow: var(--shadow);
+}
+.tool-banner .tool-photo { border: 2px solid rgb(255 255 255 / 0.7); }
+.tool-banner .tool-card-icon { background: rgb(255 255 255 / 0.25); color: inherit; }
+.tool-banner .tool-card-icon .cat-icon { color: inherit; }
+.tool-banner-title { font-size: 1.25rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.tool-banner-tool { display: inline-flex; align-items: center; gap: 2px; color: inherit; font-weight: 650; text-decoration: none; opacity: 0.95; }
+.tool-banner-tool:hover { text-decoration: underline; }
+.tool-banner-sub { font-size: 0.9rem; opacity: 0.9; }
+.tool-banner-badge { margin-top: 4px; }
+.tool-banner-badge .badge { color: var(--cat-ink); border-color: var(--cat-ink); background: transparent; }
+.tool-banner .btn-ghost, .tool-banner .tool-card-star, .tool-banner .tool-card-star[aria-pressed="true"] { color: inherit; }
+.tool-banner-none .tool-banner-title { color: var(--text); }
+.step-line { margin: -6px 2px 0; }
+.start-card { align-items: stretch; }
+.start-card .btn { align-self: stretch; }
+/* A category's colour as a dot beside a step in the plan. */
+.cat-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--cat-color, var(--border-strong)); }
+
+/* Folds: a titled block that opens on tap ("More details"), so a page shows only what matters now. */
+details.fold {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+details.fold > summary { padding: 10px 16px; color: var(--text); font-size: 1.04rem; }
+details.fold > summary::before { display: none; }
+details.fold > summary > .icon { flex: none; color: var(--text-2); transition: transform 120ms ease-out; }
+details.fold[open] > summary > .icon { transform: rotate(180deg); }
+details.fold[open] > summary { border-bottom: 1px solid var(--border); }
+details.fold > .stack, details.fold > div { padding: 14px 16px 16px; }
+details.fold > .stack { margin-top: 0; gap: 18px; }
+details.fold .section-title { font-size: 1rem; }
+details.fold .card { box-shadow: none; }
+
+/* The Start or Continue button on a project card sits above the card's stretched link, like Copy. */
+.project-card-go { position: relative; z-index: 1; flex: none; min-height: 44px; padding: 6px 14px; }
+.run-summary dd { overflow-wrap: anywhere; }
+.home-aside { margin: -6px 2px 0; }
 
 /* Gas lines not in use, behind one row of chips */
 .gas-add { display: flex; flex-direction: column; gap: 6px; }

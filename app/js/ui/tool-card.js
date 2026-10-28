@@ -141,6 +141,31 @@ export function openWikiSheet(o) {
 }
 
 /**
+ * The star that adds the tool to My tools or takes it off, or null.
+ * @param {ToolCardOpts} o
+ * @returns {HTMLElement | null}
+ */
+function starButton(o) {
+  if (!o.onStar) return null;
+  let starred = !!o.starred;
+  const star = h('button', {
+    type: 'button', class: 'btn btn-ghost btn-icon tool-card-star', 'aria-pressed': String(starred),
+    'aria-label': `${o.tool.name} is one of my tools`,
+    onClick: () => {
+      starred = !starred;
+      star.setAttribute('aria-pressed', String(starred));
+      o.onStar?.(starred);
+    },
+  }, icon('star'));
+  return star;
+}
+
+/** @param {ToolCardOpts} o @returns {HTMLElement | null} the "?" that opens the wiki sheet, when there is anything to show */
+const helpButton = (o) => (TOOL_WIKI[o.tool.id] || (o.recipes && o.recipes.length) ? button('', {
+  kind: 'ghost', icon: 'help', class: 'tool-card-help', ariaLabel: `${o.tool.name} on the LNF wiki`, onClick: () => openWikiSheet(o),
+}) : null);
+
+/**
  * The tool's header card: its photo (tap to enlarge) or category icon, and
  * its name. With `link` the name opens the tool's page (events, charts,
  * recipes); the star adds the tool to My tools; "?" opens the wiki sheet.
@@ -148,18 +173,6 @@ export function openWikiSheet(o) {
  * @returns {HTMLElement}
  */
 export function toolCard(o) {
-  const help = TOOL_WIKI[o.tool.id] || (o.recipes && o.recipes.length);
-  let starred = !!o.starred;
-  /** @type {HTMLElement | null} */
-  const star = o.onStar ? h('button', {
-    type: 'button', class: 'btn btn-ghost btn-icon tool-card-star', 'aria-pressed': String(starred),
-    'aria-label': `${o.tool.name} is one of my tools`,
-    onClick: () => {
-      starred = !starred;
-      star?.setAttribute('aria-pressed', String(starred));
-      o.onStar?.(starred);
-    },
-  }, icon('star')) : null;
   return h('div', { class: 'tool-card', dataset: { category: o.tool.category } },
     o.noPhoto ? iconBox(o.tool) : thumbnail(o.tool),
     h('span', { class: 'tool-card-text' },
@@ -167,8 +180,23 @@ export function toolCard(o) {
         ? h('a', { class: 'tool-card-name tool-card-link', href: `#/tool/${encodeURIComponent(o.tool.id)}` }, o.tool.name, icon('chevron', { size: 18 }))
         : h('span', { class: 'tool-card-name' }, o.tool.name),
       o.subtitle ? h('span', { class: 'tool-card-sub' }, o.subtitle) : null),
-    star,
-    help ? button('', {
-      kind: 'ghost', icon: 'help', class: 'tool-card-help', ariaLabel: `${o.tool.name} on the LNF wiki`, onClick: () => openWikiSheet(o),
-    }) : null);
+    starButton(o), helpButton(o));
+}
+
+/**
+ * The banner at the top of a project's step page (2.0): the step's title
+ * over the tool's name, in the tool category's colour, so a tool's page
+ * looks unlike the project's. The photo, star and "?" work as on the card.
+ * @param {ToolCardOpts & {title: string, badge?: Node | null}} o title: the step's title, "3. Etch the oxide"
+ * @returns {HTMLElement}
+ */
+export function toolBanner(o) {
+  return h('div', { class: 'tool-banner', dataset: { category: o.tool.category } },
+    thumbnail(o.tool),
+    h('span', { class: 'tool-card-text' },
+      h('span', { class: 'tool-banner-title' }, o.title),
+      h('a', { class: 'tool-banner-tool', href: `#/tool/${encodeURIComponent(o.tool.id)}` }, o.tool.name, icon('chevron', { size: 16 })),
+      o.subtitle ? h('span', { class: 'tool-banner-sub' }, o.subtitle) : null,
+      o.badge ? h('span', { class: 'tool-banner-badge' }, o.badge) : null),
+    starButton(o), helpButton(o));
 }

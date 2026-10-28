@@ -1,8 +1,10 @@
 // @ts-check
 /**
- * Home: a greeting with this week's count, four big buttons, the person's
- * active projects with their progress and next step, the latest runs, a
- * backup reminder and install help.
+ * Home (2.0): a greeting with this week's count, the timers running, the
+ * person's active projects with their progress and a Continue button into
+ * the step in progress or next, then the other tasks (look up, log a run
+ * outside a project, open runs, a tool event), the latest runs, a backup
+ * reminder and install help.
  */
 import { h, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -10,6 +12,7 @@ import { button, linkButton, section, emptyState, toast, errorText } from '../ui
 import { refresh } from '../router.js';
 import { runList, lookups } from '../ui/run-list.js';
 import { projectProgress } from '../ui/project-card.js';
+import { timerStrip } from '../ui/timers.js';
 import { canInstall, promptInstall, onInstallChange, isIos, isStandalone } from '../ui/pwa.js';
 import {
   openRuns, recentRuns, listRuns, listTools, listTemplates, getSettings, saveSettings, listProjects,
@@ -105,6 +108,13 @@ function iosHint(dismiss) {
       h('div', { class: 'row-wrap' }, linkButton('Step by step', '#/install', { icon: 'info' }), button('Got it', { onClick: dismiss }))));
 }
 
+/** What a project is, for someone who has none yet. */
+const intro = () => h('div', { class: 'card stack' },
+  h('h2', null, 'Start with a project'),
+  h('p', null, 'A project follows a batch of wafers from the first clean to the last measurement. Plan its steps, each on a tool; then do them one by one: each step has its own page, with the recipe, the inputs, a timer and the results. The project keeps the traveler of what every wafer went through.'),
+  h('div', { class: 'row-wrap' }, linkButton('New project', '#/project/new', { kind: 'primary', icon: 'plus', big: true }),
+    linkButton('Log a run without a project', '#/log', { icon: 'plus' })));
+
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
   ctx.setTitle('LNF Run Log');
@@ -142,29 +152,32 @@ export async function render(ctx) {
       await saveSettings({ iosHintDismissed: true });
     }));
   }
+  const timers = timerStrip({ tools: L.tools, projects: L.projects });
+  const more = own.length > shownProjects.length || others;
 
   append(ctx.root, [
     hello(settings.userName, week, open.length),
     recent.length ? backupBanner(settings.lastExportAt) : null,
     installSlot,
     hintSlot,
-    h('nav', { class: 'home-grid', 'aria-label': 'Main tasks' },
-      homeButton('Log run', '#/log', 'plus', { primary: true }),
+    timers.el,
+    allProjects.length ? section(settings.userName ? 'Your projects' : 'Active projects',
+      shownProjects.length ? h('div', { class: 'stack' }, shownProjects.map((p) => projectProgress(p, runs, L.tools)))
+        : h('p', { class: 'muted' }, projects.length ? 'None of the active projects is yours.' : 'No project is active.'),
+      h('div', { class: 'row-end' },
+        linkButton('New project', '#/project/new', { icon: 'plus' }),
+        linkButton(more ? (others ? `All projects (${others} more by others)` : `All ${own.length} of yours`) : 'All projects', '#/projects', { kind: 'ghost', icon: 'project' })))
+      : intro(),
+    h('nav', { class: 'home-grid', 'aria-label': 'Other tasks' },
       homeButton('Look up', '#/lookup', 'search'),
+      homeButton('Log a run', '#/log', 'plus'),
       homeButton('Open runs', '#/open', 'list', { count: open.length }),
       homeButton('Tool event', '#/event', 'wrench')),
-    h('div', { class: 'home-secondary' },
-      linkButton('Quick capture', '#/capture', { icon: 'bolt' }),
-      linkButton(projects.length ? `Projects (${projects.length})` : 'Projects', '#/projects', { icon: 'project' })),
-    projects.length ? section(settings.userName ? 'Your projects' : 'Active projects',
-      shownProjects.length ? h('div', { class: 'stack' }, shownProjects.map((p) => projectProgress(p, runs, L.tools)))
-        : h('p', { class: 'muted' }, 'None of the active projects is yours.'),
-      own.length > shownProjects.length || others ? h('div', { class: 'row-end' }, linkButton(others
-        ? `All projects (${others} more by others)` : `All ${own.length} of yours`, '#/projects', { kind: 'ghost' })) : null) : null,
+    h('p', { class: 'muted small home-aside' }, 'In a hurry? ', h('a', { href: '#/capture' }, 'Quick capture'), ' saves a tool, photo and note to fill in later.'),
     settings.sync && settings.sync.repo ? syncRow(settings.sync) : null,
     section('Recent runs', recent.length
       ? runList(recent, L)
-      : emptyState('No runs yet. Tap Log run to record your first one.')),
+      : emptyState('No runs yet. Start a project’s step, or tap Log a run.')),
   ]);
-  return stopInstall;
+  return () => { stopInstall(); timers.dispose(); };
 }

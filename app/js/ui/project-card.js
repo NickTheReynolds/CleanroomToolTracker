@@ -134,9 +134,22 @@ export function projectCard(p, runs, tools, o = {}) {
 }
 
 /**
+ * Where "Continue" on a project goes: the page of the step in progress or
+ * next, else the project itself.
+ * @param {Project} p
+ * @param {StepState | null} next
+ * @returns {string}
+ */
+export function continueHref(p, next) {
+  const base = `#/project/${encodeURIComponent(p.id)}`;
+  return next ? `${base}/step/${encodeURIComponent(next.step.id)}` : base;
+}
+
+/**
  * A project's progress for Home: its name (the link, stretched over the card
- * as on Projects), the step bar, the step in progress or next, and when
- * anything last happened.
+ * as on Projects), the step bar, the step in progress or next with a
+ * Continue button that opens that step's page, and when anything last
+ * happened.
  * @param {Project} p
  * @param {Run[]} runs every run
  * @param {Map<string, Tool>} tools
@@ -150,8 +163,11 @@ export function projectProgress(p, runs, tools) {
     h('span', { class: 'spread' }, h('a', { class: 'project-name project-link', href: `#/project/${encodeURIComponent(p.id)}` }, p.name),
       next.total ? h('span', { class: 'progress-count', 'aria-hidden': 'true' }, `${next.done}/${next.total}`) : null),
     next.total ? stepBar(next.states) : null,
-    h('span', { class: 'small' }, next.text
-      ? [h('strong', { class: [doing && 'state-active'] }, doing ? 'In progress: ' : 'Next: '), next.text]
-      : next.total ? 'Every planned step is done.' : 'No steps planned yet.'),
+    h('span', { class: 'project-card-foot' },
+      h('span', { class: 'small' }, next.text
+        ? [h('strong', { class: [doing && 'state-active'] }, doing ? 'In progress: ' : 'Next: '), next.text]
+        : next.total ? 'Every planned step is done.' : 'No steps planned yet.'),
+      next.next ? h('a', { class: 'btn btn-primary project-card-go', href: continueHref(p, next.next), 'aria-label': `${doing ? 'Continue' : 'Start'} ${p.name}: ${next.text}` },
+        icon(doing ? 'play' : 'chevron'), h('span', null, doing ? 'Continue' : 'Start')) : null),
     h('span', { class: 'muted small' }, `Last activity ${formatAgo(lastActivity(p, mine), Date.now())}`));
 }

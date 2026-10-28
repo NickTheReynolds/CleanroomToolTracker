@@ -46,9 +46,10 @@ const TEXT = [
   ['text', 'field'], ['text-2', 'field'],
   // A finished project's green card and a failed one's red: its text, muted text and Copy button.
   ['text', 'ok-soft'], ['text', 'danger-soft'], ['text-2', 'ok-soft'], ['text-2', 'danger-soft'], ['brand', 'ok-soft'], ['brand', 'danger-soft'],
-  // Tool category colours (icons and accents) on every surface.
+  // Tool category colours (icons and accents) on every surface, and the words on a step page's tool banner, which
+  // takes the category's colour as its background.
   ...['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']
-    .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg']]),
+    .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg'], ['cat-ink', `cat-${c}`]]),
 ];
 /** UI component pairs that must reach 3:1 (WCAG 1.4.11). */
 const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface'],

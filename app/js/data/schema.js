@@ -392,6 +392,9 @@ const CHECKS = {
       if (!Array.isArray(r[k]) || !r[k].every(isStr)) errs.push(`${k} must be a list of text`);
     }
     if (!isNullish(r.targetThickness) && !isNum(r.targetThickness)) errs.push('targetThickness must be a number');
+    // A running timer (2.0): optional, checked only for its shape, like the 1.5 to 1.8 parts of a project.
+    if (!isNullish(r.timer) && !(isObj(r.timer) && isIsoDate(r.timer.startedAt) && (isNullish(r.timer.target) || isNum(r.timer.target))
+      && (isNullish(r.timer.deviceId) || isStr(r.timer.deviceId)))) errs.push('timer must be {startedAt, target, deviceId}');
     checkSteps(r.steps, errs);
     if (!Array.isArray(r.projects) || !r.projects.every((/** @type {any} */ l) => isObj(l) && isStr(l.projectId) && l.projectId
       && Array.isArray(l.waferIds) && l.waferIds.every(isStr) && (isNullish(l.stepId) || isStr(l.stepId)))) {
