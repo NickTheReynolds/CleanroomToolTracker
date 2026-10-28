@@ -1,12 +1,12 @@
 // @ts-check
 /**
  * A project at a glance, for Projects and Home: its name, goal, progress
- * through the plan, the next step and its wafers. Plus the progress bar the
+ * through the plan, the next step and its wafers. Plus the step bar the
  * project page uses.
  */
 import { h } from './dom.js';
 import { icon } from './icons.js';
-import { badge, listRow } from './components.js';
+import { badge } from './components.js';
 import { stepStates, nextStep, progress, projectRuns, lastActivity, activeWafers, processItems } from '../core/projects.js';
 import { isMask } from '../core/wafer-spec.js';
 import { PROJECT_STATUS_LABELS } from '../core/vocab.js';
@@ -15,27 +15,40 @@ import { formatAgo } from '../core/time.js';
 /** @typedef {import('../core/types.js').Project} Project */
 /** @typedef {import('../core/types.js').Run} Run */
 /** @typedef {import('../core/types.js').Tool} Tool */
+/** @typedef {import('../core/projects.js').StepState} StepState */
+
+/** Above this many steps the bar is one fill instead of a segment per step. */
+const MAX_SEGMENTS = 40;
 
 /**
- * A progress bar with its numbers for assistive technology.
- * @param {number} done
- * @param {number} total
+ * The plan's progress as a bar with a segment per step, done, in progress or
+ * to do (skipped steps are left out), with its numbers for assistive
+ * technology.
+ * @param {StepState[]} states
  * @returns {HTMLElement}
  */
-export function progressBar(done, total) {
-  const pct = total ? Math.round((done / total) * 100) : 0;
-  return h('div', {
-    class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(done),
-    'aria-label': `${done} of ${total} steps done`,
-  }, h('span', { class: 'progress-fill', style: { width: `${pct}%` } }));
+export function stepBar(states) {
+  const counted = states.filter((s) => s.state !== 'skipped');
+  const { done, total } = progress(states);
+  const active = counted.filter((s) => s.state === 'active').length;
+  const attrs = {
+    role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(done),
+    'aria-label': `${done} of ${total} steps done${active ? `, ${active} in progress` : ''}`,
+  };
+  if (total > MAX_SEGMENTS) {
+    return h('div', { ...attrs, class: 'step-bar step-bar-fill' },
+      h('span', { class: 'is-done', style: { width: `${Math.round((done / total) * 100)}%` } }));
+  }
+  return h('div', { ...attrs, class: 'step-bar' }, counted.map((s) => h('span', { class: `is-${s.state}` })));
 }
 
 /**
- * "4. Etch oxide (LAM 9400)", the next step in words, or null.
+ * "4. Etch oxide (LAM 9400)", the next step in words, or '', with the plan's
+ * progress.
  * @param {Project} p
  * @param {Run[]} runs the project's runs
  * @param {Map<string, Tool>} tools
- * @returns {{text: string, done: number, total: number}}
+ * @returns {{text: string, done: number, total: number, states: StepState[], next: StepState | null}}
  */
 export function nextStepText(p, runs, tools) {
   const states = stepStates(p, runs);
@@ -43,7 +56,7 @@ export function nextStepText(p, runs, tools) {
   const next = nextStep(states);
   const tool = next && next.step.toolId ? tools.get(next.step.toolId) : null;
   const text = next ? `${next.index + 1}. ${next.step.title}${tool ? ` (${tool.shortName || tool.name})` : ''}` : '';
-  return { text, ...prog };
+  return { text, ...prog, states, next };
 }
 
 /**
@@ -75,7 +88,7 @@ export function projectCard(p, runs, tools, o = {}) {
       h('a', { class: 'project-name project-link', href: `#/project/${encodeURIComponent(p.id)}` }, icon('project', { size: 20 }), p.name),
       p.status === 'active' ? null : badge(PROJECT_STATUS_LABELS[p.status] || p.status, p.status === 'done' ? 'ok' : 'muted')),
     p.goal ? h('span', { class: 'muted small clamp-2' }, p.goal) : null,
-    next.total ? h('span', { class: 'stack project-progress' }, progressBar(next.done, next.total),
+    next.total ? h('span', { class: 'stack project-progress' }, stepBar(next.states),
       h('span', { class: 'small' }, `${next.done} of ${next.total} steps done`,
         next.text ? h('span', { class: 'muted' }, ` · next: ${next.text}`) : null)) : null,
     h('span', { class: 'project-card-foot' }, h('span', { class: 'muted small' }, facts),
@@ -85,20 +98,24 @@ export function projectCard(p, runs, tools, o = {}) {
 }
 
 /**
- * A compact row for Home: the name, the next step and the progress.
+ * A project's progress for Home: its name (the link, stretched over the card
+ * as on Projects), the step bar, the step in progress or next, and when
+ * anything last happened.
  * @param {Project} p
  * @param {Run[]} runs every run
  * @param {Map<string, Tool>} tools
  * @returns {HTMLElement}
  */
-export function projectRow(p, runs, tools) {
+export function projectProgress(p, runs, tools) {
   const mine = projectRuns(runs, p.id);
   const next = nextStepText(p, mine, tools);
-  return listRow({
-    lead: icon('project'),
-    title: p.name,
-    subtitle: next.text ? `Next: ${next.text}` : next.total ? 'Every planned step is done' : `${mine.length} run${mine.length === 1 ? '' : 's'}`,
-    meta: next.total ? `${next.done}/${next.total}` : undefined,
-    href: `#/project/${encodeURIComponent(p.id)}`,
-  });
+  const doing = next.next?.state === 'active';
+  return h('div', { class: 'card project-card' },
+    h('span', { class: 'spread' }, h('a', { class: 'project-name project-link', href: `#/project/${encodeURIComponent(p.id)}` }, p.name),
+      next.total ? h('span', { class: 'progress-count', 'aria-hidden': 'true' }, `${next.done}/${next.total}`) : null),
+    next.total ? stepBar(next.states) : null,
+    h('span', { class: 'small' }, next.text
+      ? [h('strong', { class: [doing && 'state-active'] }, doing ? 'In progress: ' : 'Next: '), next.text]
+      : next.total ? 'Every planned step is done.' : 'No steps planned yet.'),
+    h('span', { class: 'muted small' }, `Last activity ${formatAgo(lastActivity(p, mine), Date.now())}`));
 }

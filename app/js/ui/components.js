@@ -200,7 +200,7 @@ export function listRow(o) {
 
 /**
  * @param {string} text
- * @param {'info'|'ok'|'warn'|'danger'|'muted'|'brand'} [kind]
+ * @param {'info'|'ok'|'warn'|'danger'|'muted'|'brand'|'tag'} [kind] tag: a name (a wafer, a project), not a state
  * @param {string} [iconName]
  * @returns {HTMLElement}
  */

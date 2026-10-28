@@ -2,6 +2,14 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.7.0: Clearer screens, and your projects on Home
+
+- **Your projects on Home.** Home lists your active projects, the most recently active first. Each card has a bar with a segment per step: green for done, blue for in progress, gray for to do. Under the bar are the step in progress (or the next one) and when anything last happened. Projects someone else started, shared through sync, stay on the Projects screen; Home says how many there are.
+- **Sections stand apart.** A section's title is now larger and brighter than its field labels, with a line and space above every section after the first. Field labels are quieter, so the values stand out.
+- **Less blue on blue.** In the dark theme the page, cards and fields are now graphite, each a clear step apart. Fields sit in a darker well, so they no longer look like buttons or cards. Blue stays for the app bar, actions, links and what you have chosen. The "i" buttons, icons that only decorate a row and a list row's own buttons (move, remove) are gray.
+- **Steps in colour.** In a project's plan, done steps have a green check, a step in progress a blue clock and the rest a gray flag. The project's progress bar has a segment per step. Wafer and project names on runs are gray tags, so they no longer look like states.
+- **Under the hood.** A new colour token, `--field`; the contrast test now covers fields and the step bar. `ownedBy` in `core/projects.js` decides whose a project is.
+
 ## 1.6.0: Pictures, files and GDS layouts on plan steps
 
 - **Pictures and files on every plan step.** Open a step on the project page:

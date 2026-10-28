@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   runLinks, linkFor, projectRuns, stepStates, nextStep, progress, suggestStep, activeWafers, waferText, newWafers, newStep,
-  copyPlan, cleanLinks, defaultLink, sortProjects, processItems, stacksBefore, stepWaferIds, duplicateProject, copyPlanInto,
+  copyPlan, cleanLinks, defaultLink, sortProjects, ownedBy, processItems, stacksBefore, stepWaferIds, duplicateProject, copyPlanInto,
   wafersOnStepChange, recipeOnStepChange,
 } from '../app/js/core/projects.js';
 import { travelerBlocks, travelerSheets, travelerFileBase } from '../app/js/core/project-report.js';
@@ -125,6 +125,18 @@ test('copying a plan gives new ids and no marks; projects sort active first', ()
   const ps = [{ ...project, id: 'a', status: 'done' }, { ...project, id: 'b', status: 'paused' }, { ...project, id: 'c', startedAt: '2026-09-01T00:00:00Z' },
     { ...project, id: 'd' }];
   assert.deepEqual(sortProjects(/** @type {any} */ (ps)).map((p) => p.id), ['d', 'c', 'b', 'a']);
+});
+
+test('a project is the person’s when its author is them, by the words of the name', () => {
+  const p = (/** @type {string} */ author) => /** @type {any} */ ({ author });
+  assert.equal(ownedBy(p('Nick Reynolds'), 'Nick Reynolds'), true);
+  assert.equal(ownedBy(p('nick  reynolds'), 'Nick Reynolds'), true, 'case and spaces aside');
+  assert.equal(ownedBy(p('Nick'), 'Nick Reynolds'), true, 'a first name is the start of the full one');
+  assert.equal(ownedBy(p('Nick Reynolds'), 'Nick'), true);
+  assert.equal(ownedBy(p('Ana Ruiz'), 'Nick Reynolds'), false);
+  assert.equal(ownedBy(p('Nicky'), 'Nick'), false, 'whole words only');
+  assert.equal(ownedBy(p(''), 'Nick'), true, 'a project without an author');
+  assert.equal(ownedBy(p('Ana Ruiz'), ''), true, 'a person who has not given a name');
 });
 
 test('project records normalise and validate; runs carry project links and steps', () => {

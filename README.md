@@ -13,7 +13,7 @@ Lookup uses no AI and no external services. The same input always gives the same
 
 | Screen | What it does |
 |---|---|
-| Home | Log run, Look up, Open runs (with a count) and Tool event; Quick capture and Projects; your active projects with their next step; the latest runs; a backup reminder; install help. |
+| Home | Log run, Look up, Open runs (with a count) and Tool event; Quick capture and Projects; your active projects, each with a bar of its steps (done, in progress, to do) and the step in progress or next; the latest runs; a backup reminder; install help. |
 | Log run | Tool (your tools first) → template → a form prefilled from your last run with that tool; tap the tool's name for its page, ☆ to make it one of your tools, **?** for its LNF wiki pages. **LNF recipes** fill the form from one of the tool's wiki recipes, every step of a multi-step recipe included. A run can have several steps. The projects it belongs to, which wafers and which planned step. Gas lines not in use fold away. Run timer with a countdown, camera photos, notes (dictation works). Save open, or complete if you already have results. |
 | Quick capture | Tool, photo and note (and its projects) only, saved as a draft to fill in later. |
 | Open runs | Drafts and open runs, oldest first, each saying what it waits for: a post measurement, its time, results. |
@@ -24,7 +24,7 @@ Lookup uses no AI and no external services. The same input always gives the same
 | Tool detail | Tool info, a chart of each template's main result over time and against each input that varies, event timeline, the tool's LNF recipes, and its runs with their key settings. |
 | Tool event | What happened (PM, clean, seasoning, target or gas change, fault), then the tool. Major events reduce the weight of earlier runs. |
 | History | Search notes, recipe and tags; filter by tool, project, status, template, material and dates. A sortable table on a wide screen. Export everything from here too. |
-| Projects | Projects in folders and subfolders: each with its progress, next step and wafers. Select several to move or delete them; rename, move or delete a folder. |
+| Projects | Projects in folders and subfolders: each with its progress, next step and wafers, and Copy for the next batch. Select several to copy, move or delete them; rename, move or delete a folder. |
 | Project | A batch of wafers from start to finish: its wafers and masks with their types, the plan with each step's state, its compatibility notes and **Log this step**, each step's pictures and files and, on an exposure step, its GDS layout, the traveler of every run its wafers went through (for all wafers or one), PDF and Excel export, move to a folder, copy for the next batch, pause, finish, delete. |
 | Settings | Your name and device, my tools, tools (with what each takes, for the plan's checks) and the template editor, materials, wafer types (yours and the LNF store's), backup, export everything (Excel, CSV or PDF), import, sync, storage, theme, lookup tuning (under Advanced), version, updates and the source code. |
 | Install on your devices | The app's address as a QR code for phones, and install steps for iPhone, Android, Windows and Mac. |

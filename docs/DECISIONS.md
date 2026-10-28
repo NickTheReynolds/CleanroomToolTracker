@@ -458,3 +458,11 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
     - **Copies keep the layout and share its file** on this device: the next batch writes the same mask. A stored file is deleted only when no live step names it (`fileInUse`), so removing the layout from one project leaves the copy's file. Removing a layout or a file has Undo.
 132. **Edits made meanwhile survive.** The project page saves its changes (done, skipped, checked) on the project as stored now, not as the page loaded it, so pictures added in the open sheet are kept. The plan editor does not edit pictures, files or layouts: it takes them from the stored project when it saves.
     - **Older versions** keep the new step fields when they sync or save a project, as they keep any field they do not know.
+
+## Clearer screens (version 1.7.0)
+
+133. **Colour means state or action; layers differ by lightness.** People found the screens mushed together: in the dark theme the page, cards and fields were close shades of one blue, and section titles were dimmer than field labels.
+    - **Titles.** A section's title is the largest text after the screen's own; field labels are smaller and muted.
+    - **Layers.** The dark theme is graphite, with a clear step between page, card and field (a darker well).
+    - **Colour.** Brand blue marks the app bar, actions, links, what is chosen and work in progress. Green marks done, amber a Check and red Not allowed. Names (wafers, projects) are neutral tags.
+134. **Home shows the person's own active projects.** A project is theirs when its author is them, comparing the words of the names ("Nick" is "Nick Reynolds"); a project or a person without a name counts. Other people's projects, from a shared sync, stay on Projects.

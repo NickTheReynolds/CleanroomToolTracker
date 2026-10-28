@@ -1,20 +1,21 @@
 // @ts-check
 /**
- * Home: a greeting with this week's count, four big buttons, the active
- * projects with their next step, the latest runs, a backup reminder and
- * install help.
+ * Home: a greeting with this week's count, four big buttons, the person's
+ * active projects with their progress and next step, the latest runs, a
+ * backup reminder and install help.
  */
 import { h, append } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { button, linkButton, section, emptyState, toast, errorText } from '../ui/components.js';
 import { refresh } from '../router.js';
 import { runList, lookups } from '../ui/run-list.js';
-import { projectRow } from '../ui/project-card.js';
+import { projectProgress } from '../ui/project-card.js';
 import { canInstall, promptInstall, onInstallChange, isIos, isStandalone } from '../ui/pwa.js';
 import {
   openRuns, recentRuns, listRuns, listTools, listTemplates, getSettings, saveSettings, listProjects,
 } from '../data/repo.js';
 import { DEFAULTS, UI } from '../config.js';
+import { ownedBy, projectRuns, lastActivity } from '../core/projects.js';
 import { ageDays, formatDay, formatAgo, toMs } from '../core/time.js';
 
 /**
@@ -113,10 +114,14 @@ export async function render(ctx) {
   ]);
   const weekAgo = Date.now() - 7 * 86400000;
   const week = runs.filter((r) => toMs(r.startedAt) >= weekAgo).length;
-  // Run rows name every project a run is in; the Active projects section lists only the active ones.
+  // Run rows name every project a run is in; Your projects lists only this person's active ones, the latest
+  // active first (other people's, from a shared sync, are a tap away).
   const L = lookups(tools, templates, allProjects);
   const projects = allProjects.filter((p) => p.status === 'active');
-  const shownProjects = projects.slice(0, UI.HOME_PROJECTS);
+  const latest = (/** @type {import('../core/types.js').Project} */ p) => toMs(lastActivity(p, projectRuns(runs, p.id)));
+  const own = projects.filter((p) => ownedBy(p, settings.userName)).sort((a, b) => latest(b) - latest(a));
+  const shownProjects = own.slice(0, UI.HOME_PROJECTS);
+  const others = projects.length - own.length;
 
   const installSlot = h('div');
   const showInstall = () => {
@@ -151,9 +156,12 @@ export async function render(ctx) {
     h('div', { class: 'home-secondary' },
       linkButton('Quick capture', '#/capture', { icon: 'bolt' }),
       linkButton(projects.length ? `Projects (${projects.length})` : 'Projects', '#/projects', { icon: 'project' })),
+    projects.length ? section(settings.userName ? 'Your projects' : 'Active projects',
+      shownProjects.length ? h('div', { class: 'stack' }, shownProjects.map((p) => projectProgress(p, runs, L.tools)))
+        : h('p', { class: 'muted' }, 'None of the active projects is yours.'),
+      own.length > shownProjects.length || others ? h('div', { class: 'row-end' }, linkButton(others
+        ? `All projects (${others} more by others)` : `All ${own.length} of yours`, '#/projects', { kind: 'ghost' })) : null) : null,
     settings.sync && settings.sync.repo ? syncRow(settings.sync) : null,
-    shownProjects.length ? section('Active projects', h('div', { class: 'list' }, shownProjects.map((p) => projectRow(p, runs, L.tools))),
-      projects.length > shownProjects.length ? h('div', { class: 'row-end' }, linkButton(`All ${projects.length} active projects`, '#/projects')) : null) : null,
     section('Recent runs', recent.length
       ? runList(recent, L)
       : emptyState('No runs yet. Tap Log run to record your first one.')),

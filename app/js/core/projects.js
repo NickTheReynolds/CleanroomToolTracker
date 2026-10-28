@@ -516,6 +516,22 @@ export function lastActivity(project, runs) {
 }
 
 /**
+ * Whether a project is this person's: its author is them. Names compare by
+ * their words, case aside, and the shorter may be the start of the longer
+ * ("Nick" is "Nick Reynolds"); a project or person without a name counts.
+ * @param {Project} project
+ * @param {string} userName
+ * @returns {boolean}
+ */
+export function ownedBy(project, userName) {
+  const words = (/** @type {unknown} */ s) => String(s || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const [a, b] = [words(project.author), words(userName)];
+  if (!a.length || !b.length) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  return short.every((w, i) => w === long[i]);
+}
+
+/**
  * Projects in display order: active first, then paused, then done; newest
  * start first within each group.
  * @param {readonly Project[]} projects

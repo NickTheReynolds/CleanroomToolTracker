@@ -12,7 +12,7 @@ import { icon } from '../ui/icons.js';
 import {
   button, linkButton, section, segmented, badge, emptyState, listRow, toast, confirmDialog, sheet, errorText,
 } from '../ui/components.js';
-import { progressBar } from '../ui/project-card.js';
+import { stepBar } from '../ui/project-card.js';
 import { exportFlow } from '../ui/export-flow.js';
 import { chooseFolder } from '../ui/folder-picker.js';
 import { lookups, primaryText } from '../ui/run-list.js';
@@ -129,8 +129,8 @@ export async function render(ctx) {
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     p.wafers.length ? h('div', { class: 'row-wrap', role: 'list', 'aria-label': 'Wafers' }, p.wafers.map((w) => h('span', { role: 'listitem' }, badge(
       `${w.label}${w.status === 'active' ? '' : ` · ${String(WAFER_STATUS_LABELS[w.status] || w.status).toLowerCase()}`}`,
-      w.status === 'scrapped' ? 'danger' : w.status === 'done' ? 'ok' : 'brand')))) : null,
-    prog.total ? h('div', { class: 'stack' }, progressBar(prog.done, prog.total),
+      w.status === 'scrapped' ? 'danger' : w.status === 'done' ? 'ok' : 'tag')))) : null,
+    prog.total ? h('div', { class: 'stack' }, stepBar(states),
       h('p', { class: 'small muted' }, `${prog.done} of ${prog.total} planned steps done`)) : null);
 
   /** Mark a step's note as checked, or not, on the stored project. */
@@ -164,7 +164,12 @@ export async function render(ctx) {
   // The plan: a row per step; a row opens the step's sheet.
   const stepSheet = (/** @type {StepState} */ s) => {
     const st = STATE[s.state];
-    const mark = async (/** @type {Partial<PlanStep>} */ patch, /** @type {string} */ message, /** @type {Parameters<typeof toast>[1]} */ how) => {
+    /**
+     * @param {Partial<PlanStep>} patch
+     * @param {string} message
+     * @param {Parameters<typeof toast>[1]} [how] the toast's action
+     */
+    const mark = async (patch, message, how) => {
       sh.close();
       await save((cur) => ({ steps: cur.steps.map((x) => (x.id === s.step.id ? { ...x, ...patch } : x)) }), message, how);
     };
@@ -223,7 +228,7 @@ export async function render(ctx) {
       const open = s.state === 'done' || s.state === 'skipped' ? [] : openNotes(checks.byStep.get(s.step.id) || [], s.step);
       const n = (s.step.attachments || []).length;
       return listRow({
-        lead: icon(STATE[s.state].icon),
+        lead: icon(STATE[s.state].icon, { class: `state-${s.state}` }),
         title: `${s.index + 1}. ${s.step.title}`,
         subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text,
           s.step.gds ? `GDS ${s.step.gds.name}` : '', n ? `${n} picture${n === 1 ? '' : 's'} or file${n === 1 ? '' : 's'}` : '']

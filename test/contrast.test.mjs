@@ -42,12 +42,16 @@ const TEXT = [
   ['brand', 'bg'], ['brand', 'surface'], ['brand-ink', 'brand'], ['header-ink', 'header-bg'], ['danger-ink', 'danger'],
   ['warn', 'warn-soft'], ['warn', 'bg'], ['ok', 'ok-soft'], ['brand', 'brand-soft'], ['danger', 'danger-soft'],
   ['danger', 'surface'], ['text', 'warn-soft'], ['text', 'brand-soft'], ['text-2', 'surface-2'], ['bg', 'text'],
+  // What is typed in a field, and its label beside it.
+  ['text', 'field'], ['text-2', 'field'],
   // Tool category colours (icons and accents) on every surface.
   ...['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']
     .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg']]),
 ];
 /** UI component pairs that must reach 3:1 (WCAG 1.4.11). */
-const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface']];
+const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface'],
+  // A field's edge, and the step bar on a card: done and in-progress segments, a to-do segment's edge (border-strong on surface).
+  ['border-strong', 'field'], ['ok', 'surface'], ['brand', 'surface']];
 
 for (const [name, selector] of /** @type {[string, RegExp][]} */ ([
   ['light', /:root\s*\{/], ['dark', /:root\[data-theme="dark"\]\s*\{/],

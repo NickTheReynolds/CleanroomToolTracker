@@ -131,7 +131,7 @@ export const HELP = Object.freeze({
   projectGoal: 'What the project should achieve, in a sentence or two. It is shown on the project page and in the traveler.',
   projectStarted: 'When work on the wafers began. It orders the projects; the traveler takes its dates from the runs.',
   projectSubstrate: 'What the project’s wafers are, for example Si ⟨100⟩ or fused silica. It shows in the traveler, and the checks use it as the material of any wafer whose type gives none.',
-  projectStatus: 'Active projects are offered when you log a run, and their next step shows on Home. Paused: kept, but not offered. Finished: the work is done; you can reopen it.',
+  projectStatus: 'Active projects are offered when you log a run, and yours show on Home with their progress and next step. Paused: kept, but not offered. Finished: the work is done; you can reopen it.',
   projectWaferFilter: 'All wafers: every run of the project. One wafer: only the runs that processed it, which is that wafer’s path through the process.',
   planStepTitle: 'What happens in this step, in a few words, for example “Etch the oxide” or “Strip the resist”.',
   planStepTool: 'The tool the step runs on. Log this step then opens that tool, with the step’s template and recipe ready.',

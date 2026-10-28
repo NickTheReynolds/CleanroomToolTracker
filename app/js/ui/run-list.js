@@ -107,7 +107,7 @@ export function runRow(run, L, opts = {}) {
   if (opts.waiting) badges.push(badge(opts.waiting, 'muted', 'flag'));
   for (const l of runLinks(run)) {
     const p = L.projects.get(l.projectId);
-    if (p) badges.push(badge(p.name, 'brand', 'project'));
+    if (p) badges.push(badge(p.name, 'tag', 'project'));
   }
   const tool = L.tools.get(run.toolId);
   return listRow({

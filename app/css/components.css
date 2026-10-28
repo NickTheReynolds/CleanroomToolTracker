@@ -52,10 +52,12 @@
 .section { display: flex; flex-direction: column; gap: 10px; }
 .section-head { display: flex; align-items: center; gap: 2px; }
 .section-title {
-  font-size: 1rem;
-  font-weight: 750;
-  color: var(--text-2);
+  font-size: 1.14rem;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  color: var(--text);
 }
+.view > .section ~ .section { margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--border); }
 
 /* Home */
 .home-grid {
@@ -153,7 +155,7 @@
 }
 .list > .row:last-child { border-bottom: 0; }
 .row:hover { background: var(--surface-2); }
-.row-lead { flex: none; color: var(--brand); }
+.row-lead { flex: none; color: var(--text-2); }
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .row-title { font-weight: 650; }
 .row-sub { font-size: 0.88rem; color: var(--text-2); }
@@ -173,6 +175,9 @@
 .row-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .row-meta { flex: none; font-size: 0.92rem; color: var(--text-2); text-align: right; }
 .row-chev { flex: none; color: var(--text-2); }
+/* A row's own icon buttons (move, remove) are muted until used, so a long list is not a column of blue. */
+.list .btn-ghost.btn-icon { color: var(--text-2); }
+.list .btn-ghost.btn-icon:hover { color: var(--brand); }
 
 /* Badges and chips */
 .badge {
@@ -190,7 +195,8 @@
 .badge .icon { width: 14px; height: 14px; }
 .badge-muted { color: var(--text-2); }
 .badge-brand { color: var(--brand); background: var(--brand-soft); }
-.badge-info { color: var(--brand); }
+.badge-info { color: var(--brand); background: var(--brand-soft); }
+.badge-tag { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
 .badge-ok { color: var(--ok); background: var(--ok-soft); }
 .badge-warn { color: var(--warn); background: var(--warn-soft); }
 .badge-danger { color: var(--danger); background: var(--danger-soft); }
