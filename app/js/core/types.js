@@ -11,7 +11,7 @@
  * @property {string} deviceId
  * @property {string} author
  *
- * @typedef {'etch'|'deposition'|'thermal'|'litho'|'metrology'|'other'} Category
+ * @typedef {'etch'|'deposition'|'thermal'|'litho'|'wet'|'metrology'|'other'} Category
  *
  * @typedef {BaseRecord & {
  *   name: string, shortName: string, category: Category, kind: 'process'|'metrology',

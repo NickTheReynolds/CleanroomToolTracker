@@ -58,6 +58,7 @@ const PATHS = {
   move: ['M3 7a1.5 1.5 0 0 1 1.5-1.5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z', 'M9 14h6', 'M13 11.5l2.5 2.5-2.5 2.5'],
   ban: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M5.6 5.6l12.8 12.8'],
   wafer: ['M7 4.8A8.5 8.5 0 1 0 17 4.8', 'M7 4.8h10'],
+  flask: ['M9 3h6', 'M10 3v6.5L5.2 18a2 2 0 0 0 1.7 3h10.2a2 2 0 0 0 1.7-3L14 9.5V3', 'M7.5 15h9'],
 };
 
 /**
@@ -84,7 +85,7 @@ export function icon(name, opts = {}) {
 
 /** The icon of each tool category. */
 export const CATEGORY_ICONS = Object.freeze(/** @type {Record<string, string>} */ ({
-  etch: 'bolt', deposition: 'layers', thermal: 'thermo', litho: 'sun', metrology: 'ruler', other: 'wrench',
+  etch: 'bolt', deposition: 'layers', thermal: 'thermo', litho: 'sun', wet: 'flask', metrology: 'ruler', other: 'wrench',
 }));
 
 /**

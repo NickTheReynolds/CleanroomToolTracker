@@ -2,6 +2,18 @@
 
 One entry per milestone (spec Section 16).
 
+## 2.1.0: Tool pages in their colours, steps tracked by the project, time on tools
+
+The owner's notes after 2.0.0.
+
+- **The ribbon's arrows work.** The strip under the app bar on a step's page is now a pager: **‹** and **›** open the step before and the step after, in plan order, and the project's name opens the project. (Before, the whole strip opened the project and its chevron looked like a "next" that did nothing of the kind.)
+- **A tool's page is its own, top to bottom.** The app bar and the phone's status bar take a deep shade of the tool category's colour, the page a wash of it, the ribbon a rule in it, every section title a tab in it, and the banner's photo is larger. Cards, fields and buttons keep their colours, so blue still means a link or an action. Leave the step and the app is blue again.
+- **Wet benches in their own category.** The acid, base, solvent, clean and wet-etch benches are **Wet bench** tools now, with a flask icon and their own colour, in every picker, on Settings → Tools and on their pages. Installed copies move them on their next start; a category you chose yourself for one stays.
+- **Steps are tracked by the project, not by Open runs.** A run on a live project's step no longer counts on Home's Open runs tile; Open runs lists such runs apart, under **Steps in progress**, each a tap from its step's page (a run whose project or step is gone is an ordinary open run again). The project page says what each step in progress waits for ("needs post measurement"). After a measurement you land back on the step, not on the run; a double tap on Start makes one run, not two.
+- **Reopen.** A finished or failed project has **Reopen project** in its bar. On a done step's page, **Reopen step** makes the step to do again (its run becomes open, or its mark made by hand is cleared) and reopens a finished project with it. A finished step keeps **Measure**.
+- **Time on tools.** The project page adds up the run time its runs report and estimates what the steps left will take, from your past runs on each step's tool and template, weighed as Look up weighs runs (recent runs first, a step's recipe first). A step with no such runs is counted apart. Worked out afresh whenever the page opens.
+- **Under the hood.** A device on 2.0 or before refuses a synced tool it does not know as a wet bench until it updates (it keeps its own copy meanwhile); every device moves the benches with the same stamp, so no one's later edit is overwritten. Fifteen new colour tokens per theme (a bar and a wash for each of the seven categories, and the wet category's own colour), all in the contrast test.
+
 ## 2.0.0: Projects first
 
 The first round of alpha testing asked for one frame instead of two (runs beside projects), each tool as its own page inside the project, timers on several tools at once, a way to change past runs, and quieter screens. This release reshapes the app around the project.

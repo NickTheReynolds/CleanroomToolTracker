@@ -134,6 +134,7 @@ export const HELP = Object.freeze({
   projectStatus: 'Active projects are offered when you log a run, and yours show on Home with their progress and next step. Paused: kept, but not offered. Finished: the work is done, and its card turns green. Failed: it ended without working out, and its card turns red. You can reopen either.',
   projectFailReason: 'What went wrong, in a sentence or two, for example “the wafer cracked in the bonder”. It shows under the project’s name and in the traveler, so the next batch can avoid it.',
   projectWaferFilter: 'All wafers: every run of the project. One wafer: only the runs that processed it, which is that wafer’s path through the process.',
+  projectTime: 'The run time the runs in this project report, added up (each run’s time field and its other steps’). Then how long the steps still to do will likely take, from your past complete runs on each step’s tool and template: recent runs count most, runs from before a major tool event less, and runs with the step’s recipe alone when there are any. A step with no such runs has no estimate. Updated each time the page opens.',
   planStepTitle: 'What happens in this step, in a few words, for example “Etch the oxide” or “Strip the resist”.',
   planStepTool: 'The tool the step runs on. The step’s page then shows that tool, and Start this step saves a run on it with the step’s template and recipe.',
   planStepRecipe: 'The recipe to use, as named on the tool. Choosing one of the tool’s LNF recipes fills in its name.',

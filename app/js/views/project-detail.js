@@ -11,7 +11,7 @@
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import {
-  button, linkButton, section, segmented, badge, emptyState, listRow, toast, confirmDialog, sheet, errorText, labelRow,
+  button, linkButton, section, segmented, badge, emptyState, listRow, toast, confirmDialog, sheet, errorText, labelRow, helpToggle,
 } from '../ui/components.js';
 import { textInput } from '../ui/fields.js';
 import { stepBar, statusBadge, statusTone } from '../ui/project-card.js';
@@ -23,8 +23,11 @@ import { stepHref } from '../ui/step-flow.js';
 import { navigate, refresh } from '../router.js';
 import {
   getProject, getRecord, saveProject, deleteProject, restoreProject, listRuns, listTools, listTemplates, listFolders,
-  moveProjects, restoreChange, listProjects,
+  moveProjects, restoreChange, listProjects, allMeasurements, listEvents, getSettings,
 } from '../data/repo.js';
+import { waitingFor } from '../core/derive.js';
+import { projectTime } from '../core/plan-time.js';
+import { withTuning } from '../config.js';
 import { makeTravelerExport } from '../data/backup.js';
 import { planChecks } from '../data/plan-checks.js';
 import { openNotes, notesSummary } from '../ui/compat-notes.js';
@@ -32,7 +35,7 @@ import { stepStates, nextStep, progress, projectRuns, linkFor, waferText, projec
 import { specShort } from '../core/wafer-spec.js';
 import { folderTree, pathText, projectFolderId } from '../core/folders.js';
 import { WAFER_STATUS_LABELS, STATUS_LABELS } from '../core/vocab.js';
-import { formatDay, formatDateTime } from '../core/time.js';
+import { formatDay, formatDateTime, formatDuration } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
 /** @typedef {import('../core/types.js').Project} Project */
@@ -83,8 +86,8 @@ export async function render(ctx) {
         : linkButton('All projects', '#/projects'))]);
     return;
   }
-  const [runs, tools, templates, folders, projects] = await Promise.all([
-    listRuns(), listTools({ includeArchived: true }), listTemplates(), listFolders(), listProjects(),
+  const [runs, tools, templates, folders, projects, measurements, events, settings] = await Promise.all([
+    listRuns(), listTools({ includeArchived: true }), listTemplates(), listFolders(), listProjects(), allMeasurements(), listEvents(), getSettings(),
   ]);
   const checks = await planChecks(p, tools, templates);
   if (!ctx.isCurrent()) return;
@@ -100,6 +103,13 @@ export async function render(ctx) {
   const toolName = (/** @type {string | null} */ tid) => {
     const t = tid ? L.tools.get(tid) : null;
     return t ? t.shortName || t.name : '';
+  };
+  // What a step in progress waits for ("needs post measurement"), from its latest run.
+  const waitingText = (/** @type {import('../core/projects.js').StepState} */ s) => {
+    const r = s.runs[s.runs.length - 1];
+    if (!r || s.state !== 'active') return '';
+    const why = waitingFor(r, r.templateId ? L.templates.get(r.templateId) : null, measurements.filter((m) => m.runId === r.id));
+    return why === 'ready to mark complete' ? 'ready to finish' : why;
   };
   /**
    * Save a change to the project as stored now.
@@ -125,11 +135,28 @@ export async function render(ctx) {
     `started ${formatDay(p.startedAt, Date.now())}`,
     p.endedAt ? `${shown === 'failed' ? 'failed' : 'finished'} ${formatDay(p.endedAt, Date.now())}` : '',
   ].filter(Boolean).join(' · ');
+  // Time on tools: what the project's runs report so far, and what the steps left will likely take, from past runs
+  // on their tools (worked out afresh each time this page opens).
+  const templateOf = (/** @type {PlanStep} */ step) => {
+    const own = templates.filter((t) => t.toolId === step.toolId);
+    return own.find((t) => t.id === step.templateId) || own.find((t) => t.id === L.tools.get(step.toolId || '')?.defaultTemplateId) || own[0] || null;
+  };
+  const time = projectTime(p, states, templateOf, { runs, tools, events, templates, cfg: withTuning(settings.tuning) });
+  const plural = (/** @type {number} */ n, /** @type {string} */ w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+  const timeHelp = helpToggle('Time on tools', HELP.projectTime);
+  const timeLine = time.timedRuns || time.stepsLeft ? h('div', { class: 'stack time-line' },
+    h('div', { class: 'label-help' }, h('p', { class: 'small' }, icon('timer', { size: 16 }), ' ',
+      time.timedRuns ? [h('strong', null, formatDuration(time.soFar)), ` on tools so far (${plural(time.timedRuns, 'run')}${time.untimedRuns ? `, ${time.untimedRuns} without a time` : ''})`]
+        : 'No run time reported yet',
+      time.stepsLeft ? [' · ', time.remaining === null ? `${plural(time.stepsLeft, 'step')} left, no past runs to go on`
+        : [h('strong', null, time.remaining < 60 ? 'little more' : `about ${formatDuration(time.remaining)} more`), ` for the ${plural(time.stepsLeft, 'step')} left`,
+          time.estimated < time.stepsLeft ? ` (${time.stepsLeft - time.estimated} without past runs to go on)` : '']] : null), timeHelp.btn), timeHelp.note) : null;
   const header = h('div', { class: ['card stack project-head', statusTone(p)] },
     h('div', { class: 'spread' }, h('h2', { class: 'project-title' }, p.name), statusBadge(p)),
     shown === 'failed' && p.failReason ? h('p', { class: 'pre-line' }, h('strong', null, 'What went wrong: '), p.failReason) : null,
     p.goal ? h('p', { class: 'pre-line' }, p.goal) : null,
     prog.total ? h('div', { class: 'stack' }, stepBar(states), h('p', { class: 'small muted' }, `${prog.done} of ${prog.total} planned steps done`)) : null,
+    timeLine,
     h('p', { class: 'small muted' }, facts, folderId ? [' · in ', h('a', { href: `#/folder/${encodeURIComponent(folderId)}` }, pathText(tree, folderId))] : null));
   const timers = timerStrip({ tools: L.tools, projects: L.projects, filter: (r) => !!linkFor(r, id) });
 
@@ -137,7 +164,7 @@ export async function render(ctx) {
   const nextCard = next ? h('div', { class: 'card stack next-step' },
     h('span', { class: 'label' }, next.state === 'active' ? 'In progress' : 'Next step'),
     h('strong', { class: 'next-step-title' }, `${next.index + 1}. ${next.step.title}`),
-    h('p', { class: 'muted small' }, [toolName(next.step.toolId), next.step.recipe].filter(Boolean).join(' · ') || 'No tool chosen for this step.'),
+    h('p', { class: 'muted small' }, [toolName(next.step.toolId), next.step.recipe, waitingText(next)].filter(Boolean).join(' · ') || 'No tool chosen for this step.'),
     linkButton(next.state === 'active' ? 'Continue' : 'Start this step', stepHref(id, next.step.id), { kind: 'primary', icon: next.state === 'active' ? 'play' : 'chevron', big: true }))
     : null;
 
@@ -153,7 +180,7 @@ export async function render(ctx) {
       return listRow({
         lead: icon(STATE[s.state].icon, { class: `state-${s.state}` }),
         title: `${s.index + 1}. ${s.step.title}`,
-        subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text,
+        subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text, waitingText(s),
           n ? `${n} picture${n === 1 ? '' : 's'} or file${n === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '),
         badges: open.some((x) => x.severity === 'stop') ? [badge('Not allowed', 'danger', 'ban')] : open.length ? [badge('Check', 'warn', 'alert')] : [],
         href: stepHref(id, s.step.id),
@@ -280,7 +307,9 @@ export async function render(ctx) {
   /** @type {Node[]} */
   const bar = [linkButton('Edit plan', `#/project/${encodeURIComponent(id)}/edit`, { icon: 'edit' })];
   if (next) bar.push(linkButton(next.state === 'active' ? 'Continue' : 'Start', stepHref(id, next.step.id), { kind: 'primary', icon: next.state === 'active' ? 'play' : 'chevron' }));
-  else if (p.status !== 'done') bar.push(linkButton('Log run', logHref(p, null, live), { kind: 'primary', icon: 'plus' }));
+  // A finished or failed project reopens from here (and from any of its steps' pages); a paused one resumes.
+  else if (p.status !== 'active') bar.push(button(p.status === 'paused' ? 'Resume' : 'Reopen project', { kind: 'primary', icon: p.status === 'paused' ? 'play' : 'undo', onClick: () => save((cur) => statusPatch(cur, 'active'), 'The project is active again.') }));
+  else bar.push(linkButton('Log run', logHref(p, null, live), { kind: 'primary', icon: 'plus' }));
   ctx.setActions(bar);
   return () => timers.dispose();
 }

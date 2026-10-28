@@ -71,16 +71,20 @@ async function upgradeSeed() {
   const meta = await getOne('meta', 'seedVersion');
   const current = meta ? meta.value : 1;
   if (current >= SEED_VERSION) return;
-  const { planSeedUpgrade } = await import('./seed-upgrade.js');
+  const { planSeedUpgrade, movedRecord } = await import('./seed-upgrade.js');
   const [tools, templates, runs, events, settings] = await Promise.all([
     getAll('tools'), getAll('templates'), getAll('runs'), getAll('events'), getSettings(),
   ]);
   const plan = planSeedUpgrade({ tools, templates, runs, events, materials: settings.materials }, current);
   const archived = plan.archiveIds.map((id) => prepareUpdate('tools', { ...tools.find((t) => t.id === id), active: false }, settings));
   const grown = plan.withFields.map((t) => prepareUpdate('templates', t, settings));
+  // Tools a later seed put in another category (the wet benches, seed 5) move with a fixed stamp while untouched, so
+  // every device writes the same record and no device's later edit is overwritten.
+  const movedTools = plan.recategorised.tools.map((t) => movedRecord('tools', t, settings));
+  const movedTemplates = plan.recategorised.templates.map((t) => movedRecord('templates', t, settings));
   await withTx(['tools', 'templates', 'meta'], 'readwrite', (tx) => {
-    for (const t of [...plan.tools, ...archived]) tx.objectStore('tools').put(t);
-    for (const t of [...plan.templates, ...grown]) tx.objectStore('templates').put(t);
+    for (const t of [...plan.tools, ...archived, ...movedTools]) tx.objectStore('tools').put(t);
+    for (const t of [...plan.templates, ...grown, ...movedTemplates]) tx.objectStore('templates').put(t);
     tx.objectStore('meta').put({ key: 'settings', value: { ...settings, materials: plan.materials } });
     tx.objectStore('meta').put({ key: 'seedVersion', value: SEED_VERSION });
   });

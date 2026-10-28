@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedForType, knownTypes, gasKey, gasFields } from '../app/js/data/seed-types.js';
-import { lnfSeedRecords, seedMaterials, planSeedUpgrade, mergeMaterialLists } from '../app/js/data/seed-upgrade.js';
+import { lnfSeedRecords, seedMaterials, planSeedUpgrade, mergeMaterialLists, movedRecord, RECATEGORISE_TIME } from '../app/js/data/seed-upgrade.js';
 import { LNF_TOOLS, LNF_MATERIALS, LNF_MATERIAL_WORDS, LNF_EXTRA_TEMPLATES, LNF_ADDED_FIELDS } from '../app/js/data/seed-lnf.js';
 import { seedRecords, SEED_MATERIALS, SEED_TIME } from '../app/js/data/seed-tools.js';
 import { validateRecord, validateTemplateBody, SEED_VERSION } from '../app/js/data/schema.js';
@@ -108,7 +108,7 @@ test('upgrading an example-seeded database adds the LNF set without overwriting 
   assert.ok(!plan.archiveIds.includes(renamedTool.id), 'renamed example tool kept');
   assert.equal(plan.materials[0], 'Custom film');
   assert.ok(plan.materials.includes('LiNbO3 (bulk)'));
-  assert.equal(SEED_VERSION, 4);
+  assert.equal(SEED_VERSION, 5);
   const again = planSeedUpgrade({ ...existing, tools: [...existing.tools, ...plan.tools], templates: [...existing.templates, ...plan.templates] });
   assert.deepEqual(again.tools, []);
   assert.deepEqual(again.templates, []);
@@ -129,6 +129,60 @@ test('upgrading a version-2 database adds only the second chamber template', () 
   assert.deepEqual(trimmed.materials, ['Si', 'SiO2 (thermal)', 'My film']);
   assert.deepEqual(trimmed.archiveIds, []);
   assert.ok(planSeedUpgrade({ ...v2, materials: ['Si'] }, 1).materials.length > 50, 'from seed 1 the LNF materials arrive');
+});
+
+test('upgrading a version-4 database moves the wet benches to their own category, a category the person chose kept', () => {
+  const lnf = lnfSeedRecords();
+  const wetTypes = { 'wet-etch': 'etch', 'wet-bench': 'other', 'solvent-clean': 'other' };
+  const wet = LNF_TOOLS.filter((t) => t[3] in wetTypes);
+  assert.equal(wet.length, 17, 'the wet benches in the list (DECISIONS.md 149)');
+  assert.ok(lnf.tools.filter((t) => t.category === 'wet').length === wet.length, 'a fresh install seeds them as wet');
+  assert.ok(lnf.templates.filter((t) => t.processType === 'wet').length > 0);
+  // A version-4 database: the categories and process types the earlier seed gave them.
+  const typeOf = new Map(LNF_TOOLS.map((t) => [t[0], t[3]]));
+  const tools = lnf.tools.map((t) => (typeOf.get(t.id) in wetTypes ? { ...t, category: wetTypes[typeOf.get(t.id)] } : t));
+  const templates = lnf.templates.map((t) => (t.processType === 'wet' ? { ...t, processType: 'other' } : t));
+  const chosen = tools.find((t) => typeOf.get(t.id) === 'wet-bench');
+  const deleted = tools.find((t) => typeOf.get(t.id) === 'solvent-clean');
+  const renamed = tools.find((t) => typeOf.get(t.id) === 'wet-etch');
+  const archived = tools.find((t) => typeOf.get(t.id) === 'wet-bench' && t !== chosen);
+  const EDIT = '2026-10-21T00:00:00.000Z';
+  const v4 = {
+    tools: tools.map((t) => (t === chosen ? { ...t, category: 'litho' } : t === deleted ? { ...t, deleted: true }
+      : t === renamed ? { ...t, name: 'My EDP bench', shortName: 'EDP', updatedAt: EDIT, deviceId: 'phone' }
+        : t === archived ? { ...t, active: false, halfLifeDays: 90, updatedAt: EDIT, deviceId: 'phone' } : t)),
+    templates, runs: [], events: [], materials: seedMaterials(),
+  };
+  const plan = planSeedUpgrade(v4, 4);
+  assert.deepEqual(plan.tools, []);
+  assert.deepEqual(plan.templates, []);
+  assert.deepEqual(plan.withFields, []);
+  assert.equal(plan.recategorised.tools.length, wet.length - 2, 'every wet bench but the one chosen and the deleted one');
+  assert.ok(plan.recategorised.tools.every((t) => t.category === 'wet' && validateRecord('tools', t).length === 0));
+  assert.ok(!plan.recategorised.tools.some((t) => t.id === chosen.id || t.id === deleted.id));
+  // The record is the stored one, moved: a rename, an archive and a half-life stay.
+  for (const stored of [renamed, archived]) {
+    const moved = plan.recategorised.tools.find((t) => t.id === stored.id);
+    assert.deepEqual(moved, { ...v4.tools.find((t) => t.id === stored.id), category: 'wet' });
+  }
+  // How a moved record is stored: an untouched seed copy takes the fixed seed-5 stamp and keeps "seed" as its device,
+  // so every device writes the same record; an edited copy is saved as this person's edit.
+  const who = { deviceId: 'tablet', userName: 'Ana' };
+  const untouched = movedRecord('tools', plan.recategorised.tools.find((t) => t.updatedAt === SEED_TIME), who);
+  assert.equal(untouched.updatedAt, RECATEGORISE_TIME);
+  assert.equal(untouched.deviceId, 'seed');
+  assert.equal(untouched.category, 'wet');
+  assert.ok(RECATEGORISE_TIME > SEED_TIME);
+  const edited = movedRecord('tools', plan.recategorised.tools.find((t) => t.id === renamed.id), who);
+  assert.equal(edited.deviceId, 'tablet');
+  assert.ok(edited.updatedAt > EDIT);
+  assert.equal(edited.name, 'My EDP bench');
+  assert.equal(plan.recategorised.templates.length, lnf.templates.filter((t) => t.processType === 'wet').length);
+  assert.ok(plan.recategorised.templates.every((t) => t.processType === 'wet' && validateRecord('templates', t).length === 0));
+  // A wet-etch template keeps its etch process type; nothing moves from seed 5 on, nor twice.
+  assert.ok(!plan.recategorised.templates.some((t) => t.name === 'Wet etch'));
+  assert.deepEqual(planSeedUpgrade(v4, 5).recategorised, { tools: [], templates: [] });
+  assert.deepEqual(planSeedUpgrade({ ...v4, tools: lnf.tools, templates: lnf.templates }, 4).recategorised, { tools: [], templates: [] });
 });
 
 test('upgrading a version-3 database gives the µPG 501 template its Expose time field, edits kept', () => {

@@ -7,19 +7,43 @@
  * - 3: a second template for tools with two kinds of process (the
  *   Plasmatherm 790's PECVD chamber).
  * - 4: an Expose time field on the Heidelberg µPG 501's template.
+ * - 5: the wet benches (acid, base, solvent, clean and wet etch) in their
+ *   own category, "wet"; their seeded templates' process type with them.
  *
  * Fresh installs get the latest version directly. planSeedUpgrade() works
  * out what an older database needs. It adds records that are missing and
- * fields a seeded template gained, never replaces a record (so renames and
- * template edits survive), and archives example tools that were never used
- * or edited.
+ * fields a seeded template gained, moves tools a later seed put in another
+ * category unless the person chose one, never replaces a record (so renames
+ * and template edits survive), and archives example tools that were never
+ * used or edited.
  */
 import { seedForType } from './seed-types.js';
 import { LNF_TOOLS, LNF_MATERIALS, LNF_EXTRA_TEMPLATES, LNF_ADDED_FIELDS } from './seed-lnf.js';
 import { SEED_TIME, SEED_AUTHOR, SEED_TOOLS, SEED_MATERIALS } from './seed-tools.js';
+import { normalizeRecord } from './schema.js';
+import { prepareUpdate } from './records.js';
 import { normText } from '../core/vocab.js';
 
 export { SEED_VERSION } from './schema.js';
+
+/** When seed 5 moved the wet benches: the stamp every device puts on an untouched seed copy it moves. */
+export const RECATEGORISE_TIME = '2026-10-28T00:00:00.000Z';
+
+/**
+ * A tool or template moved to another category, as it is stored. A copy no
+ * one has edited keeps "seed" as its device and takes RECATEGORISE_TIME, so
+ * every device writes the very same record and an edit made anywhere after
+ * that date wins over it; a copy the person had edited is saved as their
+ * edit, since it differs from device to device anyway.
+ * @param {string} store "tools" or "templates"
+ * @param {any} rec the moved record
+ * @param {{deviceId: string, userName: string}} who
+ * @returns {any}
+ */
+export function movedRecord(store, rec, who) {
+  if (rec.updatedAt === SEED_TIME) return normalizeRecord(store, { ...rec, updatedAt: RECATEGORISE_TIME });
+  return prepareUpdate(store, rec, who);
+}
 
 /**
  * The LNF tools and their templates as complete records.
@@ -79,12 +103,17 @@ export function seedMaterials() {
  * the person removed stay removed. A step that gave a seeded template a new
  * field (LNF_ADDED_FIELDS) adds it to the stored copy, edits and all, unless
  * that copy is deleted or already has a field with the same key or label.
+ * Seed 5 put the wet benches in their own category: a stored tool of those
+ * types still in the category the earlier seed gave it moves there (one the
+ * person chose stays), and its seeded template's process type follows when
+ * it was "other".
  * @param {{tools: any[], templates: any[], runs: any[], events: any[], materials: string[]}} existing
  *   all records, tombstones included, plus the current materials list
  * @param {number} [from] the database's seed version (meta.seedVersion)
- * @returns {{tools: any[], templates: any[], withFields: any[], archiveIds: string[], materials: string[]}}
+ * @returns {{tools: any[], templates: any[], withFields: any[], archiveIds: string[], materials: string[],
+ *   recategorised: {tools: any[], templates: any[]}}}
  *   new tool and template records to add, stored templates with their new fields (to save as edits),
- *   example tools to archive, and the materials list
+ *   example tools to archive, the materials list, and stored tools and templates moved to a new category (edits)
  */
 export function planSeedUpgrade(existing, from = 1) {
   const toolIds = new Set(existing.tools.map((t) => t.id));
@@ -111,7 +140,31 @@ export function planSeedUpgrade(existing, from = 1) {
     withFields: [...withFields.values()],
     archiveIds,
     materials: from >= 2 ? [...existing.materials] : mergeMaterialLists(existing.materials, LNF_MATERIALS),
+    recategorised: from >= 5 ? { tools: [], templates: [] } : recategorise(existing),
   };
+}
+
+/** Tool types that moved to the wet category in seed 5, with the category the earlier seeds gave them. */
+const WET_TYPES = /** @type {Record<string, string>} */ ({ 'wet-etch': 'etch', 'wet-bench': 'other', 'solvent-clean': 'other' });
+
+/**
+ * The stored wet-bench tools still in their old category, moved to "wet",
+ * and their seeded templates still of process type "other", moved too.
+ * @param {{tools: any[], templates: any[]}} existing
+ * @returns {{tools: any[], templates: any[]}}
+ */
+function recategorise(existing) {
+  const tools = [];
+  const templates = [];
+  for (const [toolId, templateId, , type] of LNF_TOOLS) {
+    const prev = WET_TYPES[type];
+    if (!prev) continue;
+    const tool = existing.tools.find((t) => t.id === toolId);
+    if (tool && !tool.deleted && tool.category === prev) tools.push({ ...tool, category: 'wet' });
+    const tpl = existing.templates.find((t) => t.id === templateId);
+    if (tpl && !tpl.deleted && tpl.processType === 'other' && seedForType(type).template?.processType === 'wet') templates.push({ ...tpl, processType: 'wet' });
+  }
+  return { tools, templates };
 }
 
 /**

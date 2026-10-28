@@ -52,6 +52,31 @@ export function linkFor(run, projectId) {
 }
 
 /**
+ * Whether the run carries out a plan step of a project (2.1). Such a run is
+ * tracked by its step: the project page and Home show the step in progress
+ * until the run is complete, so Open runs counts only the runs outside
+ * project steps. With the live projects, only a step still in a live
+ * project's plan counts: a run whose project or step is gone is a loose run.
+ * @param {Partial<Run> | null | undefined} run
+ * @param {ReadonlyMap<string, Project>} [projects] live projects by id
+ * @returns {boolean}
+ */
+export function onProjectStep(run, projects) {
+  return !!stepLink(run, projects);
+}
+
+/**
+ * The run's first link to a plan step (of a live project, when the projects
+ * are given), or null.
+ * @param {Partial<Run> | null | undefined} run
+ * @param {ReadonlyMap<string, Project>} [projects] live projects by id
+ * @returns {ProjectLink | null}
+ */
+export function stepLink(run, projects) {
+  return runLinks(run).find((l) => !!l.stepId && (!projects || !!projects.get(l.projectId)?.steps.some((st) => st.id === l.stepId))) || null;
+}
+
+/**
  * A project's live runs in process order (oldest first): its traveler.
  * @param {readonly Run[]} runs
  * @param {string} projectId

@@ -9,7 +9,7 @@ import { ensureSeeded, getSettings, saveSettings } from './data/repo.js';
 import { matchRoute, parseHash, consumeReplace, track, canGoBack, parentOf } from './router.js';
 import { h, clear } from './ui/dom.js';
 import { toast, button, linkButton, errorText } from './ui/components.js';
-import { initShell, setTitle, setBack, setActions, setNavActive } from './ui/shell.js';
+import { initShell, setTitle, setBack, setActions, setNavActive, setTone } from './ui/shell.js';
 import { applyTheme } from './ui/theme.js';
 import { initPwa, requestPersist, desktopWrapper } from './ui/pwa.js';
 import { initTimers, loadTimers } from './ui/timers.js';
@@ -52,6 +52,7 @@ async function render() {
   window.scrollTo(0, 0);
   if (!match) {
     setTitle('Not found');
+    setTone(null);
     root.append(errorBox('This page does not exist.'));
     return;
   }
@@ -61,12 +62,16 @@ async function render() {
   } catch (err) {
     if (my === token) {
       setTitle('Unavailable');
+      setTone(null);
       root.append(errorBox('This screen could not load.', err));
     }
     return;
   }
   if (my !== token) return;
   const isCurrent = () => my === token;
+  // A tool's page colours the whole app for its category; any other screen gets the blue back once it has drawn
+  // (not before, so a redraw of a tool's page does not blink blue).
+  let toned = false;
   try {
     const c = await mod.render({
       params: match.params,
@@ -76,6 +81,7 @@ async function render() {
       isCurrent,
       setTitle: (t) => { if (isCurrent()) setTitle(t); },
       setActions: (nodes) => { if (isCurrent()) setActions(nodes); },
+      setTone: (category) => { if (isCurrent()) { toned = !!category; setTone(category); } },
     });
     if (!isCurrent()) {
       if (typeof c === 'function') await c();
@@ -86,8 +92,10 @@ async function render() {
     console.error(err);
     if (!isCurrent()) return;
     setActions([]);
+    toned = false;
     clear(root).append(errorBox('Something went wrong on this screen.', err));
   }
+  if (isCurrent() && !toned) setTone(null);
   if (isCurrent() && (!document.activeElement || document.activeElement === document.body)) {
     main.focus({ preventScroll: true });
   }

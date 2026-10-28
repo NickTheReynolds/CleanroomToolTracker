@@ -4,7 +4,8 @@
  * enum values in storage order plus their display labels.
  */
 
-export const TOOL_CATEGORIES = Object.freeze(['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']);
+/** Tool categories. "wet" (2.1): the wet benches, acid, base, solvent and clean, and wet etch. */
+export const TOOL_CATEGORIES = Object.freeze(['etch', 'deposition', 'thermal', 'litho', 'wet', 'metrology', 'other']);
 export const TOOL_KINDS = Object.freeze(['process', 'metrology']);
 export const PROCESS_TYPES = TOOL_CATEGORIES;
 export const RUN_STATUSES = Object.freeze(['draft', 'open', 'complete']);
@@ -32,7 +33,7 @@ export const WAFER_STATUS_LABELS = Object.freeze({ active: 'In process', done: '
 
 /** @type {Readonly<Record<string, string>>} */
 export const CATEGORY_LABELS = Object.freeze({
-  etch: 'Etch', deposition: 'Deposition', thermal: 'Thermal', litho: 'Lithography',
+  etch: 'Etch', deposition: 'Deposition', thermal: 'Thermal', litho: 'Lithography', wet: 'Wet bench',
   metrology: 'Metrology', other: 'Other',
 });
 

@@ -266,10 +266,23 @@ async function main() {
     await page.waitFor(`document.querySelector('.run-editor') && document.querySelector('.timer-card')
       && [...document.querySelectorAll('.project-links .pick-btn[aria-pressed="true"]')].some((b) => b.textContent.includes('Smoke batch'))`);
     await snap('step-page');
-    await t(`document.querySelector('.project-strip').click()`);
-    await page.waitFor(`document.querySelector('.next-step') && __t.text().includes('In progress')`);
+    // The whole page is coloured for the tool's category, status bar included; the ribbon pages through the plan.
+    await page.waitFor(`document.documentElement.dataset.toolCategory === 'etch'
+      && document.querySelector('meta[name="theme-color"]').getAttribute('content') === getComputedStyle(document.documentElement).getPropertyValue('--header-bg').trim()`);
+    await t(`document.querySelector('.strip-step[aria-label^="Next step"]').click()`);
+    await page.waitFor(`location.hash.includes('/step/') && document.querySelector('.project-strip-step') && document.querySelector('.project-strip-step').textContent === '2 of 3'`);
+    await t(`document.querySelector('.strip-step[aria-label^="Previous step"]').click()`);
+    await page.waitFor(`document.querySelector('.project-strip-step') && document.querySelector('.project-strip-step').textContent === '1 of 3' && document.querySelector('.run-editor')`);
+    await t(`document.querySelector('.project-strip-link').click()`);
+    await page.waitFor(`document.querySelector('.next-step') && __t.text().includes('In progress') && !document.documentElement.dataset.toolCategory`);
     await t(`[...document.querySelectorAll('details.fold')].find((d) => d.textContent.includes('Traveler')).open = true`);
     await page.waitFor(`document.querySelectorAll('.traveler-no').length === 1`);
+    // The step's run is the project's business: Open runs lists it apart, and Home's tile does not count it.
+    await page.evaluate(`location.hash = '#/open'`);
+    await page.waitFor(`[...document.querySelectorAll('.section-title')].some((x) => x.textContent === 'Steps in progress (1)') && document.querySelector('.list .row[href*="/step/"]')`);
+    await checkLabels('open-runs');
+    await page.evaluate(`location.hash = '#/'`);
+    await page.waitFor(`document.querySelector('.home-grid') && !document.querySelector('.home-btn .count')`);
     await page.evaluate(`location.hash = '#/projects'`);
     await page.waitFor(`__t.btn('New folder')`);
     await t(`__t.click('New folder')`);

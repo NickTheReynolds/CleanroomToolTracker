@@ -18,7 +18,7 @@ import {
   openRuns, recentRuns, listRuns, listTools, listTemplates, getSettings, saveSettings, listProjects,
 } from '../data/repo.js';
 import { DEFAULTS, UI } from '../config.js';
-import { ownedBy, projectRuns, lastActivity } from '../core/projects.js';
+import { ownedBy, projectRuns, lastActivity, onProjectStep } from '../core/projects.js';
 import { ageDays, formatDay, formatAgo, toMs } from '../core/time.js';
 
 /**
@@ -124,9 +124,12 @@ export async function render(ctx) {
   ]);
   const weekAgo = Date.now() - 7 * 86400000;
   const week = runs.filter((r) => toMs(r.startedAt) >= weekAgo).length;
+  const L = lookups(tools, templates, allProjects);
+  // Runs on a live project's steps are the project's business (its card says which step is in progress); Open runs
+  // counts the rest.
+  const loose = open.filter((r) => !onProjectStep(r, L.projects));
   // Run rows name every project a run is in; Your projects lists only this person's active ones, the latest
   // active first (other people's, from a shared sync, are a tap away).
-  const L = lookups(tools, templates, allProjects);
   const projects = allProjects.filter((p) => p.status === 'active');
   const latest = (/** @type {import('../core/types.js').Project} */ p) => toMs(lastActivity(p, projectRuns(runs, p.id)));
   const own = projects.filter((p) => ownedBy(p, settings.userName)).sort((a, b) => latest(b) - latest(a));
@@ -156,7 +159,7 @@ export async function render(ctx) {
   const more = own.length > shownProjects.length || others;
 
   append(ctx.root, [
-    hello(settings.userName, week, open.length),
+    hello(settings.userName, week, loose.length),
     recent.length ? backupBanner(settings.lastExportAt) : null,
     installSlot,
     hintSlot,
@@ -171,7 +174,7 @@ export async function render(ctx) {
     h('nav', { class: 'home-grid', 'aria-label': 'Other tasks' },
       homeButton('Look up', '#/lookup', 'search'),
       homeButton('Log a run', '#/log', 'plus'),
-      homeButton('Open runs', '#/open', 'list', { count: open.length }),
+      homeButton('Open runs', '#/open', 'list', { count: loose.length }),
       homeButton('Tool event', '#/event', 'wrench')),
     h('p', { class: 'muted small home-aside' }, 'In a hurry? ', h('a', { href: '#/capture' }, 'Quick capture'), ' saves a tool, photo and note to fill in later.'),
     settings.sync && settings.sync.repo ? syncRow(settings.sync) : null,

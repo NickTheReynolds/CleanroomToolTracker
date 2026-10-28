@@ -17,11 +17,13 @@ import { createAutosave } from '../ui/autosave.js';
 import { navigate } from '../router.js';
 import {
   getMeasurement, getRun, getTool, getTemplate, listTools, listMeasurements, allMeasurements, saveMeasurement,
-  deleteMeasurement, restoreMeasurement, getDraft, saveDraft, clearDraft, getSettings, getRecord,
+  deleteMeasurement, restoreMeasurement, getDraft, saveDraft, clearDraft, getSettings, getRecord, getProject,
 } from '../data/repo.js';
 import { LNF_TOOLS } from '../data/seed-lnf.js';
 import { pointStats, toCanonical, unitsFor } from '../core/derive.js';
 import { defaultMetrologyTool, fillPoints } from '../core/metrology.js';
+import { stepRoute } from '../core/attachments.js';
+import { stepLink } from '../core/projects.js';
 import { fmtNum, fmtValue, parseNumberList } from '../core/format.js';
 import { MEASUREMENT_KINDS, KIND_LABELS } from '../core/vocab.js';
 import { HELP } from '../core/app-help.js';
@@ -82,6 +84,11 @@ export async function render(ctx) {
     listMeasurements(run.id), allMeasurements(), getSettings(),
   ]);
   ctx.setTitle(existing ? 'Edit measurement' : 'Add measurement');
+  // Where Save, Cancel and Delete go: the page of the project step the run carries out, while that project and step
+  // exist, else the run's own page.
+  const link = stepLink(run);
+  const linked = link ? await getProject(link.projectId) : null;
+  const back = linked && linked.steps.some((s) => s.id === link?.stepId) ? stepRoute(run) || `/run/${run.id}` : `/run/${run.id}`;
   const metrology = tools.filter((t) => t.kind === 'metrology' && (t.active || t.id === existing?.metrologyToolId));
   /** @type {Map<string, number>} */
   const lastUsed = new Map();
@@ -314,7 +321,7 @@ export async function render(ctx) {
       const f = key ? template?.fields.find((x) => x.key === key) : null;
       const v = key && after ? after.results[key] : undefined;
       toast(typeof v === 'number' && f ? `Saved. ${f.label}: ${fmtValue(v, f.unit)}.` : 'Measurement saved.');
-      navigate(`/run/${run.id}`, { replace: true });
+      navigate(back, { replace: true });
     } catch (err) {
       autosave.schedule();
       toast(errorText(err), { kind: 'error' });
@@ -328,8 +335,8 @@ export async function render(ctx) {
         autosave.cancel();
         await clearDraft(draftKey);
         await deleteMeasurement(existing.id);
-        navigate(`/run/${run.id}`, { replace: true });
-        toast('Measurement deleted.', { action: { label: 'Undo', fn: async () => { await restoreMeasurement(existing.id); navigate(`/run/${run.id}`); } } });
+        navigate(back, { replace: true });
+        toast('Measurement deleted.', { action: { label: 'Undo', fn: async () => { await restoreMeasurement(existing.id); navigate(back); } } });
       },
     }) : button('Cancel', {
       onClick: async () => {
@@ -337,7 +344,7 @@ export async function render(ctx) {
         if (typed && !await confirmDialog({ title: 'Discard this measurement?', message: 'The points you typed will be lost.', confirmLabel: 'Discard', danger: true })) return;
         autosave.cancel();
         await clearDraft(draftKey);
-        navigate(`/run/${run.id}`, { replace: true });
+        navigate(back, { replace: true });
       },
     }),
     button('Save', { kind: 'primary', icon: 'check', onClick: save }),

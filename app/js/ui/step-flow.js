@@ -8,6 +8,7 @@
  */
 import { h } from './dom.js';
 import { button, linkButton, sheet, toast, errorText } from './components.js';
+import { navigate } from '../router.js';
 import { stepAfter, progress } from '../core/projects.js';
 
 /** @typedef {import('../core/types.js').Project} Project */
@@ -45,7 +46,15 @@ export function nextStepPrompt(o) {
           try { await o.onFinishProject?.(); } catch (err) { toast(errorText(err), { kind: 'error' }); }
         },
       }) : null,
-      o.filesHref ? linkButton('Add picture or file', o.filesHref, { icon: 'camera' }) : null,
+      // From the step's own page the address only gains "?files=1": replace the entry, so Back does not land on
+      // the same page twice.
+      o.filesHref ? button('Add picture or file', {
+        icon: 'camera',
+        onClick: () => {
+          const href = /** @type {string} */ (o.filesHref);
+          navigate(href.replace(/^#/, ''), { replace: location.hash.split('?')[0] === href.split('?')[0] });
+        },
+      }) : null,
       next ? null : linkButton('Back to the project', `#/project/${encodeURIComponent(o.project.id)}`, { icon: 'project' }),
       button('Stay here', { kind: 'ghost', onClick: () => sh.close() })),
   ]);

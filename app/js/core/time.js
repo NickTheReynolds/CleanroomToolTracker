@@ -130,6 +130,20 @@ export function formatMmSs(seconds) {
 }
 
 /**
+ * A length of time in words, for totals: "45 s", "12 min", "1 h 05 min",
+ * "26 h 10 min". Rounded to the minute from a minute up.
+ * @param {number} seconds
+ * @returns {string}
+ */
+export function formatDuration(seconds) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `${mins} min`;
+  return `${Math.floor(mins / 60)} h ${pad2(mins % 60)} min`;
+}
+
+/**
  * Parse a duration typed as "m:ss", "h:mm:ss" or a bare number of seconds.
  * Minutes may exceed 59 ("75:00"). Returns null for anything else.
  * @param {string} text

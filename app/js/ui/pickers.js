@@ -121,7 +121,7 @@ export function toolTiles(o) {
 }
 
 /** Display order of tool categories. */
-const CATEGORY_ORDER = ['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other'];
+const CATEGORY_ORDER = ['etch', 'deposition', 'thermal', 'litho', 'wet', 'metrology', 'other'];
 
 /**
  * @param {{templates: Template[], defaultId?: string | null, onPick: (t: Template) => void}} o

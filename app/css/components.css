@@ -382,6 +382,7 @@
 [data-category="thermal"] { --cat-color: var(--cat-thermal); }
 [data-category="litho"] { --cat-color: var(--cat-litho); }
 [data-category="metrology"] { --cat-color: var(--cat-metrology); }
+[data-category="wet"] { --cat-color: var(--cat-wet); }
 [data-category="other"] { --cat-color: var(--cat-other); }
 .cat-icon { flex: none; color: var(--cat-color, var(--text-2)); }
 .tile[data-category] { border-left: 6px solid var(--cat-color); }

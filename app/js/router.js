@@ -14,6 +14,7 @@
  * @property {() => boolean} isCurrent false once the person navigated away
  * @property {(title: string) => void} setTitle ignored after navigating away
  * @property {(nodes: Node[]) => void} setActions fills the sticky bottom bar
+ * @property {(category: string | null) => void} setTone colours the page for a tool's category; the app's blue otherwise
  */
 
 /** @typedef {{render: (ctx: ViewContext) => Promise<(() => void | Promise<void>) | void>}} ViewModule */

@@ -31,6 +31,7 @@
   --cat-thermal: #b4232a;
   --cat-litho: #7a2dc0;
   --cat-metrology: #0b7350;
+  --cat-wet: #a8257e;
   --cat-other: #4b5866;
   --cat-ink: #ffffff;
   --shadow: 0 1px 2px rgb(16 24 32 / 0.08), 0 2px 10px rgb(16 24 32 / 0.06);
@@ -77,6 +78,7 @@
     --cat-thermal: #fca5a5;
     --cat-litho: #d4b0fd;
     --cat-metrology: #6ee0b2;
+    --cat-wet: #f3a4dc;
     --cat-other: #c3ccd7;
     --cat-ink: #0b0e11;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -113,10 +115,52 @@
   --cat-thermal: #fca5a5;
   --cat-litho: #d4b0fd;
   --cat-metrology: #6ee0b2;
+  --cat-wet: #f3a4dc;
   --cat-other: #c3ccd7;
   --cat-ink: #0b0e11;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
 }
+
+/* A tool's page (2.1): the app bar and the status bar behind it take the category's deep shade, and the page a
+   wash of it; cards, fields, buttons and badges keep their colours, so blue still means a link or an action.
+   Light shades first, the dark ones under each theme block; the contrast test checks every pair. */
+:root {
+  --cat-etch-bar: #8a3006; --cat-etch-tint: #f8efe9;
+  --cat-deposition-bar: #2a378f; --cat-deposition-tint: #edf0fa;
+  --cat-thermal-bar: #82143d; --cat-thermal-tint: #f8edf1;
+  --cat-litho-bar: #5b1f95; --cat-litho-tint: #f2eef9;
+  --cat-wet-bar: #6b1550; --cat-wet-tint: #faf1f7;
+  --cat-metrology-bar: #0c5651; --cat-metrology-tint: #e8f3f1;
+  --cat-other-bar: #3b4652; --cat-other-tint: #eef1f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cat-etch-bar: #3a1a0a; --cat-etch-tint: #17100b;
+    --cat-deposition-bar: #1b2144; --cat-deposition-tint: #0d1019;
+    --cat-thermal-bar: #43122a; --cat-thermal-tint: #170c12;
+    --cat-litho-bar: #2f1a4d; --cat-litho-tint: #120c19;
+    --cat-wet-bar: #3a0f2c; --cat-wet-tint: #170c13;
+    --cat-metrology-bar: #0b3734; --cat-metrology-tint: #0a1413;
+    --cat-other-bar: #262d35; --cat-other-tint: #0b0e11;
+  }
+}
+:root[data-theme="dark"] {
+  --cat-etch-bar: #3a1a0a; --cat-etch-tint: #17100b;
+  --cat-deposition-bar: #1b2144; --cat-deposition-tint: #0d1019;
+  --cat-thermal-bar: #43122a; --cat-thermal-tint: #170c12;
+  --cat-litho-bar: #2f1a4d; --cat-litho-tint: #120c19;
+  --cat-wet-bar: #3a0f2c; --cat-wet-tint: #170c13;
+  --cat-metrology-bar: #0b3734; --cat-metrology-tint: #0a1413;
+  --cat-other-bar: #262d35; --cat-other-tint: #0b0e11;
+}
+/* As specific as the theme blocks (:root[data-theme]) and after them, so a tool's page wins in the dark theme too. */
+:root[data-tool-category="etch"] { --header-bg: var(--cat-etch-bar); --bg: var(--cat-etch-tint); }
+:root[data-tool-category="deposition"] { --header-bg: var(--cat-deposition-bar); --bg: var(--cat-deposition-tint); }
+:root[data-tool-category="thermal"] { --header-bg: var(--cat-thermal-bar); --bg: var(--cat-thermal-tint); }
+:root[data-tool-category="litho"] { --header-bg: var(--cat-litho-bar); --bg: var(--cat-litho-tint); }
+:root[data-tool-category="wet"] { --header-bg: var(--cat-wet-bar); --bg: var(--cat-wet-tint); }
+:root[data-tool-category="metrology"] { --header-bg: var(--cat-metrology-bar); --bg: var(--cat-metrology-tint); }
+:root[data-tool-category="other"] { --header-bg: var(--cat-other-bar); --bg: var(--cat-other-tint); }
 
 *, *::before, *::after { box-sizing: border-box; }
 

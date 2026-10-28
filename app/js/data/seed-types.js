@@ -134,8 +134,8 @@ const BUILDERS = {
     exact('etchant', 'Etchant'), note('ratio', 'Mix / concentration'), num('temp', 'Temperature', '°C', 1, 2), time({ weight: 0 }),
     ...ETCH_OUT,
   ], RATE_DERIVED),
-  'wet-bench': () => t('Wet process', 'other', null, [exact('chemistry', 'Chemistry'), num('temp', 'Temperature', '°C', 1, 2), time()]),
-  'solvent-clean': () => t('Solvent clean', 'other', null, [note('sequence', 'Solvents / sequence'), time()]),
+  'wet-bench': () => t('Wet process', 'wet', null, [exact('chemistry', 'Chemistry'), num('temp', 'Temperature', '°C', 1, 2), time()]),
+  'solvent-clean': () => t('Solvent clean', 'wet', null, [note('sequence', 'Solvents / sequence'), time()]),
   pecvd: (g) => t('PECVD film', 'deposition', 'depRate', [
     num('rfPower', 'RF power', 'W', 5, 20), num('pressure', 'Pressure', 'mTorr', 10, 100), num('temp', 'Temperature', '°C', 5, 25),
     ...gasFields(g.length ? g : ['SiH4', 'N2O', 'NH3', 'N2']), time(),
@@ -257,9 +257,10 @@ const NO_TEMPLATE = new Set(['sem', 'optical-microscope', 'xrd']);
 const METROLOGY_TYPES = new Set(['ellipsometer', 'reflectometer', 'profilometer', 'optical-profilometer', 'sem', 'afm',
   'optical-microscope', 'four-point-probe', 'xrd', 'stress']);
 
-/** App category for each tool type. */
+/** App category for each tool type. The wet benches (acid, base, solvent, clean, wet etch) have their own since seed 5. */
 const CATEGORY_BY_TYPE = /** @type {Record<string, string>} */ ({
-  'icp-etch': 'etch', 'rie-etch': 'etch', drie: 'etch', 'xef2-etch': 'etch', 'ion-mill': 'etch', 'plasma-clean': 'etch', 'wet-etch': 'etch',
+  'icp-etch': 'etch', 'rie-etch': 'etch', drie: 'etch', 'xef2-etch': 'etch', 'ion-mill': 'etch', 'plasma-clean': 'etch',
+  'wet-etch': 'wet', 'wet-bench': 'wet', 'solvent-clean': 'wet',
   pecvd: 'deposition', lpcvd: 'deposition', sputter: 'deposition', 'ebeam-evaporation': 'deposition', 'thermal-evaporation': 'deposition',
   ald: 'deposition', electroplating: 'deposition', parylene: 'deposition',
   'oxidation-furnace': 'thermal', 'anneal-furnace': 'thermal', rta: 'thermal',

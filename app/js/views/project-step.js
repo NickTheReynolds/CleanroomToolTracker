@@ -92,6 +92,7 @@ export async function render(ctx) {
   ctx.setTitle(tool ? tool.shortName || tool.name : `Step ${s.index + 1}`);
   ctx.root.classList.add('step-page');
   ctx.root.dataset.category = tool ? tool.category : 'other';
+  ctx.setTone(tool ? tool.category : 'other');
   const active = p.status === 'active';
 
   /**
@@ -111,6 +112,27 @@ export async function render(ctx) {
   };
   const mark = (/** @type {Partial<PlanStep>} */ patch, /** @type {string} */ message) => saveStep(
     (cur) => ({ steps: cur.steps.map((x) => (x.id === stepId ? { ...x, ...patch } : x)) }), message);
+  // Reopen the project itself (finished or failed, or paused): its steps can be started again.
+  const reopenProject = () => saveStep((cur) => statusPatch(cur, 'active'), 'The project is active again.');
+  /**
+   * Reopen a done step (2.1): every complete run linked to it becomes open again (the shown one through the editor,
+   * any other directly) and a mark made by hand is cleared, so the step is to do or in progress again; a project that
+   * had ended becomes active again with it. The page is then drawn afresh from what is stored.
+   */
+  const reopenStep = async () => {
+    try {
+      const cur = editor ? editor.current() : null;
+      if (cur && cur.status === 'complete' && editor && !await editor.setStatus('open')) return;
+      for (const r of s.runs) if (r.status === 'complete' && r.id !== cur?.id) await saveRun({ ...r, status: 'open' });
+      const now = (await getProject(id)) || p;
+      await saveProject({ ...now, ...(active ? {} : statusPatch(now, 'active')), steps: now.steps.map((x) => (x.id === stepId ? { ...x, doneAt: null } : x)) });
+      const going = s.runs.some((r) => r.status === 'complete') || !!(cur && cur.status === 'complete') || s.runs.some((r) => r.status !== 'complete');
+      toast(`${active ? 'The step' : 'The project is active again and the step'} is ${going ? 'in progress' : 'to do'} again.`);
+      refresh();
+    } catch (err) {
+      toast(errorText(err), { kind: 'error' });
+    }
+  };
   const star = async (/** @type {boolean} */ on) => {
     if (!tool) return;
     const mine = new Set((await getSettings()).myTools || []);
@@ -119,14 +141,31 @@ export async function render(ctx) {
     toast(on ? `${tool.shortName || tool.name} is now one of your tools.` : `${tool.shortName || tool.name} is no longer one of your tools.`);
   };
 
-  // The project's name stays in view as the page scrolls; the banner names the step and the tool.
-  const strip = h('a', { class: 'project-strip', href: `#/project/${encodeURIComponent(id)}` },
-    icon('project', { size: 20 }), h('span', { class: 'project-strip-name' }, p.name),
-    h('span', { class: 'project-strip-step' }, `Step ${s.index + 1} of ${p.steps.length}`), icon('chevron', { size: 18 }));
+  // The ribbon stays in view as the page scrolls: the project's name (a link to its page) and a pager through the
+  // plan in order, so the step before and the step after are one tap away (2.1; before, the whole ribbon opened the
+  // project and its chevron read as a "next" that did nothing of the kind). At an end the arrow's place stays empty.
+  const STATE_WORD = { done: ', done', active: ', in progress', skipped: ', skipped', todo: '' };
+  const pager = (/** @type {'prev' | 'next'} */ dir) => {
+    const t = states[s.index + (dir === 'next' ? 1 : -1)] || null;
+    if (!t) return h('span', { class: 'strip-step is-off', 'aria-hidden': 'true' });
+    return h('a', {
+      class: 'strip-step', href: stepHref(id, t.step.id),
+      'aria-label': `${dir === 'next' ? 'Next' : 'Previous'} step: ${t.index + 1}. ${t.step.title}${STATE_WORD[t.state]}`,
+    }, icon(dir === 'next' ? 'chevron' : 'back'));
+  };
+  const strip = h('nav', { class: 'project-strip', 'aria-label': 'Project and its steps' },
+    h('a', { class: 'project-strip-link', href: `#/project/${encodeURIComponent(id)}`, 'aria-label': `${p.name}: open the project` },
+      icon('project', { size: 20 }), h('span', { class: 'project-strip-name' }, p.name)),
+    pager('prev'),
+    h('span', { class: 'project-strip-step' }, `${s.index + 1} of ${p.steps.length}`),
+    pager('next'));
+  // The badge follows the run as the editor has it now (a finish, a reopen, a timer started or stopped).
   const stateBadge = () => {
-    const st = STATE[s.state];
-    const t = run ? runTimer(run) : null;
-    return badge(s.state === 'done' && s.doneAt ? `Done ${formatDay(s.doneAt, Date.now())}` : t ? `Timer ${timerText(t, Date.now())}` : st.text, st.kind, st.icon);
+    const cur = editor ? editor.current() : run;
+    const now = cur ? stepStates(p, runs.map((r) => (r.id === cur.id ? cur : r))).find((x) => x.step.id === stepId) || s : s;
+    const st = STATE[now.state];
+    const t = cur ? runTimer(cur) : null;
+    return badge(now.state === 'done' && now.doneAt ? `Done ${formatDay(now.doneAt, Date.now())}` : t ? `Timer ${timerText(t, Date.now())}` : st.text, st.kind, st.icon);
   };
   /** @type {import('../ui/run-editor.js').RunEditor | null} */
   let editor = null;
@@ -163,9 +202,12 @@ export async function render(ctx) {
       action: askButtons(n.materials, (name) => chooseMaterialKind({ name, onSaved: () => refresh() })),
     })))) : null;
 
-  // Start: a run for this step, prefilled from the last run on the tool, with the step's recipe and wafers.
+  // Start: a run for this step, prefilled from the last run on the tool, with the step's recipe and wafers. One run
+  // per tap, however many Start buttons the page has and however fast the thumb.
+  let starting = false;
   const start = async () => {
-    if (!tool || !stepTemplate) return;
+    if (!tool || !stepTemplate || starting) return;
+    starting = true;
     try {
       let d = blankDraft({ runId: uuid(), toolId: tool.id, templateId: stepTemplate.id, now: new Date().toISOString() });
       const last = await lastRunFor(tool.id, stepTemplate.id);
@@ -175,6 +217,7 @@ export async function render(ctx) {
       toast(run ? 'A new run was started for this step.' : 'Step started. Check the recipe and inputs, then time the run.');
       refresh();
     } catch (err) {
+      starting = false;
       toast(errorText(err), { kind: 'error' });
     }
   };
@@ -200,11 +243,11 @@ export async function render(ctx) {
         })))) : null,
       h('div', { class: 'row-wrap' },
         run ? startButton(false) : null,
-        step.doneAt ? button('Undo “done”', { icon: 'undo', onClick: () => mark({ doneAt: null }, 'The step is no longer marked done.') })
+        s.state === 'done' && !(run && run.status === 'complete') ? button('Reopen step', { icon: 'undo', onClick: reopenStep })
           : s.state !== 'done' ? button('Mark done without a run', { icon: 'check', onClick: () => mark({ doneAt: new Date().toISOString(), skipped: false }, 'Step marked done.') }) : null,
         step.skipped ? button('Don’t skip', { icon: 'undo', onClick: () => mark({ skipped: false }, 'The step is back in the plan.') })
           : s.state === 'todo' ? button('Skip this step', { icon: 'minus', onClick: () => mark({ skipped: true }, 'Step skipped.') }) : null),
-      h('p', { class: 'muted small' }, 'A step is done when a complete run in this project is linked to it, or when you mark it done.')));
+      h('p', { class: 'muted small' }, 'A step is done when a complete run in this project is linked to it, or when you mark it done. Reopen step makes it to do again, and reopens a finished project with it.')));
 
   if (run) {
     editor = runEditor({
@@ -236,13 +279,16 @@ export async function render(ctx) {
   const drawActions = () => {
     const cur = editor ? editor.current() : null;
     if (!cur) {
-      ctx.setActions(active ? [linkButton('Project', `#/project/${encodeURIComponent(id)}`, { icon: 'project' }), startButton(false)] : []);
+      ctx.setActions(active ? [linkButton('Project', `#/project/${encodeURIComponent(id)}`, { icon: 'project' }), startButton(false)]
+        : [linkButton('Project', `#/project/${encodeURIComponent(id)}`, { icon: 'project' }),
+          button(s.state === 'done' ? 'Reopen step' : 'Reopen project', { kind: 'primary', icon: 'undo', onClick: s.state === 'done' ? reopenStep : reopenProject })]);
       return;
     }
     if (cur.status === 'complete') {
+      // A finished step still takes its measurements (the rate is worked out when they come).
       ctx.setActions([
-        button('Reopen', { icon: 'undo', onClick: async () => { if (editor && await editor.setStatus('open')) toast('The step is in progress again.'); } }),
-        linkButton('Back to the project', `#/project/${encodeURIComponent(id)}`, { kind: 'primary', icon: 'project' }),
+        linkButton('Measure', `#/run/${encodeURIComponent(cur.id)}/measure`, { icon: 'ruler' }),
+        button('Reopen step', { icon: 'undo', onClick: reopenStep }),
       ]);
       return;
     }
@@ -256,7 +302,9 @@ export async function render(ctx) {
     strip,
     banner,
     line,
-    !active ? h('p', { class: 'muted small' }, `This project is ${PROJECT_STATUS_LABELS[projectStatus(p)].toLowerCase()}. Reopen it on its page to start steps.`) : null,
+    !active ? h('div', { class: 'card spread' },
+      h('p', { class: 'muted small' }, `This project is ${PROJECT_STATUS_LABELS[projectStatus(p)].toLowerCase()}. ${s.state === 'done' ? 'Reopen step makes this step to do again and the project active.' : 'Reopen it to start steps.'}`),
+      s.state === 'done' ? null : button('Reopen project', { icon: 'undo', onClick: reopenProject })) : null,
     noteBox,
     editor ? editor.el : active ? h('div', { class: 'card stack start-card' },
       h('p', null, tool && stepTemplate ? 'Start saves a run for this step, prefilled from your last run on this tool, so you only change what differs.'

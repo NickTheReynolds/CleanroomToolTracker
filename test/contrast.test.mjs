@@ -9,17 +9,21 @@ import { fileURLToPath } from 'node:url';
 const CSS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'app', 'css', 'base.css'), 'utf8');
 
 /**
- * Token values declared in the first block whose selector matches.
+ * Token values declared in every block whose selector matches (the theme's
+ * main block and the tool-page shades declared after it).
  * @param {RegExp} selector
  * @returns {Record<string, string>}
  */
 function tokens(selector) {
-  const m = selector.exec(CSS);
-  assert.ok(m, `block ${selector} not found`);
-  const body = CSS.slice(m.index + m[0].length, CSS.indexOf('}', m.index + m[0].length));
   /** @type {Record<string, string>} */
   const out = {};
-  for (const t of body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/gi)) out[t[1]] = t[2].toLowerCase();
+  let n = 0;
+  for (const m of CSS.matchAll(new RegExp(selector.source, 'g'))) {
+    n++;
+    const body = CSS.slice(m.index + m[0].length, CSS.indexOf('}', m.index + m[0].length));
+    for (const t of body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/gi)) out[t[1]] = t[2].toLowerCase();
+  }
+  assert.ok(n, `block ${selector} not found`);
   return out;
 }
 
@@ -48,8 +52,12 @@ const TEXT = [
   ['text', 'ok-soft'], ['text', 'danger-soft'], ['text-2', 'ok-soft'], ['text-2', 'danger-soft'], ['brand', 'ok-soft'], ['brand', 'danger-soft'],
   // Tool category colours (icons and accents) on every surface, and the words on a step page's tool banner, which
   // takes the category's colour as its background.
-  ...['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']
-    .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg'], ['cat-ink', `cat-${c}`]]),
+  ...['etch', 'deposition', 'thermal', 'litho', 'wet', 'metrology', 'other']
+    .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg'], ['cat-ink', `cat-${c}`],
+      // A tool's page: the app bar's words on the category's deep shade; text, muted text, links, warnings and the
+      // category's own colour on the page's wash.
+      ['header-ink', `cat-${c}-bar`], ['text', `cat-${c}-tint`], ['text-2', `cat-${c}-tint`], ['brand', `cat-${c}-tint`],
+      ['warn', `cat-${c}-tint`], ['danger', `cat-${c}-tint`], [`cat-${c}`, `cat-${c}-tint`]]),
 ];
 /** UI component pairs that must reach 3:1 (WCAG 1.4.11). */
 const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface'],
@@ -57,7 +65,9 @@ const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'],
   ['border-strong', 'field'], ['ok', 'surface'], ['brand', 'surface'],
   // On a red card the step bar's done segments (in-progress ones and to-do edges, --text-2, are covered above);
   // the band down a green or red card's edge against the page.
-  ['ok', 'danger-soft'], ['ok', 'bg'], ['danger', 'bg']];
+  ['ok', 'danger-soft'], ['ok', 'bg'], ['danger', 'bg'],
+  // A field's edge and the focus ring on a tool page's wash.
+  ...['etch', 'deposition', 'thermal', 'litho', 'wet', 'metrology', 'other'].flatMap((c) => [['border-strong', `cat-${c}-tint`], ['focus', `cat-${c}-tint`]])];
 
 for (const [name, selector] of /** @type {[string, RegExp][]} */ ([
   ['light', /:root\s*\{/], ['dark', /:root\[data-theme="dark"\]\s*\{/],

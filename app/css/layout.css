@@ -182,30 +182,48 @@
   z-index: 12;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   min-height: var(--tap);
   margin: -14px calc(-1 * max(16px, var(--safe-right))) 0 calc(-1 * max(16px, var(--safe-left)));
-  padding: 6px max(16px, var(--safe-right)) 6px max(16px, var(--safe-left));
+  padding: 0 max(4px, var(--safe-right)) 0 max(16px, var(--safe-left));
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 3px solid var(--cat-color, var(--border));
   box-shadow: var(--shadow);
   color: var(--text);
-  text-decoration: none;
 }
-.project-strip > .icon { flex: none; color: var(--brand); }
-.project-strip-name { flex: 1; min-width: 0; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.project-strip-step { flex: none; font-size: 0.88rem; color: var(--text-2); white-space: nowrap; }
+.project-strip-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: var(--tap); color: inherit; text-decoration: none; }
+.project-strip-link > .icon { flex: none; color: var(--brand); }
+.project-strip-link:hover .project-strip-name { text-decoration: underline; }
+.project-strip-name { min-width: 0; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.project-strip-step { flex: none; min-width: 44px; text-align: center; font-size: 0.9rem; font-weight: 700; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* The pager's arrows: 48 px targets in the brand blue (a link); an empty place at the first or last step. */
+.strip-step { flex: none; display: inline-grid; place-items: center; width: var(--tap); min-height: var(--tap); border-radius: var(--radius-sm); color: var(--brand); }
+a.strip-step:hover { background: var(--surface-2); }
+/* The banner is a grid: the photo, the words, and the star over the "?" in one narrow column, so the step's title
+   keeps its room beside a larger photo. */
 .tool-banner {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
   align-items: center;
-  gap: 14px;
-  padding: 14px 10px 14px 16px;
+  column-gap: 14px;
+  padding: 14px 8px 14px 16px;
   border-radius: var(--radius);
   background: var(--cat-color, var(--brand));
   color: var(--cat-ink);
   box-shadow: var(--shadow);
 }
-.tool-banner .tool-photo { border: 2px solid rgb(255 255 255 / 0.7); }
+.tool-banner > .tool-photo-btn, .tool-banner > .tool-card-icon, .tool-banner > .tool-card-text { grid-row: 1 / 3; }
+.tool-banner > .tool-card-star { grid-column: 3; grid-row: 1; align-self: start; }
+.tool-banner > .tool-card-help { grid-column: 3; grid-row: 2; align-self: end; }
+.tool-banner .tool-photo { width: 104px; height: 78px; border: 2px solid rgb(255 255 255 / 0.7); }
+/* The rest of a tool's page carries its colour too: a tab before each section's title and the folds' edges, while
+   the app bar and the page's wash take the category's shades (base.css, html[data-tool-category]). */
+.step-page .section-title::before, .step-page details.fold > summary::before {
+  content: ''; display: inline-block; width: 6px; height: 1em; margin-right: 10px; border-radius: 3px; background: var(--cat-color); vertical-align: -0.1em;
+}
+.step-page details.fold > summary::before { display: inline-block; }
+.step-page .card.next-step { border-left-color: var(--cat-color); }
 .tool-banner .tool-card-icon { background: rgb(255 255 255 / 0.25); color: inherit; }
 .tool-banner .tool-card-icon .cat-icon { color: inherit; }
 .tool-banner-title { font-size: 1.25rem; font-weight: 800; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
@@ -242,6 +260,9 @@ details.fold .card { box-shadow: none; }
 .project-card-go { position: relative; z-index: 1; flex: none; min-height: 44px; padding: 6px 14px; }
 .run-summary dd { overflow-wrap: anywhere; }
 .home-aside { margin: -6px 2px 0; }
+/* Time on tools, on a project's head: the clock icon sits in the line of text. */
+.time-line p { margin: 0; }
+.time-line .icon { display: inline-block; vertical-align: -3px; color: var(--text-2); }
 
 /* Gas lines not in use, behind one row of chips */
 .gas-add { display: flex; flex-direction: column; gap: 6px; }

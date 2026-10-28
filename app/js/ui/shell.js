@@ -57,6 +57,22 @@ export function setNavActive(path) {
 }
 
 /**
+ * Colour the whole page for a tool's category (2.1): the app bar, the status
+ * bar behind it and the page's wash take the category's shades (base.css,
+ * `html[data-tool-category]`), so a tool's page is unmistakably not the
+ * project's. null gives the app's own blue back.
+ * @param {string | null} category
+ */
+export function setTone(category) {
+  const root = document.documentElement;
+  if (category) root.dataset.toolCategory = category;
+  else delete root.dataset.toolCategory;
+  // The standalone app's status bar follows the app bar, whatever the theme is now.
+  const bar = getComputedStyle(root).getPropertyValue('--header-bg').trim();
+  if (bar) for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.setAttribute('content', bar);
+}
+
+/**
  * Fill (or hide) the sticky bottom action bar.
  * @param {Node[]} nodes buttons, primary last
  */
