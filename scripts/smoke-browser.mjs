@@ -278,6 +278,28 @@ async function main() {
     await page.waitFor(`[...document.querySelectorAll('a.row')].some((r) => r.textContent.includes('Smoke folder') && r.textContent.includes('1 project (1 active)'))`);
     await snap('projects-folders');
   });
+  await step('a project marked failed turns red and says what went wrong; Reopen undoes it', async () => {
+    const id = await page.evaluate(`(async () => (await (await import('./js/data/repo.js')).listProjects()).find((p) => p.name === 'Smoke batch').id)()`);
+    await page.evaluate(`location.hash = '#/project/${id}'`);
+    await page.waitFor(`__t.btn('Mark failed')`);
+    await t(`__t.click('Mark failed')`);
+    await page.waitFor(`document.querySelector('dialog.sheet #fail-reason')`);
+    await t(`__t.labelled('What went wrong (optional)', 'The resist lifted off')`);
+    await checkLabels('mark-failed');
+    await t(`[...document.querySelectorAll('dialog.sheet button')].find((b) => b.textContent.trim() === 'Mark failed').click()`);
+    await page.waitFor(`document.querySelector('.project-head.project-failed') && __t.text().includes('What went wrong: The resist lifted off')`);
+    await snap('project-failed');
+    // In its folder: a red card, in the Failed group.
+    const folder = await page.evaluate(`(async () => (await (await import('./js/data/repo.js')).getProject('${id}')).folderId)()`);
+    await page.evaluate(`location.hash = '#/folder/${folder}'`);
+    await page.waitFor(`[...document.querySelectorAll('summary')].some((s) => s.textContent === 'Failed (1)')`);
+    await t(`document.querySelector('details.more').open = true`);
+    await page.waitFor(`document.querySelector('.project-card.project-failed')`);
+    await page.evaluate(`location.hash = '#/project/${id}'`);
+    await page.waitFor(`__t.btn('Reopen')`);
+    await t(`__t.click('Reopen')`);
+    await page.waitFor(`__t.btn('Mark failed') && !document.querySelector('.project-head.project-failed')`);
+  });
   await step('a material the app does not know asks what it is, and the answer is kept with the materials', async () => {
     await page.evaluate(`location.hash = '#/project/new'`);
     await page.waitFor(`__t.btn('More…') && __t.btn('Add step')`);

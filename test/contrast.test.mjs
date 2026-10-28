@@ -44,6 +44,8 @@ const TEXT = [
   ['danger', 'surface'], ['text', 'warn-soft'], ['text', 'brand-soft'], ['text-2', 'surface-2'], ['bg', 'text'],
   // What is typed in a field, and its label beside it.
   ['text', 'field'], ['text-2', 'field'],
+  // A finished project's green card and a failed one's red: its text, muted text and Copy button.
+  ['text', 'ok-soft'], ['text', 'danger-soft'], ['text-2', 'ok-soft'], ['text-2', 'danger-soft'], ['brand', 'ok-soft'], ['brand', 'danger-soft'],
   // Tool category colours (icons and accents) on every surface.
   ...['etch', 'deposition', 'thermal', 'litho', 'metrology', 'other']
     .flatMap((c) => [[`cat-${c}`, 'surface'], [`cat-${c}`, 'surface-2'], [`cat-${c}`, 'bg']]),
@@ -51,7 +53,10 @@ const TEXT = [
 /** UI component pairs that must reach 3:1 (WCAG 1.4.11). */
 const UI = [['border-strong', 'surface'], ['focus', 'surface'], ['focus', 'bg'], ['chart-line', 'surface'],
   // A field's edge, and the step bar on a card: done and in-progress segments, a to-do segment's edge (border-strong on surface).
-  ['border-strong', 'field'], ['ok', 'surface'], ['brand', 'surface']];
+  ['border-strong', 'field'], ['ok', 'surface'], ['brand', 'surface'],
+  // On a red card the step bar's done segments (in-progress ones and to-do edges, --text-2, are covered above);
+  // the band down a green or red card's edge against the page.
+  ['ok', 'danger-soft'], ['ok', 'bg'], ['danger', 'bg']];
 
 for (const [name, selector] of /** @type {[string, RegExp][]} */ ([
   ['light', /:root\s*\{/], ['dark', /:root\[data-theme="dark"\]\s*\{/],

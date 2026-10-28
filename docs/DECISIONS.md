@@ -466,3 +466,19 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
     - **Layers.** The dark theme is graphite, with a clear step between page, card and field (a darker well).
     - **Colour.** Brand blue marks the app bar, actions, links, what is chosen and work in progress. Green marks done, amber a Check and red Not allowed. Names (wafers, projects) are neutral tags.
 134. **Home shows the person's own active projects.** A project is theirs when its author is them, comparing the words of the names ("Nick" is "Nick Reynolds"); a project or a person without a name counts. Other people's projects, from a shared sync, stay on Projects.
+
+## Failed projects (version 1.8.0)
+
+135. **A failed project is a finished one with a mark, not a fourth status.** The owner asked to mark a project as failed.
+    - **Stored as** `status: 'done'` with `failed: true` and `failReason` (`projectStatus` in `core/projects.js`).
+    - **Why not a status.** Older versions check `status` against active, paused and done, and refuse any other record. A new status would have been "records refused" on every device not yet updated, including a Windows desktop install, which stays on its version until a newer installer is run. As a mark, decision 92 holds: older versions accept it, show it as finished, and keep both fields when they save the project.
+    - **One leftover case.** An older version that reopens a failed project leaves `failed` behind. The mark counts only on a done project, so the project reads as active. If that older version then marks it finished, newer versions read it as failed again. That takes two steps on an old version, and Mark finished or the editor sets it right.
+136. **Red for failed, green for finished, on the whole card.** The owner asked for failed projects to be marked in red and finished ones to turn green.
+    - **The card** (and the head of the project page) takes the soft tint (`--danger-soft`, `--ok-soft`), with a 6 px band of the strong colour down its left edge, as the next step's card has in blue.
+    - **Not colour alone.** The badge says Failed or Finished, with a cross or a check. Active and paused cards stay neutral.
+    - **Contrast.** On the tints, a to-do step's edge uses `--text-2`, because `--border-strong` falls under 3:1 there in the light theme. The contrast test covers the card's text, muted text, Copy button, step bar and band.
+    - **Failed projects get their own group** on Projects, after Finished.
+137. **What went wrong is asked for, not required.** Mark failed opens a sheet with one optional box. The words show under the project's name, in the traveler and in the workbook.
+    - **Its own field, not a line in the notes:** copies keep the notes, and the next batch has not failed.
+    - **Kept when reopened.** Reopening or finishing keeps the words (hidden), so marking the project failed again starts from them.
+    - **Ending.** Mark failed and Mark finished keep the day a project ended when it already had one, so a project found to have failed later keeps its end date.

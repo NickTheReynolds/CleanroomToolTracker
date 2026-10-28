@@ -5,14 +5,16 @@
  * in process order, for all wafers or one. A step's sheet holds its
  * pictures, files and GDS layout; "?step=<id>" opens it. Export the
  * traveler as PDF or Excel; move it to a folder, copy it for the next
- * batch, pause, finish, reopen or delete it.
+ * batch, pause, finish, mark it failed (saying what went wrong), reopen or
+ * delete it. Once it ends, its head is green, or red when it failed.
  */
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import {
-  button, linkButton, section, segmented, badge, emptyState, listRow, toast, confirmDialog, sheet, errorText,
+  button, linkButton, section, segmented, badge, emptyState, listRow, toast, confirmDialog, sheet, errorText, labelRow,
 } from '../ui/components.js';
-import { stepBar } from '../ui/project-card.js';
+import { textInput } from '../ui/fields.js';
+import { stepBar, statusBadge, statusTone } from '../ui/project-card.js';
 import { exportFlow } from '../ui/export-flow.js';
 import { chooseFolder } from '../ui/folder-picker.js';
 import { lookups, primaryText } from '../ui/run-list.js';
@@ -26,11 +28,11 @@ import { planChecks } from '../data/plan-checks.js';
 import { noteLine, notesSummary, openNotes, toggleChecked } from '../ui/compat-notes.js';
 import { chooseMaterialKind, askButtons } from '../ui/material-kind.js';
 import { stepFiles } from '../ui/step-files.js';
-import { stepStates, nextStep, progress, projectRuns, linkFor, waferText } from '../core/projects.js';
+import { stepStates, nextStep, progress, projectRuns, linkFor, waferText, projectStatus, statusPatch } from '../core/projects.js';
 import { isExposureStep } from '../core/attachments.js';
 import { specShort } from '../core/wafer-spec.js';
 import { folderTree, pathText, projectFolderId } from '../core/folders.js';
-import { PROJECT_STATUS_LABELS, WAFER_STATUS_LABELS, STATUS_LABELS } from '../core/vocab.js';
+import { WAFER_STATUS_LABELS, STATUS_LABELS } from '../core/vocab.js';
 import { formatDay, formatDateTime } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
@@ -86,6 +88,7 @@ export async function render(ctx) {
   const mine = projectRuns(runs, id);
   const states = stepStates(p, mine);
   const prog = progress(states);
+  const shown = projectStatus(p);
   const next = p.status === 'active' ? nextStep(states) : null;
   const toolName = (/** @type {string | null} */ tid) => {
     const t = tid ? L.tools.get(tid) : null;
@@ -112,7 +115,7 @@ export async function render(ctx) {
   const facts = [];
   if (folderId) facts.push(['Folder', h('a', { href: `#/folder/${encodeURIComponent(folderId)}` }, pathText(tree, folderId))]);
   facts.push(['Started', formatDay(p.startedAt, Date.now())]);
-  if (p.endedAt) facts.push(['Finished', formatDay(p.endedAt, Date.now())]);
+  if (p.endedAt) facts.push([shown === 'failed' ? 'Failed' : 'Finished', formatDay(p.endedAt, Date.now())]);
   if (p.substrate) facts.push(['Substrate', p.substrate]);
   // The wafers grouped by type: "W1–W4: Si · 100 mm · p · DSP".
   /** @type {Map<string, string[]>} */
@@ -122,9 +125,9 @@ export async function render(ctx) {
     facts.push(['Types', [...byType].filter(([k]) => k).map(([k, ids]) => `${waferText(p, ids)}: ${k}`).join('; ')]);
   }
   facts.push(['Runs', String(mine.length)]);
-  const header = h('div', { class: 'card stack project-head' },
-    h('div', { class: 'spread' }, h('h2', { class: 'project-title' }, p.name),
-      badge(PROJECT_STATUS_LABELS[p.status] || p.status, p.status === 'active' ? 'brand' : p.status === 'done' ? 'ok' : 'muted')),
+  const header = h('div', { class: ['card stack project-head', statusTone(p)] },
+    h('div', { class: 'spread' }, h('h2', { class: 'project-title' }, p.name), statusBadge(p)),
+    shown === 'failed' && p.failReason ? h('p', { class: 'pre-line' }, h('strong', null, 'What went wrong: '), p.failReason) : null,
     p.goal ? h('p', { class: 'pre-line' }, p.goal) : null,
     h('dl', { class: 'facts' }, facts.map(([k, v]) => [h('dt', null, k), h('dd', null, v)])),
     p.wafers.length ? h('div', { class: 'row-wrap', role: 'list', 'aria-label': 'Wafers' }, p.wafers.map((w) => h('span', { role: 'listitem' }, badge(
@@ -272,10 +275,29 @@ export async function render(ctx) {
       label: 'Traveler as Excel', icon: 'chart', busy: () => 'Preparing the workbook…', make: () => makeTravelerExport(id, 'xlsx'),
       ready: () => 'Ready. Share or download it below.', title: `Traveler: ${p.name}`, shared: 'Workbook shared.',
     }).el);
+  // Failed: what went wrong (optional) shows under the name and in the traveler; a second failure starts from the first's words.
+  const markFailed = () => {
+    let reason = p.failReason || '';
+    const input = textInput({
+      id: 'fail-reason', value: reason, multiline: true, placeholder: 'e.g. the resist lifted off in develop', onChange: (v) => { reason = v || ''; },
+    });
+    const sh = sheet('Mark this project failed', [
+      h('div', { class: 'field' },
+        labelRow(h('label', { class: 'label', for: 'fail-reason' }, 'What went wrong (optional)'), 'What went wrong', HELP.projectFailReason), input.el),
+      h('p', { class: 'muted small' }, 'Its card turns red. Its runs and wafers stay as they are; you can reopen it, or copy it to try again.'),
+      h('div', { class: 'row-wrap' },
+        button('Mark failed', {
+          kind: 'danger', icon: 'close',
+          onClick: () => { sh.close(); save((cur) => ({ ...statusPatch(cur, 'failed'), failReason: reason.trim() }), 'Project marked failed.'); },
+        }),
+        button('Cancel', { onClick: () => sh.close() })),
+    ]);
+  };
+  const ended = shown === 'done' || shown === 'failed';
   const actions = h('div', { class: 'row-wrap' },
-    p.status === 'done'
-      ? button('Reopen', { icon: 'undo', onClick: () => save({ status: 'active', endedAt: null }, 'The project is active again.') })
-      : button('Mark finished', { icon: 'check', onClick: () => save({ status: 'done', endedAt: new Date().toISOString() }, 'Project finished.') }),
+    ended ? button('Reopen', { icon: 'undo', onClick: () => save((cur) => statusPatch(cur, 'active'), 'The project is active again.') }) : null,
+    shown === 'done' ? null : button('Mark finished', { icon: 'check', onClick: () => save((cur) => statusPatch(cur, 'done'), 'Project finished.') }),
+    shown === 'failed' ? null : button('Mark failed', { icon: 'close', onClick: markFailed }),
     p.status === 'active' ? button('Pause', { icon: 'pause', onClick: () => save({ status: 'paused' }, 'Project paused.') })
       : p.status === 'paused' ? button('Resume', { icon: 'play', onClick: () => save({ status: 'active' }, 'The project is active again.') }) : null,
     button(folderId ? 'Move to another folder' : 'Move to a folder', {

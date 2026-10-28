@@ -426,6 +426,7 @@ export function copyName(name, taken = []) {
  * A new project like this one, for the next batch: the same goal,
  * substrate, notes, folder, wafer labels and plan, with new ids, every
  * wafer in process, no step done and no runs (they stay with the original).
+ * It starts active: a copy of a failed project does not carry the failure.
  * @param {Project} from
  * @param {{now?: string, taken?: readonly string[]}} [o] taken: names in use, so the copy gets its own
  * @returns {Record<string, any>} the new project's fields, not stored yet
@@ -529,6 +530,36 @@ export function ownedBy(project, userName) {
   if (!a.length || !b.length) return true;
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   return short.every((w, i) => w === long[i]);
+}
+
+/**
+ * A project's status as people see it: active, paused, done (finished) or
+ * failed. A failed project is stored as done with `failed` (1.8), so versions
+ * that know only the three statuses keep syncing it, as finished. `failed`
+ * left over from an older version that reopened the project does not count.
+ * @param {Project} project
+ * @returns {'active' | 'paused' | 'done' | 'failed'}
+ */
+export function projectStatus(project) {
+  return project.status === 'done' && project.failed === true ? 'failed' : project.status;
+}
+
+/**
+ * The stored fields for a status chosen in words: finished and failed both
+ * end the project (keeping the date it ended, if it had one); the others
+ * clear the end.
+ * @param {Pick<Project, 'endedAt'>} project as stored now
+ * @param {string} shown active, paused, done or failed
+ * @param {string} [now]
+ * @returns {Pick<Project, 'status' | 'endedAt' | 'failed'>}
+ */
+export function statusPatch(project, shown, now = new Date().toISOString()) {
+  const ends = shown === 'done' || shown === 'failed';
+  return {
+    status: ends ? 'done' : shown === 'paused' ? 'paused' : 'active',
+    endedAt: ends ? project.endedAt || now : null,
+    failed: shown === 'failed',
+  };
 }
 
 /**

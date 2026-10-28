@@ -2,6 +2,16 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.8.0: Failed projects in red, finished ones in green
+
+- **Mark a project failed.** On the project page, **Mark failed** asks what went wrong (optional) and ends the project. The editor's Status has **Failed** too, with the same box.
+- **Red and green at a glance.** A failed project's card is red, with a red band down its left edge and a **Failed** badge. A finished one's is green, with a **Finished** badge. The top of the project page takes the same colour, and a failed project says what went wrong under its name.
+- **Its own group.** Projects lists failed projects under **Failed**, after **Finished**.
+- **Changing your mind.** **Reopen** makes a failed or finished project active again. **Mark finished** turns a failed project into a finished one, and **Mark failed** a finished one into a failed one; both keep the day it ended. Marking a project failed again starts from what you wrote before.
+- **Trying again.** **Copy project** on a failed project starts the next batch as active, without the failure.
+- **Exports.** The traveler PDF says the project failed, when, and what went wrong. The workbook's Projects sheet has a **What went wrong** column, and its "Finished" column is now **Ended**.
+- **Older versions keep syncing.** A failed project is stored as a finished one with a mark. A device still on 1.7 or before accepts it, shows it as finished, and keeps the mark when it saves the project.
+
 ## 1.7.0: Clearer screens, and your projects on Home
 
 - **Your projects on Home.** Home lists your active projects, the most recently active first. Each card has a bar with a segment per step: green for done, blue for in progress, gray for to do. Under the bar are the step in progress (or the next one) and when anything last happened. Projects someone else started, shared through sync, stay on the Projects screen; Home says how many there are.

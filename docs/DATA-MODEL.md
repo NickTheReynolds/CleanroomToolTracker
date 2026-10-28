@@ -31,7 +31,7 @@ Every record in the nine data stores (`meta` excluded) has:
 | `measurements` | `runId`, `metrologyToolId`, `kind` (thickness, stepHeight, cd, sheetResistance, refractiveIndex, stress, other), `phase` (pre, post), `material`, `unit`, `points[]` {site, value}, `takenAt`, `notes` | `runId` |
 | `events` | `toolId`, `type` (pm, clean, seasoning, targetChange, gasChange, fault, other), `major`, `at`, `notes` | `toolAt` = [toolId, at] |
 | `photos` | `runId` (the run, or since 1.6 the plan step, it belongs to), `blob` (JPEG; a step's file as picked), `width`, `height`, `caption`, `takenAt`; a step's picture or file also has `name` and `type` | `runId` |
-| `projects` | `name`, `goal`, `status` (active, paused, done), `startedAt`, `endedAt`, `substrate`, `notes`, `folderId` (or null), `wafers[]`, `steps[]` (see Projects) | `status` |
+| `projects` | `name`, `goal`, `status` (active, paused, done), `startedAt`, `endedAt`, `substrate`, `notes`, `folderId` (or null), `wafers[]`, `steps[]` (see Projects), and optionally `failed` and `failReason` | `status` |
 | `folders` | `name`, `parentId` (a folder, or null for the top level) | none |
 | `wafers` | Saved wafer types: `name`, `spec` (a WaferSpec, see Wafer types). Masks are kept here too, with `spec.kind: "mask"`. | none |
 | `meta` | keyed by `key`: `schemaVersion`, `settings`, and `draft:<form>` entries | none |
@@ -68,6 +68,9 @@ A run with several steps (a breakthrough, the main etch and an over-etch, or the
 
 A project follows a batch of wafers through a process.
 
+- A project that ended without working out is **failed** (1.8): `status` done, `failed: true`, and `failReason`, what went wrong (text, may be empty). `projectStatus` in `core/projects.js` reads the four statuses people see (active, paused, finished, failed); `failed` counts only on a done project.
+  - **Older versions** check `status` against the three they know, so "failed" is never stored there: they accept a failed project, show it as finished and keep both fields when they save it.
+  - **Copies** start active, without either field.
 - `wafers[]`: `{id, label, status (active, done, scrapped), notes}`. Ids are UUIDs, so a wafer can be renamed.
 - `steps[]`: the plan, in order: `{id, title, toolId, templateId, recipe, notes, doneAt, skipped}`. `toolId`, `templateId` and `doneAt` may be null. A step is **done** when a complete run is linked to it, or when it was marked done by hand (`doneAt`); **in progress** when a draft or open run is linked to it; **skipped** when marked so. Progress counts done steps out of the steps not skipped.
 - A plan step may carry `attachments` (`[{id, name, kind (photo, file), type, size, addedAt}]`) and, on an exposure step, `gds` (`{name, cell, layer, link, fileId, size}`, every part but the name optional). New in 1.6 (`core/attachments.js`, `data/attachments.js`):
@@ -188,7 +191,7 @@ Settings → Backup and data writes one file of the live records (no tombstones)
 - **Excel** (`.xlsx`, `core/xlsx.js`): the same table as "All runs", then one sheet per tool with labelled columns ("ICP power (W)", durations in seconds), then "Measurements" (one row per measurement, with its points) and "Tool events". Times are Excel dates in local time; the first row is bold, frozen and filterable.
 - **PDF** (`core/pdf.js`): a report, tool by tool and run by run, with inputs, conditions, results, sample, measurements, notes and tags, then the tool's events. It uses the standard Helvetica fonts and WinAnsi text; characters outside it are spelled out ("Ω" becomes "Ohm") or shown as "?".
 
-Every run row also names the run's projects (with its wafers and plan step) and its steps. The workbook gets a "Projects" sheet when there are projects: each project's folder, status, dates, wafers, steps done and runs.
+Every run row also names the run's projects (with its wafers and plan step) and its steps. The workbook gets a "Projects" sheet when there are projects: each project's folder, status, dates, wafers, steps done and runs, and what went wrong for a failed one.
 
 ## A project's traveler
 

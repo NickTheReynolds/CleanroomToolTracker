@@ -1,7 +1,8 @@
 // @ts-check
 /**
  * Projects, in folders: the folders here (with what each holds), then the
- * projects here, active first. Inside a folder: where it is, and rename,
+ * projects here, active first, then paused, finished (green) and failed
+ * (red). Inside a folder: where it is, and rename,
  * move or delete it. Each project's card has Copy, which opens a new project
  * copied from it; "Select" picks projects to copy, move into a folder or
  * delete together. A project follows a batch of wafers from start to
@@ -20,6 +21,7 @@ import {
   copyProjects,
 } from '../data/repo.js';
 import { folderTree, folderPath, pathText, projectsIn, folderCounts, countsText, folderNameClash } from '../core/folders.js';
+import { projectStatus } from '../core/projects.js';
 import { PROJECT_STATUS_LABELS } from '../core/vocab.js';
 
 /** @typedef {import('../core/types.js').Project} Project */
@@ -198,7 +200,7 @@ export async function render(ctx) {
       },
     }, h('span', { class: 'row-lead' }, icon('project')),
     h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, p.name),
-      h('span', { class: 'row-sub' }, PROJECT_STATUS_LABELS[p.status] || p.status)),
+      h('span', { class: 'row-sub' }, PROJECT_STATUS_LABELS[projectStatus(p)] || p.status)),
     h('span', { class: 'check-box', 'aria-hidden': 'true' }, icon('check', { size: 20 })));
     return btn;
   };
@@ -225,7 +227,8 @@ export async function render(ctx) {
   const draw = () => {
     const active = mine.filter((p) => p.status === 'active');
     const paused = mine.filter((p) => p.status === 'paused');
-    const done = mine.filter((p) => p.status === 'done');
+    const done = mine.filter((p) => projectStatus(p) === 'done');
+    const failed = mine.filter((p) => projectStatus(p) === 'failed');
     const crumbs = here ? h('nav', { class: 'crumbs', 'aria-label': 'Folder path' },
       h('a', { href: '#/projects' }, icon('list', { size: 18 }), 'Projects'),
       folderPath(tree, here.id).map((f) => [h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '›'),
@@ -252,6 +255,7 @@ export async function render(ctx) {
           active.length ? section(`Active (${active.length})`, cards(active)) : null,
           paused.length ? section(`Paused (${paused.length})`, cards(paused)) : null,
           done.length ? h('details', { class: 'more' }, h('summary', null, icon('check', { size: 18 }), `Finished (${done.length})`), cards(done)) : null,
+          failed.length ? h('details', { class: 'more' }, h('summary', null, icon('close', { size: 18 }), `Failed (${failed.length})`), cards(failed)) : null,
         ] : here ? emptyState(subfolders.length ? 'No projects directly in this folder.' : 'This folder is empty. Add a project or a folder to it.') : null,
       !selecting && here ? section('This folder',
         h('p', { class: 'muted small' }, `In ${pathText(tree, upId) || 'the top level'} · ${(() => {

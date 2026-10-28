@@ -5,7 +5,7 @@
  * writer and as sheets for the workbook writer. Pure: records in, blocks
  * and rows out; deleted records are left out.
  */
-import { stepStates, projectRuns, waferText, linkFor, progress } from './projects.js';
+import { stepStates, projectRuns, waferText, linkFor, progress, projectStatus } from './projects.js';
 import { gdsText, filesText } from './attachments.js';
 import { measurementText, localStamp, fieldText } from './export-all.js';
 import { stepsText } from './run-steps.js';
@@ -111,16 +111,18 @@ export function travelerBlocks(input, o) {
   const P = prepare(input);
   const p = P.p;
   const prog = progress(P.states);
+  const shown = projectStatus(p);
   /** @type {PdfBlock[]} */
   const out = [
     { kind: 'title', text: `Traveler: ${p.name}` },
-    { kind: 'small', text: [`Exported ${localStamp(o.now)}`, o.who || '', PROJECT_STATUS_LABELS[p.status] || p.status,
-      `started ${localDateKey(p.startedAt)}`, p.endedAt ? `finished ${localDateKey(p.endedAt)}` : '', count(P.runs.length, 'run'),
-      prog.total ? `${prog.done} of ${count(prog.total, 'step')} done` : ''].filter(Boolean).join(' · ') },
+    { kind: 'small', text: [`Exported ${localStamp(o.now)}`, o.who || '', PROJECT_STATUS_LABELS[shown] || shown,
+      `started ${localDateKey(p.startedAt)}`, p.endedAt ? `${shown === 'failed' ? 'failed' : 'finished'} ${localDateKey(p.endedAt)}` : '',
+      count(P.runs.length, 'run'), prog.total ? `${prog.done} of ${count(prog.total, 'step')} done` : ''].filter(Boolean).join(' · ') },
   ];
   if (p.goal) out.push({ kind: 'p', text: p.goal });
   const wafers = list(p.wafers);
   for (const [label, text] of [
+    ['What went wrong', shown === 'failed' ? p.failReason || '' : ''],
     ['Folder', pathText(folderTree(list(input.folders)), p.folderId, ' / ')],
     ['Substrate', p.substrate || ''],
     ['Wafers', wafers.map(waferLine).join('; ')],

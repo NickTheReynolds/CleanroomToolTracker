@@ -144,9 +144,14 @@
  *   notes: string, doneAt: string|null, skipped: boolean, waferIds?: string[], bonds?: Bond[], debond?: boolean,
  *   adds?: string[], removes?: string[], checked?: string[], attachments?: StepFile[], gds?: GdsLayout}} PlanStep
  *
+ * A project. A finished one can be marked failed (1.8): `status` stays done,
+ * so versions that know only active, paused and done show it as finished;
+ * `failed` says it failed and `failReason` what went wrong
+ * (core/projects.js projectStatus).
  * @typedef {BaseRecord & {
  *   name: string, goal: string, status: 'active'|'paused'|'done', startedAt: string, endedAt: string|null,
- *   substrate: string, notes: string, wafers: Wafer[], steps: PlanStep[], folderId: string|null
+ *   substrate: string, notes: string, wafers: Wafer[], steps: PlanStep[], folderId: string|null,
+ *   failed?: boolean, failReason?: string
  * }} Project
  *
  * A folder of projects; parentId null is the top level.

@@ -19,11 +19,13 @@ export const FIELD_TYPES = Object.freeze(['number', 'text', 'select', 'bool', 'd
 export const FIELD_ROLES = Object.freeze(['input', 'output', 'context']);
 /** A project: active (wafers in process), paused, or done (finished). */
 export const PROJECT_STATUSES = Object.freeze(['active', 'paused', 'done']);
+/** What a project's status reads as: the stored ones, and failed (a finished project marked failed; core/projects.js projectStatus). */
+export const PROJECT_SHOWN_STATUSES = Object.freeze([...PROJECT_STATUSES, 'failed']);
 /** A wafer of a project: still in process, done (finished its process), or scrapped (broken or lost). */
 export const WAFER_STATUSES = Object.freeze(['active', 'done', 'scrapped']);
 
 /** @type {Readonly<Record<string, string>>} */
-export const PROJECT_STATUS_LABELS = Object.freeze({ active: 'Active', paused: 'Paused', done: 'Finished' });
+export const PROJECT_STATUS_LABELS = Object.freeze({ active: 'Active', paused: 'Paused', done: 'Finished', failed: 'Failed' });
 
 /** @type {Readonly<Record<string, string>>} */
 export const WAFER_STATUS_LABELS = Object.freeze({ active: 'In process', done: 'Done', scrapped: 'Scrapped' });

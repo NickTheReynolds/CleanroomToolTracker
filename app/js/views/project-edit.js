@@ -1,8 +1,9 @@
 // @ts-check
 /**
- * New or edit project: name, folder, goal, start date and substrate, the
- * wafers and masks (added in one go with their type, renamed, finished or
- * scrapped one by one) and an optional plan of steps, each with a tool and
+ * New or edit project: name, folder, goal, start date and substrate, its
+ * status (a failed one says what went wrong), the wafers and masks (added
+ * in one go with their type, renamed, finished or scrapped one by one) and
+ * an optional plan of steps, each with a tool and
  * a recipe, which wafers it is for, the stacks it bonds and what it adds or
  * removes. Each step shows the plan's compatibility notes, kept up to date
  * as the plan changes. "?copy=<id>" starts from a copy of another project,
@@ -29,12 +30,14 @@ import {
 import { recipesForTool, allRecipes } from '../data/recipes.js';
 import { planChecksWith, recipeAdds } from '../data/plan-checks.js';
 import { lnfType, LNF_COMPAT } from '../data/compat-lnf.js';
-import { newWafers, newStep, copyPlanInto, projectRuns, linkFor, duplicateProject, stepStates } from '../core/projects.js';
+import {
+  newWafers, newStep, copyPlanInto, projectRuns, linkFor, duplicateProject, stepStates, projectStatus, statusPatch,
+} from '../core/projects.js';
 import { isMask, labelPrefix, specShort, specEmpty } from '../core/wafer-spec.js';
 import { normText } from '../core/vocab.js';
 import { folderTree, pathText } from '../core/folders.js';
 import { recipesFor } from '../core/recipes.js';
-import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, WAFER_STATUSES, WAFER_STATUS_LABELS } from '../core/vocab.js';
+import { PROJECT_SHOWN_STATUSES, PROJECT_STATUS_LABELS, WAFER_STATUSES, WAFER_STATUS_LABELS } from '../core/vocab.js';
 import { localDateKey, fromLocalInput } from '../core/time.js';
 import { HELP } from '../core/app-help.js';
 
@@ -122,25 +125,25 @@ export async function render(ctx) {
   if (!ctx.isCurrent()) return;
   let tree = folderTree(folders);
   const inFolder = ctx.query.get('folder');
-  // The project page (a pause, a finish, a move) or another device may have changed the project since these
-  // unsaved edits were made. They are restored, but status, end and folder come from the stored project unless
-  // the person changed them in this form (`_base` holds what the form started from). Step marks are merged on
-  // Save, which also asks before saving over the newer version.
+  // The project page (a pause, a finish, a failure, a move) or another device may have changed the project since
+  // these unsaved edits were made. They are restored, but status (and whether it failed), end and folder come from
+  // the stored project unless the person changed them in this form (`_base` holds what the form started from).
+  // Step marks are merged on Save, which also asks before saving over the newer version.
   const stale = !!(draft && existing && draft.updatedAt !== existing.updatedAt);
   /** @type {Record<string, any> | null} */
   let restored = draft;
   if (stale && draft && existing) {
-    const base = draft._base || { status: draft.status, endedAt: draft.endedAt ?? null, folderId: draft.folderId ?? null };
-    /** @param {'status' | 'endedAt' | 'folderId'} k */
+    const base = draft._base || { status: draft.status, endedAt: draft.endedAt ?? null, folderId: draft.folderId ?? null, failed: draft.failed ?? null };
+    /** @param {'status' | 'endedAt' | 'folderId' | 'failed'} k */
     const pick = (k) => ((draft[k] ?? null) === (base[k] ?? null) ? existing[k] ?? null : draft[k]);
-    restored = { ...draft, status: pick('status'), endedAt: pick('endedAt'), folderId: pick('folderId') };
+    restored = { ...draft, status: pick('status'), endedAt: pick('endedAt'), folderId: pick('folderId'), failed: pick('failed') };
   }
   /** @type {Record<string, any>} */
   let p = restored || (existing ? {
     ...structuredClone(existing),
     // What the form started from: for the stale-draft merge, and the marks of checked notes for Save's three-way merge.
     _base: {
-      status: existing.status, endedAt: existing.endedAt ?? null, folderId: existing.folderId ?? null,
+      status: existing.status, endedAt: existing.endedAt ?? null, folderId: existing.folderId ?? null, failed: existing.failed ?? null,
       checked: Object.fromEntries(existing.steps.map((s) => [s.id, list(s.checked)])),
     },
   } : source ? duplicateProject(source, { taken: projects.map((x) => x.name) }) : {
@@ -441,6 +444,11 @@ export async function render(ctx) {
     const startInput = /** @type {HTMLInputElement} */ (h('input', { id: 'project-start', class: 'input', type: 'date', value: localDateKey(p.startedAt) }));
     startInput.addEventListener('change', () => { const iso = fromLocalInput(startInput.value); if (iso) change({ startedAt: iso }); });
     const others = projects.filter((x) => x.id !== id && x.steps.length);
+    // What went wrong: shown while the status is Failed, kept (hidden) otherwise.
+    const reason = textField('What went wrong', p.failReason || '', (v) => change({ failReason: v }), {
+      multiline: true, help: HELP.projectFailReason, id: 'project-fail-reason', placeholder: 'e.g. the resist lifted off in develop',
+    });
+    reason.hidden = projectStatus(/** @type {any} */ (p)) !== 'failed';
     fill(body,
       section('Project',
         textField('Name', p.name, (v) => change({ name: v }), { help: HELP.projectName, placeholder: 'e.g. Resonators, batch 3' }),
@@ -453,10 +461,14 @@ export async function render(ctx) {
           onChange: (v) => change({ substrate: v }),
         }),
         isNew ? null : segmented({
-          label: 'Status', value: p.status, help: HELP.projectStatus,
-          options: PROJECT_STATUSES.map((s) => ({ value: s, label: PROJECT_STATUS_LABELS[s] })),
-          onChange: (v) => change({ status: v || 'active', endedAt: v === 'done' ? p.endedAt || new Date().toISOString() : null }),
-        })),
+          label: 'Status', value: projectStatus(/** @type {any} */ (p)), help: HELP.projectStatus,
+          options: PROJECT_SHOWN_STATUSES.map((s) => ({ value: s, label: PROJECT_STATUS_LABELS[s] })),
+          onChange: (v) => {
+            change(statusPatch(/** @type {any} */ (p), v || 'active'));
+            reason.hidden = v !== 'failed';
+          },
+        }),
+        isNew ? null : reason),
       section(`Wafers and masks (${p.wafers.length})`,
         h('p', { class: 'muted small' }, 'Each wafer gets its own path through the process; a run says which wafers it processed. No wafers: runs join the project as a whole. Give them a type to have the plan checked.'),
         p.wafers.length ? h('div', { class: 'stack' }, p.wafers.map(waferRow)) : null,
@@ -545,6 +557,7 @@ export async function render(ctx) {
       const saved = await saveProject({
         ...(cur || p), name, goal: String(p.goal || '').trim(), notes: String(p.notes || '').trim(), steps,
         startedAt: p.startedAt, substrate: p.substrate || '', status: p.status, endedAt: p.endedAt ?? null, folderId: p.folderId ?? null,
+        failed: p.status === 'done' && p.failed === true, failReason: String(p.failReason || '').trim(),
         wafers: p.wafers.map((/** @type {Wafer} */ w, /** @type {number} */ i) => ({
           ...w, label: labels[i], notes: String(w.notes || '').trim(),
         })),

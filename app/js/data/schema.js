@@ -405,6 +405,9 @@ const CHECKS = {
     if (!isIsoDate(r.startedAt)) errs.push('startedAt must be a date');
     if (!isNullish(r.endedAt) && !isIsoDate(r.endedAt)) errs.push('endedAt must be a date');
     if (!isNullish(r.folderId) && !isStr(r.folderId)) errs.push('folderId must be text');
+    // Failed (1.8): optional, checked only for their type, like the 1.5 and 1.6 parts.
+    if (!isNullish(r.failed) && !isBool(r.failed)) errs.push('failed must be true or false');
+    if (!isNullish(r.failReason) && !isStr(r.failReason)) errs.push('failReason must be text');
     checkList(r.wafers, 'wafer', errs, (w) => [
       !isStr(w.label) || !w.label.trim() ? 'needs a label' : '',
       !WAFER_STATUSES.includes(w.status) ? `status must be one of ${WAFER_STATUSES.join(', ')}` : '',

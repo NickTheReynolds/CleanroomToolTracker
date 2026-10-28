@@ -13,7 +13,7 @@ import {
   CATEGORY_LABELS, STATUS_LABELS, KIND_LABELS, PHASE_LABELS, EVENT_LABELS, PROJECT_STATUS_LABELS, normText,
 } from './vocab.js';
 import { toCsv } from './csv.js';
-import { projectsText, projectRuns, stepStates, progress } from './projects.js';
+import { projectsText, projectRuns, stepStates, progress, projectStatus } from './projects.js';
 import { folderTree, pathText } from './folders.js';
 import { stepsText } from './run-steps.js';
 
@@ -253,13 +253,14 @@ export function allSheets(input) {
   if (P.projectList.length) {
     sheets.push({
       name: 'Projects',
-      rows: [['Project', 'Folder', 'Status', 'Started', 'Finished', 'Wafers', 'Steps done', 'Runs', 'Goal', 'Notes'], ...P.projectList.map((p) => {
+      rows: [['Project', 'Folder', 'Status', 'Started', 'Ended', 'Wafers', 'Steps done', 'Runs', 'Goal', 'Notes', 'What went wrong'], ...P.projectList.map((p) => {
         const runs = projectRuns(P.runs, p.id);
         const prog = progress(stepStates(p, runs));
-        return [p.name, P.folderOf(p), PROJECT_STATUS_LABELS[p.status] || p.status, date(p.startedAt), date(p.endedAt), list(p.wafers).length,
-          prog.total ? `${prog.done} of ${prog.total}` : '', runs.length, p.goal, p.notes];
+        const shown = projectStatus(p);
+        return [p.name, P.folderOf(p), PROJECT_STATUS_LABELS[shown] || shown, date(p.startedAt), date(p.endedAt), list(p.wafers).length,
+          prog.total ? `${prog.done} of ${prog.total}` : '', runs.length, p.goal, p.notes, shown === 'failed' ? p.failReason || '' : ''];
       })],
-      widths: [26, 20, 10, 16, 16, 8, 12, 6, 40, 40],
+      widths: [26, 20, 10, 16, 16, 8, 12, 6, 40, 40, 40],
     });
   }
   return sheets;

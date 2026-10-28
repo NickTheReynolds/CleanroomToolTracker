@@ -1,13 +1,15 @@
 // @ts-check
 /**
  * A project at a glance, for Projects and Home: its name, goal, progress
- * through the plan, the next step and its wafers. Plus the step bar the
- * project page uses.
+ * through the plan, the next step and its wafers; green once finished, red
+ * when it failed. Plus the step bar and status badge the project page uses.
  */
 import { h } from './dom.js';
 import { icon } from './icons.js';
 import { badge } from './components.js';
-import { stepStates, nextStep, progress, projectRuns, lastActivity, activeWafers, processItems } from '../core/projects.js';
+import {
+  stepStates, nextStep, progress, projectRuns, lastActivity, activeWafers, processItems, projectStatus,
+} from '../core/projects.js';
 import { isMask } from '../core/wafer-spec.js';
 import { PROJECT_STATUS_LABELS } from '../core/vocab.js';
 import { formatAgo } from '../core/time.js';
@@ -19,6 +21,40 @@ import { formatAgo } from '../core/time.js';
 
 /** Above this many steps the bar is one fill instead of a segment per step. */
 const MAX_SEGMENTS = 40;
+
+/**
+ * How each status looks: its badge, and the card's colour once the project
+ * ended (layout.css). The badge says it in words, so colour is never alone.
+ * @type {Readonly<Record<string, {kind: 'brand' | 'muted' | 'ok' | 'danger', icon?: string, tone?: string}>>}
+ */
+const LOOK = Object.freeze({
+  active: { kind: 'brand' },
+  paused: { kind: 'muted' },
+  done: { kind: 'ok', icon: 'check', tone: 'project-finished' },
+  failed: { kind: 'danger', icon: 'close', tone: 'project-failed' },
+});
+
+/**
+ * A project's status as a badge: Finished in green with a check, Failed in
+ * red with a cross.
+ * @param {Project} p
+ * @returns {HTMLElement}
+ */
+export function statusBadge(p) {
+  const s = projectStatus(p);
+  const look = LOOK[s] || LOOK.paused;
+  return badge(PROJECT_STATUS_LABELS[s] || s, look.kind, look.icon);
+}
+
+/**
+ * The class that colours a project's card: green when it is finished, red
+ * when it failed, none before it ends.
+ * @param {Project} p
+ * @returns {string | null}
+ */
+export function statusTone(p) {
+  return LOOK[projectStatus(p)]?.tone || null;
+}
 
 /**
  * The plan's progress as a bar with a segment per step, done, in progress or
@@ -83,10 +119,10 @@ export function projectCard(p, runs, tools, o = {}) {
     `${mine.length} run${mine.length === 1 ? '' : 's'}`,
     `last activity ${formatAgo(lastActivity(p, mine), Date.now())}`,
   ].filter(Boolean).join(' · ');
-  return h('div', { class: 'card project-card' },
+  return h('div', { class: ['card project-card', statusTone(p)] },
     h('span', { class: 'spread' },
       h('a', { class: 'project-name project-link', href: `#/project/${encodeURIComponent(p.id)}` }, icon('project', { size: 20 }), p.name),
-      p.status === 'active' ? null : badge(PROJECT_STATUS_LABELS[p.status] || p.status, p.status === 'done' ? 'ok' : 'muted')),
+      p.status === 'active' ? null : statusBadge(p)),
     p.goal ? h('span', { class: 'muted small clamp-2' }, p.goal) : null,
     next.total ? h('span', { class: 'stack project-progress' }, stepBar(next.states),
       h('span', { class: 'small' }, `${next.done} of ${next.total} steps done`,

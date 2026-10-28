@@ -18,6 +18,13 @@
 .project-card:has(.project-link:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
 .project-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .project-card-copy { position: relative; z-index: 1; flex: none; margin: -6px -4px -6px 0; }
+/* A finished project's card (and the head of its page) is green, a failed one's red, with a band down the left edge
+   like the next step's; the badge says it in words. On the tint a step still to do keeps a clear edge: --border-strong
+   is under 3:1 there. */
+.card.project-finished { background: var(--ok-soft); border-color: var(--ok); border-left: 6px solid var(--ok); }
+.card.project-failed { background: var(--danger-soft); border-color: var(--danger); border-left: 6px solid var(--danger); }
+:is(.project-finished, .project-failed) .step-bar > .is-todo,
+:is(.project-finished, .project-failed) .step-bar-fill { box-shadow: inset 0 0 0 1px var(--text-2); }
 /* Select mode's Copy, Move and Delete: icons only on a narrow phone, so four buttons fit; screen readers still hear the words. */
 @media (max-width: 480px) {
   .select-action > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
