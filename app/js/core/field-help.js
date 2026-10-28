@@ -207,6 +207,7 @@ const ABOUT = {
     { name: /laser/i, text: 'Laser dose per area, or the writer’s power or intensity setting. More dose widens what the beam reaches: openings in a positive resist, lines in a negative one. Too little leaves resist in the openings of a positive resist, and thin or missing lines in a negative one.' },
     { text: 'Exposure energy per area (or the exposure time, if your tool is set that way; say which in the notes). More dose widens what the light reaches: openings in a positive resist, lines in a negative one.' },
   ],
+  exposeTime: [{ text: 'The writer’s exposure time setting, which sets how much light each spot gets. Longer exposure widens what the beam reaches, like more dose. LNF posts the standard value at the tool and updates it after major maintenance, so check it before you write.' }],
   mode: [{ text: 'How close the mask sits to the resist. Vacuum and hard contact give the finest features but wear the mask and can pick up resist; soft contact presses more lightly, with slightly coarser features; proximity leaves a small gap, gentle on the mask but blurring small features.' }],
   focus: [
     { unit: 'µm', text: 'Offset of the focal plane from the tool’s best focus. Away from best focus the linewidth drifts and the sidewalls lose their angle; a focus–exposure matrix finds the best value.' },

@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v1.5.1-dev';
+const CACHE_NAME = 'lnf-runlog-v1.5.2-dev';
 
 const ASSETS = [
   './',

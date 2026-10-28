@@ -427,3 +427,17 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 
         "Magnesium fluoride" stays a metal, as in 1.5.0.
       - Each material of a list is read on its own ("Cr/AZ 1518" is a metal and a resist).
+
+## Copying from the folder page, and Expose time on the mask maker (version 1.5.2)
+
+126. **Copy is on every project card of a folder page, and in Select mode.** The owner looked for it there, not at the foot of the project page.
+    - **The card's Copy** opens the Copy project form, as decision 91 says.
+    - **The card's link.** The card used to be one link. Now its name is the link, stretched over the whole card, so tapping anywhere still opens the project while Copy sits above it. Keyboard focus outlines the whole card.
+    - **Select → Copy saves at once.** It may copy several projects, each named as below, and Undo deletes the copies.
+    - **Small screens.** On a phone Select mode shows Copy, Move and Delete as icons only, so four buttons fit. A line above the list says how many are selected, and screen readers still hear the words.
+127. **A copy's name counts on.** A name that ends in a number of up to three digits gets the next one no project uses, keeping leading zeros ("Mask_09" becomes "Mask_10"). That matches how batches are usually named. A longer number is likely a year or a part number, so that name, like any other, still gets "(copy)", "(copy 2)" and so on.
+128. **The µPG 501 gets its own template type, "mask-maker", with an Expose time input; seed version 4 adds the field to installed copies.** The owner asked for it, and the LNF wiki sets this tool by exposure time (its recipe gives 45 ms), not by dose. The DWL 66+ keeps the plain laser-write template.
+    - **A narrow change to an existing record.** Until now an upgrade only added missing records. `LNF_ADDED_FIELDS` names the template and the field. The field goes after the one it follows in the seed (Dose), or before the first output.
+    - **When it is skipped.** The template was deleted, or already has a field with that key or label.
+    - **Saved as an ordinary edit** (new `updatedAt`, this device), so sync carries it to devices still on an older version, and any later edit wins as usual.
+    - **Dose stays:** runs may already use it.

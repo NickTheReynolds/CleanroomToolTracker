@@ -146,15 +146,26 @@ test('folder records validate; a project names its folder', () => {
 });
 
 test('a copy gets a free name, new ids, every wafer in process and no step done', () => {
-  assert.equal(copyName('Batch 3'), 'Batch 3 (copy)');
-  assert.equal(copyName('Batch 3', ['Batch 3 (copy)']), 'Batch 3 (copy 2)');
-  assert.equal(copyName('Batch 3 (copy)', ['batch 3 (COPY)', 'Batch 3 (copy 2)']), 'Batch 3 (copy 3)', 'no stacked suffixes');
+  // A short number at the end counts on to the next free one, keeping its zeros.
+  assert.equal(copyName('Batch 3'), 'Batch 4');
+  assert.equal(copyName('Batch 3', ['batch 4', 'Batch 5']), 'Batch 6');
+  assert.equal(copyName('Umich_RegistrationJig_ShadowMask_1', ['Umich_RegistrationJig_ShadowMask_1']), 'Umich_RegistrationJig_ShadowMask_2');
+  assert.equal(copyName('Mask_09'), 'Mask_10');
+  assert.equal(copyName('Wafer7'), 'Wafer8');
+  // Anything else gets "(copy)": no number, a long one (a year, a part number), a bare number, or no room left.
+  assert.equal(copyName('Release'), 'Release (copy)');
+  assert.equal(copyName('Release', ['Release (copy)']), 'Release (copy 2)');
+  assert.equal(copyName('Release (copy)', ['release (COPY)', 'Release (copy 2)']), 'Release (copy 3)', 'no stacked suffixes');
+  assert.equal(copyName('LN_2024'), 'LN_2024 (copy)');
+  assert.equal(copyName('42'), '42 (copy)');
+  assert.equal(copyName('Run 999'), 'Run 999 (copy)');
+  assert.equal(copyName('Batch 3 (copy)'), 'Batch 4', 'a copy of an old copy counts on too');
   assert.equal(copyName(''), 'Project (copy)');
   const wafers = newWafers([], 3).map((w, i) => ({ ...w, status: i ? 'done' : 'scrapped', notes: 'chipped' }));
   const steps = [{ ...newStep({ title: 'Oxidize', toolId: 'furnace', recipe: 'Wet 1000' }), doneAt: T }, { ...newStep({ title: 'Etch' }), skipped: true }];
   const from = { ...project('src', 'c2', 'done'), name: 'Batch 3', goal: 'Release', substrate: 'Si', notes: 'Mask v2', endedAt: T, wafers, steps };
   const copy = duplicateProject(from, { now: '2026-10-21T08:00:00.000Z', taken: ['Batch 3'] });
-  assert.equal(copy.name, 'Batch 3 (copy)');
+  assert.equal(copy.name, 'Batch 4');
   assert.equal(copy.status, 'active');
   assert.equal(copy.startedAt, '2026-10-21T08:00:00.000Z');
   assert.equal(copy.endedAt, null);

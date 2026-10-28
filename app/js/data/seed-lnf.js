@@ -69,7 +69,7 @@ export const LNF_TOOLS = Object.freeze([
   ['fb954980-ab11-4754-a475-84166a87abcd', 'a894824e-af10-4c65-b824-9b2deb1778ce', 'Deep UV SenLights PL16', 'other', []],
   ['c12f43b6-f8f8-4bb1-94b6-3f47cc0f134b', 'cd3ecd57-e1be-497d-ab71-d9fa9c4ba418', 'Dimatix MP-2831 Inkjet Printer', 'other', []],
   ['04deab01-c075-44ac-98ec-8dd2e6cb7d4c', 'bc5377aa-d434-4476-b8aa-3c73ea1ba510', 'GCA AS200 AutoStep', 'stepper', []],
-  ['353b8e89-6133-4553-adf4-4940fe75d11b', 'c0d8b717-539b-4334-90db-79eb35c22462', 'Heidelberg µPG 501 Mask Maker', 'laser-writer', []],
+  ['353b8e89-6133-4553-adf4-4940fe75d11b', 'c0d8b717-539b-4334-90db-79eb35c22462', 'Heidelberg µPG 501 Mask Maker', 'mask-maker', []],
   ['6fa20e58-d9e0-4fd2-870b-012a90b2053c', 'e316cc3d-bfb9-42a9-8496-9ecbe3c6ab41', 'JEOL JBX-6300FS Electron Beam Lithography System', 'ebeam-lithography', []],
   ['9027387e-680b-42ab-84f8-a754082cc4e3', '33aa44cd-50d8-4158-b6d9-6423e90f9718', 'Laser Lith Heidelberg DWL66+', 'laser-writer', []],
   ['63dde648-e917-4652-9dc5-b9067fa2ff61', 'fdf9dd3c-75c2-4c05-b5b0-733f455c8ffd', 'Laurell Spinner', 'spin-coat', []],
@@ -152,6 +152,17 @@ export const LNF_TOOLS = Object.freeze([
 export const LNF_EXTRA_TEMPLATES = Object.freeze([
   ['38ec44e8-16bf-46b6-b492-a7993291dc7f', '6119e6b6-53b2-4b07-822f-3d00980c5cb0', 'pecvd', ['SiH4', 'NH3', 'N2O', 'N2', 'He'],
     'PECVD film (right chamber)'],
+]);
+
+/**
+ * Fields a later seed version adds to a seeded template, as [seed version,
+ * templateId, field key]. The field is the one the tool's type builds
+ * (seed-types.js); the upgrade adds it to an older database's copy of the
+ * template unless that copy already has the key or the label.
+ * @type {ReadonlyArray<[number, string, string]>}
+ */
+export const LNF_ADDED_FIELDS = Object.freeze([
+  [4, 'c0d8b717-539b-4334-90db-79eb35c22462', 'exposeTime'], // Heidelberg µPG 501 Mask Maker
 ]);
 
 /**

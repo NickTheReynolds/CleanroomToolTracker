@@ -81,6 +81,12 @@ const DEP_DERIVED = /** @type {DerivedSpec[]} */ ([
   { output: 'uniformity', fn: 'uniformity', phase: 'post' },
 ]);
 const EXPOSE_OUT = [out('cd', 'Critical dimension', 'µm'), out('sidewall', 'Sidewall angle', '°')];
+/** @param {FieldSpec[]} [extra] inputs after the dose @returns {FieldSpec[]} */
+const laserWrite = (extra = []) => [
+  exact('resist', 'Resist'), num('dose', 'Dose', 'mJ/cm²', 5, 20), ...extra, num('focus', 'Defocus', '', 1, 2, { min: undefined }),
+  ctx('resistThickness', 'Resist thickness', 'nm', 10), { key: 'devTime', label: 'Develop time', type: 'duration', unit: 's', role: 'context', step: 5 },
+  ...EXPOSE_OUT,
+];
 
 /**
  * @param {string} name @param {string} processType @param {string | null} primary
@@ -198,11 +204,9 @@ const BUILDERS = {
     ctx('resistThickness', 'Resist thickness', 'nm', 10), { key: 'devTime', label: 'Develop time', type: 'duration', unit: 's', role: 'context', step: 5 },
     ...EXPOSE_OUT,
   ]),
-  'laser-writer': () => t('Laser write', 'litho', 'cd', [
-    exact('resist', 'Resist'), num('dose', 'Dose', 'mJ/cm²', 5, 20), num('focus', 'Defocus', '', 1, 2, { min: undefined }),
-    ctx('resistThickness', 'Resist thickness', 'nm', 10), { key: 'devTime', label: 'Develop time', type: 'duration', unit: 's', role: 'context', step: 5 },
-    ...EXPOSE_OUT,
-  ]),
+  'laser-writer': () => t('Laser write', 'litho', 'cd', laserWrite()),
+  // The µPG 501 is set by an exposure time; the LNF wiki posts the standard value (45 ms).
+  'mask-maker': () => t('Laser write', 'litho', 'cd', laserWrite([num('exposeTime', 'Expose time', 'ms', 1, 5)])),
   'ebeam-lithography': () => t('E-beam write', 'litho', 'linewidth', [
     exact('resist', 'Resist'), num('dose', 'Dose', 'µC/cm²', 10, 50), num('current', 'Beam current', 'nA', 0.1, 1),
     ctx('stepSize', 'Beam step', 'nm', 1), ctx('resistThickness', 'Resist thickness', 'nm', 10),
@@ -259,7 +263,7 @@ const CATEGORY_BY_TYPE = /** @type {Record<string, string>} */ ({
   pecvd: 'deposition', lpcvd: 'deposition', sputter: 'deposition', 'ebeam-evaporation': 'deposition', 'thermal-evaporation': 'deposition',
   ald: 'deposition', electroplating: 'deposition', parylene: 'deposition',
   'oxidation-furnace': 'thermal', 'anneal-furnace': 'thermal', rta: 'thermal',
-  'spin-coat': 'litho', bake: 'litho', 'mask-aligner': 'litho', stepper: 'litho', 'laser-writer': 'litho',
+  'spin-coat': 'litho', bake: 'litho', 'mask-aligner': 'litho', stepper: 'litho', 'laser-writer': 'litho', 'mask-maker': 'litho',
   'ebeam-lithography': 'litho', nanoimprint: 'litho', develop: 'litho',
 });
 

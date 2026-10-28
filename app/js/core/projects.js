@@ -394,7 +394,10 @@ function copyWafer(w) {
 }
 
 /**
- * A name for a copy that no other project uses: "Name (copy)", then
+ * A name for a copy that no other project uses. A name that ends in a
+ * number of up to three digits counts on to the next free one ("Batch 3"
+ * to "Batch 4", "Mask_01" to "Mask_02"); a longer number is likely a year
+ * or a part number, so that name, like any other, gets "Name (copy)", then
  * "Name (copy 2)" and so on. Copying a copy does not stack the suffix.
  * @param {string} name
  * @param {readonly string[]} [taken] names in use
@@ -402,7 +405,14 @@ function copyWafer(w) {
  */
 export function copyName(name, taken = []) {
   const base = String(name || '').trim().replace(/\s*\(copy(?: \d+)?\)$/i, '') || 'Project';
-  const used = new Set(taken.map((t) => String(t).trim().toLocaleLowerCase()));
+  const used = new Set([...taken, base].map((t) => String(t).trim().toLocaleLowerCase()));
+  const numbered = /^(.*\D)(\d{1,3})$/.exec(base);
+  if (numbered) {
+    for (let i = Number(numbered[2]) + 1; i < 1000; i++) {
+      const n = `${numbered[1]}${String(i).padStart(numbered[2].length, '0')}`;
+      if (!used.has(n.toLocaleLowerCase())) return n;
+    }
+  }
   for (let i = 1; ; i++) {
     const n = i === 1 ? `${base} (copy)` : `${base} (copy ${i})`;
     if (!used.has(n.toLocaleLowerCase())) return n;

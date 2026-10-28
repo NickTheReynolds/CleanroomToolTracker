@@ -2,6 +2,17 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.5.2: Copy a project from its folder, Expose time on the mask maker
+
+- **Copy a project from its folder.**
+  - Every project card on a folder page has **Copy**. It opens the Copy project form, already filled in.
+  - **Select** can copy several projects at once, with Undo.
+  - A copy's name counts on: "…ShadowMask_1" becomes "…ShadowMask_2" and "Batch 3" becomes "Batch 4". Other names still get "(copy)".
+- **Expose time on the Heidelberg µPG 501 Mask Maker.**
+  - Its template has a new input, **Expose time** (ms), after Dose.
+  - The wiki recipe "Direct writing on mask blanks" now fills it with LNF's posted 45 ms.
+  - Installed copies get the field on their next start, added to the template as you have it: your other edits stay. Nothing is added if the template already has an Expose time field or was deleted.
+
 ## 1.5.1: Materials the app does not know
 
 - **No more silent misses.** A material the plan checks don't recognize now gets a **Check** wherever a rule could apply to it, and the note names the rule. Examples: a tool that allows no metals or resists, a CMOS-clean tool, a furnace that takes silicon only, an anodic or fusion bond. In 1.5.0 such a name raised nothing.

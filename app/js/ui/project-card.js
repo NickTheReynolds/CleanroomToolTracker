@@ -47,13 +47,15 @@ export function nextStepText(p, runs, tools) {
 }
 
 /**
- * One project as a card that opens it.
+ * One project as a card that opens it. Its name is the link, stretched over
+ * the card, so the card can also hold a Copy button.
  * @param {Project} p
  * @param {Run[]} runs every run
  * @param {Map<string, Tool>} tools
+ * @param {{copy?: boolean}} [o] copy: a Copy button that opens a new project copied from this one
  * @returns {HTMLElement}
  */
-export function projectCard(p, runs, tools) {
+export function projectCard(p, runs, tools, o = {}) {
   const mine = projectRuns(runs, p.id);
   const next = nextStepText(p, mine, tools);
   const inProcess = activeWafers(p).length;
@@ -68,14 +70,18 @@ export function projectCard(p, runs, tools) {
     `${mine.length} run${mine.length === 1 ? '' : 's'}`,
     `last activity ${formatAgo(lastActivity(p, mine), Date.now())}`,
   ].filter(Boolean).join(' · ');
-  return h('a', { class: 'card project-card', href: `#/project/${encodeURIComponent(p.id)}` },
-    h('span', { class: 'spread' }, h('span', { class: 'project-name' }, icon('project', { size: 20 }), p.name),
+  return h('div', { class: 'card project-card' },
+    h('span', { class: 'spread' },
+      h('a', { class: 'project-name project-link', href: `#/project/${encodeURIComponent(p.id)}` }, icon('project', { size: 20 }), p.name),
       p.status === 'active' ? null : badge(PROJECT_STATUS_LABELS[p.status] || p.status, p.status === 'done' ? 'ok' : 'muted')),
     p.goal ? h('span', { class: 'muted small clamp-2' }, p.goal) : null,
     next.total ? h('span', { class: 'stack project-progress' }, progressBar(next.done, next.total),
       h('span', { class: 'small' }, `${next.done} of ${next.total} steps done`,
         next.text ? h('span', { class: 'muted' }, ` · next: ${next.text}`) : null)) : null,
-    h('span', { class: 'muted small' }, facts));
+    h('span', { class: 'project-card-foot' }, h('span', { class: 'muted small' }, facts),
+      o.copy ? h('a', {
+        class: 'btn btn-ghost project-card-copy', href: `#/project/new?copy=${encodeURIComponent(p.id)}`, 'aria-label': `Copy ${p.name}`,
+      }, icon('copy'), h('span', null, 'Copy')) : null));
 }
 
 /**

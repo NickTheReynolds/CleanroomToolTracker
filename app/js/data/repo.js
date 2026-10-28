@@ -62,9 +62,9 @@ export async function ensureSeeded() {
 
 /**
  * Bring a database seeded by an older app version up to the current seed:
- * add missing LNF tools and templates and, coming from the example seed,
- * merge the LNF materials and archive example tools nobody used. Runs once
- * per device, in one transaction.
+ * add missing LNF tools, templates and template fields and, coming from the
+ * example seed, merge the LNF materials and archive example tools nobody
+ * used. Runs once per device, in one transaction.
  */
 async function upgradeSeed() {
   const meta = await getOne('meta', 'seedVersion');
@@ -76,9 +76,10 @@ async function upgradeSeed() {
   ]);
   const plan = planSeedUpgrade({ tools, templates, runs, events, materials: settings.materials }, current);
   const archived = plan.archiveIds.map((id) => prepareUpdate('tools', { ...tools.find((t) => t.id === id), active: false }, settings));
+  const grown = plan.withFields.map((t) => prepareUpdate('templates', t, settings));
   await withTx(['tools', 'templates', 'meta'], 'readwrite', (tx) => {
     for (const t of [...plan.tools, ...archived]) tx.objectStore('tools').put(t);
-    for (const t of plan.templates) tx.objectStore('templates').put(t);
+    for (const t of [...plan.templates, ...grown]) tx.objectStore('templates').put(t);
     tx.objectStore('meta').put({ key: 'settings', value: { ...settings, materials: plan.materials } });
     tx.objectStore('meta').put({ key: 'seedVersion', value: SEED_VERSION });
   });

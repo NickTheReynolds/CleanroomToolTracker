@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedForType, knownTypes, gasKey, gasFields } from '../app/js/data/seed-types.js';
 import { lnfSeedRecords, seedMaterials, planSeedUpgrade, mergeMaterialLists } from '../app/js/data/seed-upgrade.js';
-import { LNF_TOOLS, LNF_MATERIALS, LNF_MATERIAL_WORDS, LNF_EXTRA_TEMPLATES } from '../app/js/data/seed-lnf.js';
+import { LNF_TOOLS, LNF_MATERIALS, LNF_MATERIAL_WORDS, LNF_EXTRA_TEMPLATES, LNF_ADDED_FIELDS } from '../app/js/data/seed-lnf.js';
 import { seedRecords, SEED_MATERIALS, SEED_TIME } from '../app/js/data/seed-tools.js';
 import { validateRecord, validateTemplateBody, SEED_VERSION } from '../app/js/data/schema.js';
 import { isUuid } from '../app/js/core/ids.js';
@@ -108,7 +108,7 @@ test('upgrading an example-seeded database adds the LNF set without overwriting 
   assert.ok(!plan.archiveIds.includes(renamedTool.id), 'renamed example tool kept');
   assert.equal(plan.materials[0], 'Custom film');
   assert.ok(plan.materials.includes('LiNbO3 (bulk)'));
-  assert.equal(SEED_VERSION, 3);
+  assert.equal(SEED_VERSION, 4);
   const again = planSeedUpgrade({ ...existing, tools: [...existing.tools, ...plan.tools], templates: [...existing.templates, ...plan.templates] });
   assert.deepEqual(again.tools, []);
   assert.deepEqual(again.templates, []);
@@ -129,4 +129,35 @@ test('upgrading a version-2 database adds only the second chamber template', () 
   assert.deepEqual(trimmed.materials, ['Si', 'SiO2 (thermal)', 'My film']);
   assert.deepEqual(trimmed.archiveIds, []);
   assert.ok(planSeedUpgrade({ ...v2, materials: ['Si'] }, 1).materials.length > 50, 'from seed 1 the LNF materials arrive');
+});
+
+test('upgrading a version-3 database gives the µPG 501 template its Expose time field, edits kept', () => {
+  const lnf = lnfSeedRecords();
+  const [[, templateId, key]] = LNF_ADDED_FIELDS;
+  const fresh = lnf.templates.find((t) => t.id === templateId);
+  assert.deepEqual(fresh.fields.slice(0, 4).map((f) => f.key), ['resist', 'dose', key, 'focus']);
+  assert.equal(fresh.fields[2].label, 'Expose time');
+  const dwl = lnf.templates.find((t) => t.id === '33aa44cd-50d8-4158-b6d9-6423e90f9718');
+  assert.ok(!dwl.fields.some((f) => f.key === key), 'the DWL 66+ keeps the plain laser-write template');
+  const old = { ...fresh, fields: fresh.fields.filter((f) => f.key !== key) };
+  const v3 = (t) => ({ tools: lnf.tools, templates: [...lnf.templates.filter((x) => x.id !== templateId), t], runs: [], events: [], materials: seedMaterials() });
+  const mine = { key: 'mine', label: 'Mine', type: 'text', role: 'context' };
+  const edited = { ...old, name: 'My mask write', fields: [...old.fields, mine], updatedAt: '2026-10-21T00:00:00.000Z' };
+  const plan = planSeedUpgrade(v3(edited), 3);
+  assert.deepEqual(plan.templates, []);
+  assert.equal(plan.withFields.length, 1);
+  const grown = plan.withFields[0];
+  assert.deepEqual(grown.fields.map((f) => f.key), [...fresh.fields.map((f) => f.key), 'mine']);
+  assert.equal(grown.name, 'My mask write');
+  assert.deepEqual(validateRecord('templates', grown), []);
+  // Already there (by key or by label), deleted, or the database is already at seed 4: nothing to add.
+  assert.deepEqual(planSeedUpgrade(v3(fresh), 3).withFields, []);
+  const ownField = { ...old, fields: [...old.fields, { key: 'myExpose', label: 'expose TIME', type: 'number', role: 'input' }] };
+  assert.deepEqual(planSeedUpgrade(v3(ownField), 3).withFields, []);
+  assert.deepEqual(planSeedUpgrade(v3({ ...old, deleted: true }), 3).withFields, []);
+  assert.deepEqual(planSeedUpgrade(v3(old), 4).withFields, []);
+  // Without the field it follows (the dose), it goes before the first output.
+  const noDose = { ...old, fields: old.fields.filter((f) => f.key !== 'dose') };
+  const keys = planSeedUpgrade(v3(noDose), 3).withFields[0].fields.map((f) => f.key);
+  assert.equal(keys.indexOf(key), keys.indexOf('cd') - 1);
 });

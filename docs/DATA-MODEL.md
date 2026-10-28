@@ -123,7 +123,7 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 | `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, seenStores, lastSyncAt, lastResult}`. `seenStores` names what `seen` covers (`SYNC_SCOPE`: the stores and, since 1.5.1, the answers about materials), so a version that syncs more reads every file again once | no, and the token never leaves the device |
 | `myTools` | Ids of the tools this person uses; tool pickers show them (and tools used in the last 60 days) first | no |
 
-`meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list, 3 adds a PECVD template for the Plasmatherm 790's second chamber (`LNF_EXTRA_TEMPLATES` in `data/seed-lnf.js`, fixed id). Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade only adds records that are missing (a deleted one stays deleted), merges new materials, and archives example tools that were never used or edited.
+`meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list, 3 adds a PECVD template for the Plasmatherm 790's second chamber (`LNF_EXTRA_TEMPLATES` in `data/seed-lnf.js`, fixed id), 4 adds an Expose time field to the Heidelberg µPG 501's template (`LNF_ADDED_FIELDS`). Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade adds records that are missing (a deleted one stays deleted) and the fields `LNF_ADDED_FIELDS` lists to stored templates that lack them (saved as an edit), merges new materials, and archives example tools that were never used or edited.
 
 ## Drafts (`meta` keys `draft:<form>`)
 

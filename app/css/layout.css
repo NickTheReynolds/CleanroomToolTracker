@@ -4,13 +4,24 @@
 
 /* Projects */
 .project-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   color: var(--text);
-  text-decoration: none;
 }
 .project-card:hover { border-color: var(--border-strong); }
+/* The name is the card's link: it stretches over the whole card, and the Copy button sits above it. */
+.project-link { color: inherit; text-decoration: none; }
+.project-link::after { content: ''; position: absolute; inset: 0; }
+.project-link:focus-visible { outline: none; }
+.project-card:has(.project-link:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+.project-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.project-card-copy { position: relative; z-index: 1; flex: none; margin: -6px -4px -6px 0; }
+/* Select mode's Copy, Move and Delete: icons only on a narrow phone, so four buttons fit; screen readers still hear the words. */
+@media (max-width: 480px) {
+  .select-action > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 .project-name { display: inline-flex; align-items: center; gap: 8px; font-size: 1.08rem; font-weight: 750; min-width: 0; overflow-wrap: anywhere; }
 .project-name > svg { flex: none; color: var(--brand); }
 .project-title { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; overflow-wrap: anywhere; }

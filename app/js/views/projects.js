@@ -2,7 +2,8 @@
 /**
  * Projects, in folders: the folders here (with what each holds), then the
  * projects here, active first. Inside a folder: where it is, and rename,
- * move or delete it. "Select" picks projects to move into a folder or
+ * move or delete it. Each project's card has Copy, which opens a new project
+ * copied from it; "Select" picks projects to copy, move into a folder or
  * delete together. A project follows a batch of wafers from start to
  * finish; runs work without one, and several projects can run at once.
  */
@@ -16,6 +17,7 @@ import { chooseFolder, folderForm } from '../ui/folder-picker.js';
 import { navigate, refresh } from '../router.js';
 import {
   listProjects, listRuns, listTools, listFolders, saveFolder, moveProjects, deleteProjects, moveFolder, deleteFolder, restoreChange,
+  copyProjects,
 } from '../data/repo.js';
 import { folderTree, folderPath, pathText, projectsIn, folderCounts, countsText, folderNameClash } from '../core/folders.js';
 import { PROJECT_STATUS_LABELS } from '../core/vocab.js';
@@ -145,6 +147,17 @@ export async function render(ctx) {
   };
 
   // Several projects at once.
+  const copySelected = async () => {
+    try {
+      const made = await copyProjects(mine.filter((p) => picked.has(p.id)).map((p) => p.id));
+      toast(made.length === 1 ? `Copied as “${made[0].name}”.` : `${plural(made.length, 'project')} copied.`, {
+        action: { label: 'Undo', fn: async () => { await deleteProjects(made.map((p) => p.id)); refresh(); } },
+      });
+      refresh();
+    } catch (err) {
+      toast(errorText(err), { kind: 'error' });
+    }
+  };
   const moveSelected = () => chooseFolder({
     title: `Move ${plural(picked.size, 'project')} to`, folders, current: folderId,
     onPick: async (target) => {
@@ -170,6 +183,8 @@ export async function render(ctx) {
 
   /** The Select all / Select none button, kept in step with the ticks. */
   let allBtn = /** @type {HTMLButtonElement | null} */ (null);
+  /** How many are picked, in words (the bottom buttons may show only icons). */
+  let pickedLine = /** @type {HTMLElement | null} */ (null);
   const allLabel = () => (picked.size === mine.length ? 'Select none' : 'Select all');
   const pickRow = (/** @type {Project} */ p) => {
     const btn = h('button', {
@@ -187,18 +202,25 @@ export async function render(ctx) {
     h('span', { class: 'check-box', 'aria-hidden': 'true' }, icon('check', { size: 20 })));
     return btn;
   };
-  const cards = (/** @type {Project[]} */ ps) => h('div', { class: 'stack' }, ps.map((p) => projectCard(p, runs, toolMap)));
+  const cards = (/** @type {Project[]} */ ps) => h('div', { class: 'stack' }, ps.map((p) => projectCard(p, runs, toolMap, { copy: true })));
 
   /** Focus a control of the redrawn screen (the one pressed was replaced). */
   const focusIn = (/** @type {string} */ sel) => { /** @type {HTMLElement | null} */ (document.querySelector(sel))?.focus(); };
-  const drawActions = () => ctx.setActions(selecting ? [
-    button('Cancel', { onClick: () => { selecting = false; picked.clear(); draw(); focusIn('[data-select-mode]'); } }),
-    button(`Move${picked.size ? ` (${picked.size})` : ''}`, { icon: 'move', disabled: !picked.size, onClick: moveSelected }),
-    button(`Delete${picked.size ? ` (${picked.size})` : ''}`, { icon: 'trash', kind: 'danger', disabled: !picked.size, onClick: deleteSelected }),
-  ] : [
-    button('New folder', { icon: 'folderPlus', onClick: newFolder }),
-    linkButton('New project', newProjectHref, { kind: 'primary', icon: 'plus' }),
-  ]);
+  const drawActions = () => {
+    if (pickedLine) pickedLine.textContent = picked.size ? `${plural(picked.size, 'project')} selected` : 'None selected';
+    // On a narrow phone Copy, Move and Delete show only their icons (layout.css), so the four buttons fit.
+    ctx.setActions(selecting ? [
+      button('Cancel', { onClick: () => { selecting = false; picked.clear(); draw(); focusIn('[data-select-mode]'); } }),
+      button(`Copy${picked.size ? ` (${picked.size})` : ''}`, { icon: 'copy', class: 'select-action', disabled: !picked.size, onClick: copySelected }),
+      button(`Move${picked.size ? ` (${picked.size})` : ''}`, { icon: 'move', class: 'select-action', disabled: !picked.size, onClick: moveSelected }),
+      button(`Delete${picked.size ? ` (${picked.size})` : ''}`, {
+        icon: 'trash', kind: 'danger', class: 'select-action', disabled: !picked.size, onClick: deleteSelected,
+      }),
+    ] : [
+      button('New folder', { icon: 'folderPlus', onClick: newFolder }),
+      linkButton('New project', newProjectHref, { kind: 'primary', icon: 'plus' }),
+    ]);
+  };
 
   const draw = () => {
     const active = mine.filter((p) => p.status === 'active');
@@ -214,7 +236,7 @@ export async function render(ctx) {
         lead: icon('folder'), title: f.name, subtitle: countsText(folderCounts(tree, projects, f.id)), href: `#${folderRoute(f.id)}`,
       })))) : null,
       selecting ? section(`Select projects (${mine.length})`,
-        h('div', { class: 'row-end' }, allBtn = marked(button(allLabel(), {
+        h('div', { class: 'spread' }, pickedLine = h('p', { class: 'muted small', role: 'status' }), allBtn = marked(button(allLabel(), {
           kind: 'ghost', onClick: () => {
             if (picked.size === mine.length) picked.clear();
             else mine.forEach((p) => picked.add(p.id));

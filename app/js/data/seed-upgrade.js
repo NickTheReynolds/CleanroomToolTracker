@@ -6,14 +6,16 @@
  *   (seed-lnf.js), each tool with its own copy of its type's template.
  * - 3: a second template for tools with two kinds of process (the
  *   Plasmatherm 790's PECVD chamber).
+ * - 4: an Expose time field on the Heidelberg µPG 501's template.
  *
  * Fresh installs get the latest version directly. planSeedUpgrade() works
- * out what an older database needs. It only ever adds records that are
- * missing, never overwrites a record (so renames and template edits
- * survive), and archives example tools that were never used or edited.
+ * out what an older database needs. It adds records that are missing and
+ * fields a seeded template gained, never replaces a record (so renames and
+ * template edits survive), and archives example tools that were never used
+ * or edited.
  */
 import { seedForType } from './seed-types.js';
-import { LNF_TOOLS, LNF_MATERIALS, LNF_EXTRA_TEMPLATES } from './seed-lnf.js';
+import { LNF_TOOLS, LNF_MATERIALS, LNF_EXTRA_TEMPLATES, LNF_ADDED_FIELDS } from './seed-lnf.js';
 import { SEED_TIME, SEED_AUTHOR, SEED_TOOLS, SEED_MATERIALS } from './seed-tools.js';
 import { normText } from '../core/vocab.js';
 
@@ -74,12 +76,15 @@ export function seedMaterials() {
  * a deleted one stays deleted). Only the step from seed 1 to 2, which
  * brought the LNF list, merges the LNF materials and archives unused
  * example tools: later steps leave the materials list alone, so materials
- * the person removed stay removed.
+ * the person removed stay removed. A step that gave a seeded template a new
+ * field (LNF_ADDED_FIELDS) adds it to the stored copy, edits and all, unless
+ * that copy is deleted or already has a field with the same key or label.
  * @param {{tools: any[], templates: any[], runs: any[], events: any[], materials: string[]}} existing
  *   all records, tombstones included, plus the current materials list
  * @param {number} [from] the database's seed version (meta.seedVersion)
- * @returns {{tools: any[], templates: any[], archiveIds: string[], materials: string[]}}
- *   new tool and template records to add, example tools to archive, and the materials list
+ * @returns {{tools: any[], templates: any[], withFields: any[], archiveIds: string[], materials: string[]}}
+ *   new tool and template records to add, stored templates with their new fields (to save as edits),
+ *   example tools to archive, and the materials list
  */
 export function planSeedUpgrade(existing, from = 1) {
   const toolIds = new Set(existing.tools.map((t) => t.id));
@@ -90,10 +95,37 @@ export function planSeedUpgrade(existing, from = 1) {
   const archiveIds = from >= 2 ? [] : existing.tools
     .filter((t) => examples.has(t.id) && !t.deleted && t.active && t.updatedAt === SEED_TIME && !used.has(t.id))
     .map((t) => t.id);
+  /** @type {Map<string, any>} */
+  const withFields = new Map();
+  for (const [version, templateId, key] of LNF_ADDED_FIELDS) {
+    const own = withFields.get(templateId) || existing.templates.find((t) => t.id === templateId);
+    const seeded = seed.templates.find((t) => t.id === templateId);
+    const field = seeded?.fields.find((/** @type {any} */ f) => f.key === key);
+    if (version <= from || !own || own.deleted || !field) continue;
+    if (own.fields.some((/** @type {any} */ f) => f.key === key || normText(f.label) === normText(field.label))) continue;
+    withFields.set(templateId, addField(own, seeded, field));
+  }
   return {
     tools: seed.tools.filter((t) => !toolIds.has(t.id)),
     templates: seed.templates.filter((t) => !templateIds.has(t.id)),
+    withFields: [...withFields.values()],
     archiveIds,
     materials: from >= 2 ? [...existing.materials] : mergeMaterialLists(existing.materials, LNF_MATERIALS),
   };
+}
+
+/**
+ * A copy of `template` with `field` placed after the field that comes before
+ * it in the seed's template, or before the first output when this copy lacks
+ * that one.
+ * @param {any} template @param {any} seeded the seed's copy of the template @param {any} field
+ * @returns {any}
+ */
+function addField(template, seeded, field) {
+  const fields = [...template.fields];
+  const prev = seeded.fields[seeded.fields.indexOf(field) - 1];
+  let at = prev ? fields.findIndex((f) => f.key === prev.key) + 1 : 0;
+  if (at === 0) at = fields.findIndex((f) => f.role === 'output');
+  fields.splice(at < 0 ? fields.length : at, 0, structuredClone(field));
+  return { ...template, fields };
 }

@@ -5,7 +5,7 @@
  * project itself: its wafers, its plan and its notes.
  */
 import { createRecord, updateRecord, getLive, listLive, softDelete, restoreRecord } from './records.js';
-import { sortProjects } from '../core/projects.js';
+import { sortProjects, duplicateProject } from '../core/projects.js';
 
 /** @typedef {import('../core/types.js').Project} Project */
 
@@ -37,6 +37,28 @@ export function getProject(id) {
  */
 export function saveProject(p) {
   return p.createdAt ? updateRecord('projects', p) : createRecord('projects', p);
+}
+
+/**
+ * New projects copied from these, for their next batch (core duplicateProject):
+ * the same plan and wafer labels with nothing done, in the original's folder,
+ * each under a name no other project uses. The runs stay with the originals.
+ * @param {readonly string[]} ids
+ * @returns {Promise<Project[]>} the copies, in the order asked
+ */
+export async function copyProjects(ids) {
+  const all = await listProjects();
+  const taken = all.map((p) => p.name);
+  /** @type {Project[]} */
+  const made = [];
+  for (const id of ids) {
+    const from = all.find((p) => p.id === id);
+    if (!from) continue;
+    const fields = duplicateProject(from, { taken });
+    taken.push(fields.name);
+    made.push(await saveProject(fields));
+  }
+  return made;
 }
 
 /**

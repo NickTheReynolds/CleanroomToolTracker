@@ -28,9 +28,10 @@ export const DB_VERSION = 4;
 export const SCHEMA_VERSION = 1;
 /**
  * Seed data version (meta.seedVersion): 1 = generic examples, 2 = the LNF
- * equipment list, 3 = a PECVD template for the Plasmatherm 790's second chamber.
+ * equipment list, 3 = a PECVD template for the Plasmatherm 790's second chamber,
+ * 4 = an Expose time field on the Heidelberg µPG 501's template.
  */
-export const SEED_VERSION = 3;
+export const SEED_VERSION = 4;
 /** Stores holding user records (meta excluded). */
 export const DATA_STORES = Object.freeze(['tools', 'templates', 'runs', 'measurements', 'events', 'photos', 'projects', 'folders', 'wafers']);
 export const MAX_REQUIRED_FIELDS = 5;
