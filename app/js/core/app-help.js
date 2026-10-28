@@ -99,7 +99,7 @@ export const HELP = Object.freeze({
   userName: 'Recorded as the author of the runs, measurements and events you log. Labmates who sync with you see it, and it is in the repository’s history of each sync.',
   deviceName: 'Sync shows it in the repository’s history, so you can tell your devices apart.',
   theme: 'System follows your device’s light or dark setting.',
-  includePhotos: 'Photos make the backup much bigger. They do not sync, so a backup is the way to move them to another device.',
+  includePhotos: 'Run photos, and the pictures and files on plan steps, make the backup much bigger. They do not sync, so a backup is the way to move them to another device.',
   exportFormat: 'Excel: a workbook with all runs, a sheet per tool, the measurements and the tool events. CSV: one table of all runs, for any spreadsheet or script. PDF: a report to read or print.',
   syncRepo: 'The private GitHub repository that holds the sync files, as owner/name or its github.com address. Create it once, empty and private; every device and labmate who syncs uses the same one.',
   syncToken: 'The key that lets this device read and write the sync files. Make it as in “Set up the repository and token” below: a fine-grained token for this repository only, with Contents: Read and write. Anyone who has it can change the repository, so share it only privately.',

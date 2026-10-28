@@ -30,7 +30,7 @@ Every record in the nine data stores (`meta` excluded) has:
 | `runs` | `toolId`, `templateId` (null for an untyped quick capture), `material`, `substrate`, `maskMaterial`, `status` (draft, open, complete), `startedAt`, `endedAt`, `params` {key: value}, `results` {key: value}, `derivedKeys[]`, `targetThickness` (nm or null), `recipe`, `notes`, `tags[]`, `photoIds[]`, `steps[]` (see Run steps), `projects[]` (see Projects) | `toolId`, `toolTemplate` = [toolId, templateId], `startedAt`, `status` |
 | `measurements` | `runId`, `metrologyToolId`, `kind` (thickness, stepHeight, cd, sheetResistance, refractiveIndex, stress, other), `phase` (pre, post), `material`, `unit`, `points[]` {site, value}, `takenAt`, `notes` | `runId` |
 | `events` | `toolId`, `type` (pm, clean, seasoning, targetChange, gasChange, fault, other), `major`, `at`, `notes` | `toolAt` = [toolId, at] |
-| `photos` | `runId`, `blob` (JPEG), `width`, `height`, `caption`, `takenAt` | `runId` |
+| `photos` | `runId` (the run, or since 1.6 the plan step, it belongs to), `blob` (JPEG; a step's file as picked), `width`, `height`, `caption`, `takenAt`; a step's picture or file also has `name` and `type` | `runId` |
 | `projects` | `name`, `goal`, `status` (active, paused, done), `startedAt`, `endedAt`, `substrate`, `notes`, `folderId` (or null), `wafers[]`, `steps[]` (see Projects) | `status` |
 | `folders` | `name`, `parentId` (a folder, or null for the top level) | none |
 | `wafers` | Saved wafer types: `name`, `spec` (a WaferSpec, see Wafer types). Masks are kept here too, with `spec.kind: "mask"`. | none |
@@ -70,6 +70,11 @@ A project follows a batch of wafers through a process.
 
 - `wafers[]`: `{id, label, status (active, done, scrapped), notes}`. Ids are UUIDs, so a wafer can be renamed.
 - `steps[]`: the plan, in order: `{id, title, toolId, templateId, recipe, notes, doneAt, skipped}`. `toolId`, `templateId` and `doneAt` may be null. A step is **done** when a complete run is linked to it, or when it was marked done by hand (`doneAt`); **in progress** when a draft or open run is linked to it; **skipped** when marked so. Progress counts done steps out of the steps not skipped.
+- A plan step may carry `attachments` (`[{id, name, kind (photo, file), type, size, addedAt}]`) and, on an exposure step, `gds` (`{name, cell, layer, link, fileId, size}`, every part but the name optional). New in 1.6 (`core/attachments.js`, `data/attachments.js`):
+  - **What syncs.** These lists sync with the project.
+  - **Where the bytes are.** They stay on the device that added them, in the `photos` store under the same id, with `runId` set to the step's id. Another device shows the name and size and says the file is on another device.
+  - **Copies.** A copied project keeps each step's `gds` (sharing the file on this device), but not its attachments.
+  - **Deleting.** A file's bytes are deleted, as a tombstone, only when no live step names them (`fileInUse`).
 - A run joins a project from its own side: `run.projects[]` holds `{projectId, waferIds[], stepId}` links. One run can carry wafers of several projects (a furnace load), and a run without links is a run without a project. A project's traveler is its linked runs, oldest first; a wafer's path is the runs whose link names it.
 - Deleting a project leaves its runs alone; their links to it are ignored. Wafers and steps that runs name cannot be removed from the project, only finished, scrapped or skipped.
 - `folderId` files the project in a folder. Folders hold folders through `parentId`. A folder whose parent was deleted, or a loop of folders that two devices moved into each other at the same time, shows at the top level: in a loop, the folder with the lowest id (`folderTree` in `core/folders.js`), so every device draws the same tree. A project in a deleted folder shows at the top level too.
@@ -77,7 +82,7 @@ A project follows a batch of wafers through a process.
 
 ### Photos
 
-Photos are resized on the device to at most 1600 px on the long edge and stored as JPEG blobs, at quality 0.8 (`PHOTO_MAX_EDGE`, `PHOTO_QUALITY`). Very old Safari versions cannot store blobs in IndexedDB; there the record holds `bytes` (an ArrayBuffer) and `type` instead of `blob`.
+Photos are resized on the device to at most 1600 px on the long edge and stored as JPEG blobs, at quality 0.8 (`PHOTO_MAX_EDGE`, `PHOTO_QUALITY`). A plan step's pictures are resized the same way; its other files are stored as picked, up to 100 MB each (`MAX_FILE_BYTES`). Very old Safari versions cannot store blobs in IndexedDB; there the record holds `bytes` (an ArrayBuffer) and `type` instead of `blob`.
 
 ## Template field spec
 
@@ -191,3 +196,4 @@ The project page exports its traveler (`core/project-report.js`): every run the 
 
 - **PDF** (`lnf-runlog-project-<name>-<date>.pdf`): the project's facts (folder, goal, substrate, wafers, notes), the plan with each step's state, the process record run by run (inputs, results, measurements, wafers, step) and each wafer's path.
 - **Excel** (`.xlsx`): the sheets "Process record", "Plan" and "Wafers".
+- Each step in the plan names its GDS layout and its pictures and files (in the workbook, the Plan sheet's last two columns). The files themselves are not in the traveler.

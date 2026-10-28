@@ -321,10 +321,18 @@ function stepExtras(s) {
   const bondsOk = isNullish(s.bonds) || (Array.isArray(s.bonds)
     && s.bonds.every((/** @type {any} */ b) => isObj(b) && isStr(b.id) && Array.isArray(b.waferIds) && b.waferIds.every(isStr)
       && (isNullish(b.method) || isStr(b.method))));
+  // Pictures, files and the GDS layout (1.6): checked only for their type, like the 1.5 parts.
+  const filesOk = isNullish(s.attachments) || (Array.isArray(s.attachments)
+    && s.attachments.every((/** @type {any} */ a) => isObj(a) && isStr(a.id) && a.id && isStr(a.name) && (a.kind === 'photo' || a.kind === 'file')
+      && (isNullish(a.size) || isNum(a.size))));
+  const gdsOk = isNullish(s.gds) || (isObj(s.gds) && isStr(s.gds.name)
+    && ['cell', 'layer', 'link', 'fileId'].every((k) => isNullish(s.gds[k]) || isStr(s.gds[k])) && (isNullish(s.gds.size) || isNum(s.gds.size)));
   return [
     ...optionalTextLists(s, ['waferIds', 'adds', 'removes', 'checked']),
     bondsOk ? '' : 'bonds must be a list of {id, waferIds, method}',
     !isNullish(s.debond) && !isBool(s.debond) ? 'debond must be true or false' : '',
+    filesOk ? '' : 'attachments must be a list of {id, name, kind}',
+    gdsOk ? '' : 'gds must be {name, cell, layer, link, fileId}',
   ];
 }
 
@@ -448,6 +456,7 @@ const CHECKS = {
     for (const k of ['width', 'height']) if (!(isNum(r[k]) && r[k] >= 0)) errs.push(`${k} must be a number`);
     if (!isStr(r.caption)) errs.push('caption must be text');
     if (!isIsoDate(r.takenAt)) errs.push('takenAt must be a date');
+    if (!isNullish(r.name) && !isStr(r.name)) errs.push('name must be text');
   },
 };
 

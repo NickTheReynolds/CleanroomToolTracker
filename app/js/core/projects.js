@@ -314,7 +314,9 @@ export function newWafers(existing, count, prefix = 'W', type = {}) {
 }
 
 /**
- * A plan step with a fresh id.
+ * A plan step with a fresh id. A GDS layout comes along (the next batch
+ * writes the same layout, and on this device shares its file); pictures and
+ * files stay with the step they were added to.
  * @param {Partial<PlanStep>} [s]
  * @returns {PlanStep}
  */
@@ -327,12 +329,13 @@ export function newStep(s = {}) {
   if (list(s.adds).length) out.adds = [...list(s.adds)];
   if (list(s.removes).length) out.removes = [...list(s.removes)];
   if (s.debond) out.debond = true;
+  if (s.gds && (s.gds.name || s.gds.fileId)) out.gds = { ...s.gds };
   return out;
 }
 
 /**
- * A copy of another project's plan: the same steps with new ids and no
- * marks. With `waferMap` (old wafer id to new one) the steps keep which
+ * A copy of another project's plan: the same steps (and GDS layouts) with
+ * new ids and no marks. With `waferMap` (old wafer id to new one) the steps keep which
  * wafers they are for and the stacks they bond; wafers not in the map are
  * left out (a stack needs two of them to stay).
  * @param {Project} from

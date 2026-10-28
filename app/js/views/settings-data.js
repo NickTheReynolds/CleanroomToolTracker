@@ -24,7 +24,7 @@ import { ageDays, formatDateTime } from '../core/time.js';
 
 const STORE_LABELS = Object.freeze([
   ['tools', 'Tools'], ['templates', 'Templates'], ['runs', 'Runs'], ['measurements', 'Measurements'],
-  ['events', 'Tool events'], ['photos', 'Photos'], ['projects', 'Projects'], ['folders', 'Project folders'],
+  ['events', 'Tool events'], ['photos', 'Photos and step files'], ['projects', 'Projects'], ['folders', 'Project folders'],
   ['wafers', 'Saved wafers and masks'],
 ]);
 
@@ -34,6 +34,9 @@ const STORE_LABELS = Object.freeze([
  * @returns {string} "1 photo", "3 photos"
  */
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** @param {number} n stored photos, with plan steps' pictures and files (1.6) @returns {string} "1 photo or file", "3 photos and files" */
+const storedFiles = (n) => (n === 1 ? '1 photo or file' : `${n} photos and files`);
 
 /**
  * @param {string | null} at settings.lastExportAt
@@ -56,12 +59,12 @@ function backupSection(settings, photos, photoEstimate) {
   let includePhotos = false;
   const last = h('p', { class: 'muted' }, lastExportText(settings.lastExportAt));
   const warning = h('p', { class: 'field-note warn', hidden: true },
-    `Photos make the file about ${formatBytes(photoEstimate)} larger. Big files are slow to prepare and share, and are often too large for email: save them to Files or Drive instead.`);
+    `Photos and files make the backup about ${formatBytes(photoEstimate)} larger. Big files are slow to prepare and share, and are often too large for email: save them to Files or Drive instead.`);
   const flow = exportFlow({
     label: 'Prepare backup',
     kind: 'primary',
     icon: 'download',
-    busy: () => (includePhotos && photos.count ? 'Preparing the backup with photos…' : 'Preparing the backup…'),
+    busy: () => (includePhotos && photos.count ? 'Preparing the backup with photos and files…' : 'Preparing the backup…'),
     make: async () => [await makeBackupFile({ includePhotos, onWarning: (m) => toast(m, { kind: 'error' }) })],
     ready: () => 'Backup ready. Share or download it below.',
     title: 'LNF Run Log backup',
@@ -71,10 +74,10 @@ function backupSection(settings, photos, photoEstimate) {
     h('p', null, 'One file with all your tools, templates, runs, measurements, tool events, projects and their folders, saved wafers and masks, materials and lookup tuning. Keep a copy off this device, for example in Files, Drive or email.'),
     last,
     toggle({
-      label: 'Include photos', help: HELP.includePhotos,
+      label: 'Include photos and files', help: HELP.includePhotos,
       hint: photos.count
-        ? `${plural(photos.count, 'photo')}, about ${formatBytes(photoEstimate)} in the backup`
-        : 'No photos stored on this device.',
+        ? `${storedFiles(photos.count)}, about ${formatBytes(photoEstimate)} in the backup`
+        : 'No photos or files stored on this device.',
       checked: false,
       onChange: (v) => {
         includePhotos = v;
@@ -226,8 +229,8 @@ function storageSection() {
         h('dt', null, 'Space used'),
         h('dd', null, st.usage === null ? 'Not reported by this browser'
           : `${formatBytes(st.usage)}${st.quota ? ` of ${formatBytes(st.quota)} allowed` : ''}`),
-        h('dt', null, 'Photos'),
-        h('dd', null, photos.count ? `${plural(photos.count, 'photo')}, ${formatBytes(photos.bytes)}` : 'None'),
+        h('dt', null, 'Photos and files'),
+        h('dd', null, photos.count ? `${storedFiles(photos.count)}, ${formatBytes(photos.bytes)}` : 'None'),
         h('dt', null, 'Persistent'),
         h('dd', null, persisted)),
       st.persisted === true ? h('p', { class: 'field-note' }, 'The browser will not clear this data on its own.') : null,

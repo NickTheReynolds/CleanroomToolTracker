@@ -2,6 +2,21 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.6.0: Pictures, files and GDS layouts on plan steps
+
+- **Pictures and files on every plan step.** Open a step on the project page:
+  - **Add picture** takes or picks photos (resized like run photos);
+  - **Add file** keeps any file as it is, up to 100 MB: a microscope image, a profile, a PDF;
+  - tap one to see it, download it or remove it (with Undo).
+- **Offered when a step is finished.** After **Mark done without a run**, or when a run linked to a step is saved or marked complete, the message has **Add picture or file**. It opens that step.
+- **A GDS layout on exposure steps** (aligners, steppers, the laser writers, the mask maker, e-beam lithography; optional):
+  - the GDS file itself, which you can download again from the step;
+  - its name, top cell, layer, and where it is kept (a web link opens).
+- **Names everywhere, files on the device that added them.** A step's pictures, files and layout sync with the project, but the files themselves stay on the device that added them, like run photos. Your other devices list them as "On another device".
+  - **Backups** can include them: **Include photos and files**.
+  - **Copy project** keeps each step's GDS layout, but not its pictures and files.
+- **The traveler** names each step's layout and files, in the PDF and in the workbook's Plan sheet.
+
 ## 1.5.2: Copy a project from its folder, Expose time on the mask maker
 
 - **Copy a project from its folder.**

@@ -2,9 +2,10 @@
 /**
  * One project: its wafers and progress, the next step with "Log this step",
  * the plan, and the traveler: every run the project's wafers went through,
- * in process order, for all wafers or one. Export the traveler as PDF or
- * Excel; move it to a folder, copy it for the next batch, pause, finish,
- * reopen or delete it.
+ * in process order, for all wafers or one. A step's sheet holds its
+ * pictures, files and GDS layout; "?step=<id>" opens it. Export the
+ * traveler as PDF or Excel; move it to a folder, copy it for the next
+ * batch, pause, finish, reopen or delete it.
  */
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
@@ -24,7 +25,9 @@ import { makeTravelerExport } from '../data/backup.js';
 import { planChecks } from '../data/plan-checks.js';
 import { noteLine, notesSummary, openNotes, toggleChecked } from '../ui/compat-notes.js';
 import { chooseMaterialKind, askButtons } from '../ui/material-kind.js';
+import { stepFiles } from '../ui/step-files.js';
 import { stepStates, nextStep, progress, projectRuns, linkFor, waferText } from '../core/projects.js';
+import { isExposureStep } from '../core/attachments.js';
 import { specShort } from '../core/wafer-spec.js';
 import { folderTree, pathText, projectFolderId } from '../core/folders.js';
 import { PROJECT_STATUS_LABELS, WAFER_STATUS_LABELS, STATUS_LABELS } from '../core/vocab.js';
@@ -88,10 +91,17 @@ export async function render(ctx) {
     const t = tid ? L.tools.get(tid) : null;
     return t ? t.shortName || t.name : '';
   };
-  const save = async (/** @type {Partial<Project>} */ patch, /** @type {string} */ message) => {
+  /**
+   * Save a change to the project as stored now (a step's pictures may have changed since this page drew it).
+   * @param {Partial<Project> | ((cur: Project) => Partial<Project>)} patch
+   * @param {string} message
+   * @param {Parameters<typeof toast>[1]} [how] the toast's action
+   */
+  const save = async (patch, message, how) => {
     try {
-      await saveProject({ ...p, ...patch });
-      toast(message);
+      const cur = (await getProject(id)) || p;
+      await saveProject({ ...cur, ...(typeof patch === 'function' ? patch(cur) : patch) });
+      toast(message, how);
       refresh();
     } catch (err) {
       toast(errorText(err), { kind: 'error' });
@@ -126,7 +136,7 @@ export async function render(ctx) {
   /** Mark a step's note as checked, or not, on the stored project. */
   const setChecked = async (/** @type {PlanStep} */ step, /** @type {string} */ key, /** @type {boolean} */ on, /** @type {(() => void) | undefined} */ close) => {
     close?.();
-    await save({ steps: p.steps.map((x) => (x.id === step.id ? { ...x, checked: toggleChecked(x, key, on) } : x)) },
+    await save((cur) => ({ steps: cur.steps.map((x) => (x.id === step.id ? { ...x, checked: toggleChecked(x, key, on) } : x)) }),
       on ? 'Marked as checked.' : 'The note counts again.');
   };
   /** @param {PlanStep} step @param {() => void} [close] */
@@ -146,13 +156,23 @@ export async function render(ctx) {
     nextOpen.length ? h('div', { class: 'compat-notes' }, h('p', { class: 'small' }, h('strong', null, 'Before you log this step:')), noteLines(next.step)) : null,
     linkButton('Log this step', logHref(p, next.step, live), { kind: 'primary', icon: 'plus', big: true })) : null;
 
+  // The template a step's runs use: its own, else its tool's default (for whether it exposes a pattern).
+  const stepTemplate = (/** @type {PlanStep} */ step) => L.templates.get(step.templateId || '')
+    || L.templates.get(L.tools.get(step.toolId || '')?.defaultTemplateId || '') || null;
+  const filesRoute = (/** @type {PlanStep} */ step) => `/project/${encodeURIComponent(id)}?step=${encodeURIComponent(step.id)}`;
+
   // The plan: a row per step; a row opens the step's sheet.
   const stepSheet = (/** @type {StepState} */ s) => {
     const st = STATE[s.state];
-    const mark = async (/** @type {Partial<PlanStep>} */ patch, /** @type {string} */ message) => {
+    const mark = async (/** @type {Partial<PlanStep>} */ patch, /** @type {string} */ message, /** @type {Parameters<typeof toast>[1]} */ how) => {
       sh.close();
-      await save({ steps: p.steps.map((x) => (x.id === s.step.id ? { ...x, ...patch } : x)) }, message);
+      await save((cur) => ({ steps: cur.steps.map((x) => (x.id === s.step.id ? { ...x, ...patch } : x)) }), message, how);
     };
+    // Pictures and files change the stored project at once; the page behind redraws when the sheet closes.
+    let filesChanged = false;
+    const files = stepFiles({
+      projectId: id, stepId: s.step.id, exposure: isExposureStep(s.step, stepTemplate(s.step)), onChange: () => { filesChanged = true; },
+    });
     const bonds = (s.step.bonds || []).filter((b) => (b.waferIds || []).length >= 2);
     const label = (/** @type {string} */ wid) => p.wafers.find((w) => w.id === wid)?.label || '?';
     /** @type {[string, string][]} */
@@ -174,16 +194,26 @@ export async function render(ctx) {
         subtitle: [STATUS_LABELS[r.status], waferText(p, linkFor(r, p.id)?.waferIds || []), primaryText(r, L)].filter(Boolean).join(' · '),
         href: `#/run/${r.id}`,
       }))) : h('p', { class: 'muted' }, 'No run is linked to this step yet.'),
+      files.el,
       p.status === 'active' ? linkButton('Log this step', logHref(p, s.step, live), { kind: 'primary', icon: 'plus', big: true }) : null,
       h('div', { class: 'row-wrap' },
         s.step.doneAt ? button('Undo “done”', { icon: 'undo', onClick: () => mark({ doneAt: null }, 'The step is no longer marked done.') })
           : s.state !== 'done' ? button('Mark done without a run', {
-            icon: 'check', onClick: () => mark({ doneAt: new Date().toISOString(), skipped: false }, 'Step marked done.'),
+            icon: 'check',
+            onClick: () => mark({ doneAt: new Date().toISOString(), skipped: false }, 'Step marked done.', {
+              action: { label: 'Add picture or file', fn: () => navigate(filesRoute(s.step), { replace: true }) }, timeout: 10000,
+            }),
           }) : null,
         s.step.skipped ? button('Don’t skip', { icon: 'undo', onClick: () => mark({ skipped: false }, 'The step is back in the plan.') })
           : s.state === 'todo' ? button('Skip this step', { icon: 'minus', onClick: () => mark({ skipped: true }, 'Step skipped.') }) : null),
       h('p', { class: 'muted small' }, 'A step is done when a complete run in this project is linked to it. Link a run to a step in the run’s Project section.'),
-    ]);
+    ], {
+      onClose: () => {
+        files.dispose();
+        if (filesChanged && location.hash.startsWith(`#/project/${encodeURIComponent(id)}`)) refresh();
+      },
+    });
+    return files.el;
   };
   const counts = (/** @type {PlanStep} */ step) => { const st = states.find((x) => x.step.id === step.id); return !!st && st.state !== 'done'; };
   const summary = notesSummary(checks.byStep, p.steps, counts);
@@ -191,10 +221,12 @@ export async function render(ctx) {
     summary ? h('p', { class: 'small plan-summary' }, icon('alert', { size: 16 }), h('span', null, summary)) : null,
     h('div', { class: 'list' }, states.map((s) => {
       const open = s.state === 'done' || s.state === 'skipped' ? [] : openNotes(checks.byStep.get(s.step.id) || [], s.step);
+      const n = (s.step.attachments || []).length;
       return listRow({
         lead: icon(STATE[s.state].icon),
         title: `${s.index + 1}. ${s.step.title}`,
-        subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text]
+        subtitle: [toolName(s.step.toolId), s.step.recipe, s.doneAt ? `done ${formatDay(s.doneAt, Date.now())}` : STATE[s.state].text,
+          s.step.gds ? `GDS ${s.step.gds.name}` : '', n ? `${n} picture${n === 1 ? '' : 's'} or file${n === 1 ? '' : 's'}` : '']
           .filter(Boolean).join(' · '),
         badges: open.some((n) => n.severity === 'stop') ? [badge('Not allowed', 'danger', 'ban')] : open.length ? [badge('Check', 'warn', 'alert')] : [],
         onClick: () => stepSheet(s),
@@ -286,4 +318,11 @@ export async function render(ctx) {
   const bar = [linkButton('Edit', `#/project/${encodeURIComponent(id)}/edit`, { icon: 'edit' })];
   if (p.status !== 'done') bar.push(linkButton('Log run', logHref(p, null), { kind: 'primary', icon: 'plus' }));
   ctx.setActions(bar);
+  // "?step=<id>" (from "Add picture or file" after a step is done) opens that step. The address drops it, so a
+  // redraw does not open the sheet again.
+  const asked = states.find((s) => s.step.id === ctx.query.get('step'));
+  if (asked) {
+    history.replaceState(history.state, '', `#/project/${encodeURIComponent(id)}`);
+    stepSheet(asked).scrollIntoView({ block: 'start' });
+  }
 }

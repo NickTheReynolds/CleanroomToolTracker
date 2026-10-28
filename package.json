@@ -1,6 +1,6 @@
 {
   "name": "lnf-runlog",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "private": true,
   "description": "Offline-first PWA for logging and looking up cleanroom process runs.",
   "license": "AGPL-3.0-or-later",

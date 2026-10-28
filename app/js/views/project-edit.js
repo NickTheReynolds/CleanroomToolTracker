@@ -81,8 +81,9 @@ function tidyStep(s, ids) {
   if (named.length) out.waferIds = named; else delete out.waferIds;
   const bonds = list(s.bonds).map((b) => ({ ...b, waferIds: list(b.waferIds).filter((id) => ids.has(id)) })).filter((b) => b.waferIds.length >= 2);
   if (bonds.length) out.bonds = bonds; else delete out.bonds;
-  for (const k of ['adds', 'removes', 'checked']) if (!list(out[k]).length) delete out[k];
+  for (const k of ['adds', 'removes', 'checked', 'attachments']) if (!list(out[k]).length) delete out[k];
   if (!out.debond) delete out.debond;
+  if (!out.gds) delete out.gds;
   return /** @type {PlanStep} */ (out);
 }
 
@@ -520,7 +521,8 @@ export async function render(ctx) {
       return;
     }
     // Build on the project as stored now, so what the form does not edit stays: the marks on each step
-    // (done, skipped) and the record's own fields. Ask before saving over changes made meanwhile.
+    // (done, skipped), its pictures, files and GDS layout, and the record's own fields. Ask before saving
+    // over changes made meanwhile.
     const cur = existing ? await getProject(id) : null;
     if (existing && !cur) { toast('This project was deleted meanwhile, so these edits cannot be saved.', { kind: 'error' }); return; }
     if (cur && cur.updatedAt !== p.updatedAt && !await confirmDialog({
@@ -537,7 +539,7 @@ export async function render(ctx) {
       const base = p._base && p._base.checked ? p._base.checked[s.id] : null;
       const checked = concurrent && m ? (base ? merge3(list(base), list(s.checked), list(m.checked)) : [...new Set([...list(m.checked), ...list(s.checked)])])
         : list(s.checked);
-      return tidyStep(m ? { ...s, doneAt: m.doneAt ?? null, skipped: !!m.skipped, checked } : s, ids);
+      return tidyStep(m ? { ...s, doneAt: m.doneAt ?? null, skipped: !!m.skipped, checked, attachments: m.attachments, gds: m.gds } : s, ids);
     });
     try {
       const saved = await saveProject({

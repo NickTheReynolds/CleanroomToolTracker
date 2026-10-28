@@ -25,7 +25,7 @@ Lookup uses no AI and no external services. The same input always gives the same
 | Tool event | What happened (PM, clean, seasoning, target or gas change, fault), then the tool. Major events reduce the weight of earlier runs. |
 | History | Search notes, recipe and tags; filter by tool, project, status, template, material and dates. A sortable table on a wide screen. Export everything from here too. |
 | Projects | Projects in folders and subfolders: each with its progress, next step and wafers. Select several to move or delete them; rename, move or delete a folder. |
-| Project | A batch of wafers from start to finish: its wafers and masks with their types, the plan with each step's state, its compatibility notes and **Log this step**, the traveler of every run its wafers went through (for all wafers or one), PDF and Excel export, move to a folder, copy for the next batch, pause, finish, delete. |
+| Project | A batch of wafers from start to finish: its wafers and masks with their types, the plan with each step's state, its compatibility notes and **Log this step**, each step's pictures and files and, on an exposure step, its GDS layout, the traveler of every run its wafers went through (for all wafers or one), PDF and Excel export, move to a folder, copy for the next batch, pause, finish, delete. |
 | Settings | Your name and device, my tools, tools (with what each takes, for the plan's checks) and the template editor, materials, wafer types (yours and the LNF store's), backup, export everything (Excel, CSV or PDF), import, sync, storage, theme, lookup tuning (under Advanced), version, updates and the source code. |
 | Install on your devices | The app's address as a QR code for phones, and install steps for iPhone, Android, Windows and Mac. |
 
@@ -109,7 +109,7 @@ Browser storage can be cleared: by the system when space runs low, by clearing s
 **Settings → Backup, import and storage:**
 
 - **Export backup** writes one JSON file, `lnf-runlog-backup-YYYY-MM-DD.json`, with all tools, templates, runs, measurements, events, projects and their folders, saved wafer types, the materials list and lookup tuning.
-  - Photos are optional ("Include photos"), and the screen shows how much they add.
+  - Photos, and the pictures and files on plan steps, are optional ("Include photos and files"), and the screen shows how much they add.
   - Where the browser supports sharing files (iPhone and iPad, Android, and Chrome or Edge on Windows and macOS), **Share…** opens the system share sheet so you can save to Files or Drive, or email it. **Download** works everywhere.
 - **Export everything** writes one file with every run, its parameters, results and measurements (the Excel and PDF files also hold the tool events). Choose **Excel** (a workbook: all runs, one sheet per tool with named columns, measurements, tool events), **CSV** (one table, a row per run) or **PDF** (a report to read or print). History has a shortcut to it.
 - **Export CSV** writes `runs.csv` (one column per parameter `p.*` and result `r.*`), `measurements.csv` and `events.csv` for Excel or Sheets.

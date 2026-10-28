@@ -6,6 +6,7 @@
  * and rows out; deleted records are left out.
  */
 import { stepStates, projectRuns, waferText, linkFor, progress } from './projects.js';
+import { gdsText, filesText } from './attachments.js';
 import { measurementText, localStamp, fieldText } from './export-all.js';
 import { stepsText } from './run-steps.js';
 import { folderTree, pathText } from './folders.js';
@@ -130,7 +131,8 @@ export function travelerBlocks(input, o) {
     for (const s of P.states) {
       const tool = s.step.toolId ? P.name(s.step.toolId) : '';
       const text = [STATE_TEXT[s.state], tool, s.step.recipe, s.doneAt ? `done ${localDateKey(s.doneAt)}` : '',
-        s.runs.length ? count(s.runs.length, 'run') : '', P.extras(s.step), s.step.notes, P.checks(s.step)].filter(Boolean).join(' · ');
+        s.runs.length ? count(s.runs.length, 'run') : '', P.extras(s.step), s.step.gds ? `GDS ${gdsText(s.step.gds)}` : '',
+        filesText(s.step) ? `files: ${filesText(s.step)}` : '', s.step.notes, P.checks(s.step)].filter(Boolean).join(' · ');
       out.push({ kind: 'kv', label: `${s.index + 1}. ${s.step.title}`, text });
     }
   }
@@ -175,15 +177,15 @@ export function travelerSheets(input) {
   });
   const plan = P.states.map((s) => [
     s.index + 1, s.step.title, s.step.toolId ? P.name(s.step.toolId) : '', s.step.recipe, STATE_TEXT[s.state], dateCell(s.doneAt), s.runs.length,
-    P.extras(s.step), s.step.notes, P.checks(s.step),
+    P.extras(s.step), s.step.notes, P.checks(s.step), gdsText(s.step.gds), filesText(s.step),
   ]);
   const wafers = list(p.wafers).map((w) => [w.label, WAFER_STATUS_LABELS[w.status] || w.status, w.spec ? specSummary(w.spec) : '', w.notes, waferPath(P, w)]);
   return [
     { name: 'Process record', rows: [['Date', 'Step', 'Tool', 'Template', 'Recipe', 'Wafers', 'Status', 'Material', 'Substrate', 'Mask',
       'Inputs', 'Steps', 'Conditions', 'Results', 'Measurements', 'Notes', 'Also in', 'Run id'], ...record],
     widths: [16, 18, 22, 16, 18, 14, 10, 14, 14, 12, 40, 30, 30, 30, 40, 30, 18, 36] },
-    { name: 'Plan', rows: [['#', 'Step', 'Tool', 'Recipe', 'State', 'Done', 'Runs', 'Wafers and materials', 'Notes', 'Checks'], ...plan],
-      widths: [4, 24, 22, 18, 12, 16, 6, 30, 30, 50] },
+    { name: 'Plan', rows: [['#', 'Step', 'Tool', 'Recipe', 'State', 'Done', 'Runs', 'Wafers and materials', 'Notes', 'Checks', 'GDS layout',
+      'Pictures and files'], ...plan], widths: [4, 24, 22, 18, 12, 16, 6, 30, 30, 50, 30, 30] },
     { name: 'Wafers', rows: [['Wafer', 'Status', 'Type', 'Notes', 'Path'], ...wafers], widths: [10, 10, 40, 30, 80] },
   ];
 }

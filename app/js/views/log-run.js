@@ -38,6 +38,7 @@ import {
   mainIndex, stepValues, withStepValues, addStep, removeStep, setMain, renameStep, recipeForForm,
 } from '../core/run-steps.js';
 import { defaultLink, wafersOnStepChange, recipeOnStepChange } from '../core/projects.js';
+import { stepFilesRoute } from '../core/attachments.js';
 import { uuid } from '../core/ids.js';
 import { formatDay, formatDateTime } from '../core/time.js';
 import { normText } from '../core/vocab.js';
@@ -436,7 +437,10 @@ async function form(ctx, toolId, templateId) {
       const saved = await saveRun(draftToRun(dd, status));
       await clearDraft(DRAFT);
       disarmAlarm();
-      toast(status === 'complete' ? 'Run saved as complete.' : 'Run saved. Add measurements when you have them.');
+      // A complete run that carries out a plan step offers that step's pictures and files.
+      const files = status === 'complete' ? stepFilesRoute(saved) : null;
+      toast(status === 'complete' ? 'Run saved as complete.' : 'Run saved. Add measurements when you have them.',
+        files ? { action: { label: 'Add picture or file', fn: () => navigate(files) }, timeout: 10000 } : {});
       navigate(`/run/${saved.id}`, { replace: true });
     } catch (err) {
       autosave.schedule();

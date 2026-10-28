@@ -126,13 +126,23 @@
  * @typedef {{id: string, label: string, status: 'active'|'done'|'scrapped', notes: string,
  *   spec?: WaferSpec, specId?: string|null}} Wafer
  *
+ * A picture or file on a plan step. The record syncs with the project; the
+ * bytes stay on the device that added them, in the photos store under `id`.
+ * @typedef {{id: string, name: string, kind: 'photo'|'file', type: string, size: number, addedAt: string}} StepFile
+ *
+ * An exposure step's layout: the GDS file's name, its top cell, layer and a
+ * link to where it is kept, and the stored file (`fileId`, bytes on the
+ * device that added it) when one was attached.
+ * @typedef {{name: string, cell?: string, layer?: string, link?: string, fileId?: string, size?: number}} GdsLayout
+ *
  * A planned step. The optional parts: which wafers (and masks) it is for
  * (none: every wafer in process), the stacks it bonds, whether it separates
- * stacks, what it leaves on or removes from the wafers, and the
- * compatibility notes the person marked as checked (core/compat.js noteKey).
+ * stacks, what it leaves on or removes from the wafers, the compatibility
+ * notes the person marked as checked (core/compat.js noteKey), and its
+ * pictures, files and GDS layout (1.6).
  * @typedef {{id: string, title: string, toolId: string|null, templateId: string|null, recipe: string,
  *   notes: string, doneAt: string|null, skipped: boolean, waferIds?: string[], bonds?: Bond[], debond?: boolean,
- *   adds?: string[], removes?: string[], checked?: string[]}} PlanStep
+ *   adds?: string[], removes?: string[], checked?: string[], attachments?: StepFile[], gds?: GdsLayout}} PlanStep
  *
  * @typedef {BaseRecord & {
  *   name: string, goal: string, status: 'active'|'paused'|'done', startedAt: string, endedAt: string|null,
@@ -153,9 +163,11 @@
  *   toolId: string, type: string, major: boolean, at: string, notes: string
  * }} ToolEvent
  *
+ * A stored photo, or (1.6) a plan step's picture or file: `runId` is then the
+ * step's id, `name` the file name and `type` its media type.
  * @typedef {BaseRecord & {
  *   runId: string, blob: Blob|null, width: number, height: number,
- *   caption: string, takenAt: string
+ *   caption: string, takenAt: string, name?: string, type?: string
  * }} Photo
  */
 export {};

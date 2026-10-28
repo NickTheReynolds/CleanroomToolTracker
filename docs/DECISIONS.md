@@ -441,3 +441,20 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
     - **When it is skipped.** The template was deleted, or already has a field with that key or label.
     - **Saved as an ordinary edit** (new `updatedAt`, this device), so sync carries it to devices still on an older version, and any later edit wins as usual.
     - **Dose stays:** runs may already use it.
+
+## Pictures, files and GDS layouts on plan steps (version 1.6.0)
+
+129. **Pictures and files belong to plan steps, and the app offers them when a step is finished.** The owner asked to attach a picture or file "after each step".
+    - **When it is offered.** After **Mark done without a run**, after **Save complete** in Log run, and after **Mark complete** on a run linked to a step, the message has **Add picture or file**. It opens the project page with that step's sheet (`?step=<id>`, dropped from the address once open).
+    - **Always there.** A step's sheet lists its pictures and files at any time, before or after it is done.
+    - **Run photos stay as they were.**
+130. **Names sync; the files stay on the device that added them.** The owner chose this over syncing files through GitHub, which would grow the repository with every file.
+    - **The step lists each file** (`attachments`: name, kind, type, size, time), so every device shows it, as "On another device" where the bytes are missing.
+    - **The bytes go into the photos store** under the same id, with `runId` set to the step's id. That reuses what run photos already have: they stay out of sync, go into backups with **Include photos and files**, and fall back to an ArrayBuffer on old Safari. No new IndexedDB store, so `DB_VERSION` stays 4.
+    - **Pictures are resized** like run photos. **Other files are kept as they are, up to 100 MB each** (`MAX_FILE_BYTES`): a backup carries them as base64 in one JSON file, which must fit in a phone's memory.
+131. **An exposure step can carry a GDS layout:** its name, top cell, layer, where it is kept, and optionally the file itself.
+    - **Exposure steps** are those whose template is a lithography one with a dose or exposure setting (aligners, steppers, laser and e-beam writers, the mask maker), or, without a template, whose title says so. Other steps can still have pictures and files.
+    - **Only web links open.** "Where it is kept" opens only an `http` or `https` address; a network path or a note shows as text, so text synced from another device never runs anything.
+    - **Copies keep the layout and share its file** on this device: the next batch writes the same mask. A stored file is deleted only when no live step names it (`fileInUse`), so removing the layout from one project leaves the copy's file. Removing a layout or a file has Undo.
+132. **Edits made meanwhile survive.** The project page saves its changes (done, skipped, checked) on the project as stored now, not as the page loaded it, so pictures added in the open sheet are kept. The plan editor does not edit pictures, files or layouts: it takes them from the stored project when it saves.
+    - **Older versions** keep the new step fields when they sync or save a project, as they keep any field they do not know.

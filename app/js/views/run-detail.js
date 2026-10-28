@@ -36,6 +36,7 @@ import {
   mainIndex, stepValues, withStepValues, addStep, removeStep, setMain, renameStep, recipeForForm, tidySteps,
 } from '../core/run-steps.js';
 import { waitingFor } from '../core/derive.js';
+import { stepFilesRoute } from '../core/attachments.js';
 import { uuid } from '../core/ids.js';
 import { formatDateTime } from '../core/time.js';
 import { STATUS_LABELS, normText } from '../core/vocab.js';
@@ -287,7 +288,10 @@ export async function render(ctx) {
     if (status === 'complete' && !await confirmComplete()) return;
     const endedAt = status === 'complete' ? state.endedAt || new Date().toISOString() : state.endedAt;
     if (await saveNow({ status, endedAt })) {
-      toast(status === 'complete' ? 'Run marked complete.' : `Run is now ${status}.`);
+      // A complete run that carries out a plan step offers that step's pictures and files.
+      const files = status === 'complete' ? stepFilesRoute(state) : null;
+      toast(status === 'complete' ? 'Run marked complete.' : `Run is now ${status}.`,
+        files ? { action: { label: 'Add picture or file', fn: () => navigate(files) }, timeout: 10000 } : {});
       refresh();
     }
   };

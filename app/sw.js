@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v1.5.2-dev';
+const CACHE_NAME = 'lnf-runlog-v1.6.0-dev';
 
 const ASSETS = [
   './',
@@ -174,6 +174,7 @@ const ASSETS = [
   'js/core/metrology.js',
   'js/core/wafer-spec.js',
   'js/core/compat.js',
+  'js/core/attachments.js',
   'js/data/db.js',
   'js/data/schema.js',
   'js/data/records.js',
@@ -199,6 +200,7 @@ const ASSETS = [
   'js/data/lnf-store.js',
   'js/data/compat-lnf.js',
   'js/data/plan-checks.js',
+  'js/data/attachments.js',
   'js/ui/wafer-spec-editor.js',
   'js/ui/wafer-types.js',
   'js/views/wafer-types.js',
@@ -222,6 +224,7 @@ const ASSETS = [
   'js/ui/field-spec-editor.js',
   'js/ui/pickers.js',
   'js/ui/photos.js',
+  'js/ui/step-files.js',
   'js/ui/run-form.js',
   'js/ui/run-outputs.js',
   'js/ui/lookup-card.js',
