@@ -26,7 +26,7 @@ import { APP_VERSION } from '../../version.js';
 const BOM = String.fromCharCode(0xfeff);
 
 /** @typedef {import('./export-import.js').MergeCounts} MergeCounts */
-/** @typedef {{counts: Record<string, MergeCounts>, errors: string[], materialsAdded: number}} ImportResult */
+/** @typedef {{counts: Record<string, MergeCounts>, errors: string[], materialsAdded: number, answersChanged: number}} ImportResult */
 
 /**
  * Every record of these stores, tombstones included, read in one
@@ -287,10 +287,15 @@ export async function importBackupFile(file) {
   if (problems.length) throw new Error(problems.join(' '));
   const [existing, settings] = await Promise.all([readStores(DATA_STORES), getSettings()]);
   const local = Array.isArray(settings.materials) ? settings.materials : [];
-  const plan = planImport(existing, backup, local);
+  const plan = planImport(existing, backup, local, { kinds: settings.materialKinds || {} });
   /** @type {Record<string, any[]>} */
   const writes = { ...plan.put, photos: plan.put.photos.map(decodePhoto) };
-  if (plan.materials) writes.meta = [{ key: 'settings', value: { ...settings, materials: plan.materials } }];
+  if (plan.materials || plan.materialKinds) {
+    writes.meta = [{
+      key: 'settings',
+      value: { ...settings, ...(plan.materials ? { materials: plan.materials } : {}), ...(plan.materialKinds ? { materialKinds: plan.materialKinds } : {}) },
+    }];
+  }
   try {
     await putAll(writes);
   } catch (err) {
@@ -303,6 +308,7 @@ export async function importBackupFile(file) {
     counts: plan.counts,
     errors: plan.errors,
     materialsAdded: plan.materials ? plan.materials.length - local.length : 0,
+    answersChanged: plan.answersChanged || 0,
   };
 }
 

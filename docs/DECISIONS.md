@@ -345,9 +345,85 @@ These are choices the spec left open, or where it needed a small adjustment. Eac
 114. **The LNF store's items come with the app, from the owner's screenshots.** The 13 single items of 2026-10-22 (boxes left out at the owner's request), names and descriptions verbatim, prices with the day they were seen and no stock. The spec holds only what the store states: doping type from "Type P/N", never resistivity from a name, because the store's names do not follow their own convention ("Type P-10-80" whose description says 1-20 ohm-cm: those three items have no resistivity). Two things are read into the items, and each says so: doped store wafers are silicon (the item sheet says it), and the oxide wafers' oxide is thermal (the store's note says its oxide wafers are made in the Tempress furnaces; each oxide item's notes say where that comes from). The mask plates' details come from the LNF wiki's µPG 501 note on LNF-store blanks, and say so. Nothing is fetched from the LNF sites; new items come from the owner, in a release.
 115. **The plan's checks follow each wafer, or bonded stack, through the plan.** Size and pieces, thickness (a stack's is the sum), substrate, the materials on it, how clean it is (metal on it, a step on an evaporator, sputter or plating tool even for a dielectric, dicing, and metals-class or non-CMOS solvent benches leave it out of CMOS-clean tools for good; a semi-clean wafer, which only a tool setting can make, is brought back by an RCA clean), the last wet bench it saw, and KOH waiting to be cleaned off. Deposition and plating recipes add their film, and a spin coat its resist (a recipe that lists several resists adds "Photoresist"); strip, ash, lift-off and piranha steps that add nothing remove resist (not a stack's bond adhesive, which sits between its wafers until the debond), and what a strip takes off a stack stays off after the debond; a debond in a solvent, at a wet bench or with the mount's own LNF recipe takes the adhesive off, while a dry one leaves it for a later clean or wax removal; a step can say what else it adds or removes. A wafer whose type gives no material takes the project's substrate.
 116. **The tool facts come from the LNF notes the app already ships, with their source.** `data/compat-lnf.js` quotes the recipe-page text each fact rests on (tube sizes and "silicon only"; the PFC Bench 01 clean right before the CMOS-clean tubes, and only that clean counts; PFC Bench 01 takes no wafers from wet benches other than Acid 02 or RCA 81, as its note says, instead of the app guessing which benches make a wafer semi-clean; the KOH cleaning in its order, Piranha and SC2 at Acid 92 and then RCA 81, which the PFC clean does not replace, and Base Bench 63's own rule that its KOH developer keeps wafers out of clean and semi-clean tools; the Endeavor's heat, no organics; non-CMOS solvent benches; carriers, size and thickness limits, mask plates, the 790's PECVD chamber, the EVG 510). General practice adds only three things: a metal on the wafer, or a step on an evaporator, sputter or plating tool even for a dielectric, leaves it metal-contaminated; the bond rules (anodic needs a sodium glass against silicon; fusion needs polished surfaces); and a mask plate is usually wider than the wafer. Every note says which it rests on, and the LNF's rules and the tool engineer come first.
+    - Version 1.5.1 adds a fourth: a compound semiconductor or lithium niobate or tantalate on a wafer (by name or by the person's answer) leaves it out of CMOS-clean tools for good, like metal (decision 123).
 117. **Unknown never warns, and notes never block.** No size, material or profile field means no note; an unlisted material is not guessed at. Notes lead with "Not allowed" or "Check" and an icon, never colour alone. Saving is never stopped.
+    - Version 1.5.1 still never guesses at a material the app does not know, but it now says so with a "Check" wherever a rule could apply (decision 123). A field that is not set still raises nothing.
 118. **"Mark as checked" quiets a note for its wafers.** The step stores the note's key (its kind and wafers), so the note comes back when the wafers change. Done and skipped steps and checked notes do not count in the summaries.
 119. **A tool's compatibility can be changed per tool, and the change syncs.** Sizes (the person's choice, Any size included, replaces the LNF notes' size limits: up to a diameter, a ticket for a size), pieces, the thickest wafer or stack, mask plates and the materials not allowed; the cleanliness rules, the wet-bench rule and a thinnest wafer show read only with their source. Reset ("Reset to the LNF notes", or to general practice, or "Clear my settings" for a tool without either) drops the change.
 120. **Bonding is planned on the step, and runs keep linking wafer ids.** A step's `bonds` name the wafers of each stack and the method; after it, a step or run that names one wafer of a stack takes the whole stack (a run's wafer chip and the step it is logged for pick the stack), until a step debonds. "Pair them" proposes pairs across two equal type groups, otherwise in order; "Pair them myself" taps the wafers of each stack. A tool with LNF mounting recipes (the Sample mounting station) offers stacks too, temporary by default. Log this step and Log run's step menu move a new run's wafers and recipe the same way (`wafersOnStepChange` and `recipeOnStepChange` in `core/projects.js`).
 121. **Copies carry types, wafer choices and bonds, on the new wafers.** Copy project remaps them. "Copy the plan of" into a new, not yet saved project that still has only its untouched W1 brings the other project's wafers too. Otherwise it finds wafers by label, and a stack keeps the wafers found (it is left out when fewer than two are).
 122. **No run costs yet.** The owner asked for costs only if the LNF wiki publishes tool pricing; until it is read from there, store prices show on the types only.
+
+## Materials the app does not know (version 1.5.1)
+
+123. **A material the app does not know gets a "Check", never a guess.** The owner asked for this after 1.5.0, whose checks skipped such names without a word.
+    - **What counts as known.** Every word of each material in the name, what is in brackets after a space included, must be one the checks know or one that only says how, how much, where or in what state.
+      - Known material words: a class (metals, resists and polymers, glass…), a material they know and have no rule for (silicon in its forms, oxides, nitrides, carbon, HMDS), or the person's answer.
+      - Words that only describe: "thermal", "p-type", "bare", "100 nm", "Y-cut".
+      - A resist or glass name covers only its own words (a resist's product code too: "AZ P4620"), so "FTO glass" and "AF32 glass" are asked about.
+      - An element symbol that is also a word counts as the element unless the words around it say otherwise ("In situ", "III-V", "Y-cut", "Bi-layer").
+      - So "PZT on Si", "Amorphous selenium" and "Si (with PZT)" are asked about, and "p+ Si", "B-doped Si" and "Ti/Au 10/100 nm" are not.
+      - A name with several materials ("Ti/PZT") is known only when each one is.
+      - A name that says there is nothing ("-", "n/a", "(none)") is no material.
+    - **Where the note comes.** Only where a rule could apply:
+      - a tool that allows no class of material;
+      - one that takes clean wafers only, while the wafer is still clean enough;
+      - one that lists the substrates it takes;
+      - the 790's PECVD caution;
+      - anodic and fusion bonds.
+
+      A material a "Not allowed" at the same step already names is not asked about too.
+    - **Substrates.** A film the app knows, used as a wafer, is an unknown kind of wafer: SiO2 (or "silicon dioxide") could be fused silica. Such a wafer is asked about:
+      - at tools that list the substrates they take;
+      - for SiO2-like names, at tools with a rule on glass or fused silica (PFC Bench 01).
+
+      A polymer or metal wafer is known to be none of the kinds a tool lists.
+    - **What the note says.** It names the rule it could break, rests on that rule's source, and asks about the unknown word of a material ("PZT" in "Ti/PZT", "Se" in "Evaporated Se").
+      - A bond asks only about what the step's tool notes have not already asked.
+    - **The app's own names.** Every material the app lists is known except selenium, which is left to the person. A test checks this, and also that every film a plan step's recipe can leave is known.
+    - **Dopants.** A semiconductor dopant before "doped", after "doped with", or in "Si:B" is not a film: "B-doped Si" and "Sb-doped Si" are silicon. A metal stays a metal however it is written ("Au-doped Si"), and the host of "GaAs doped with Si" stays GaAs.
+    - **Not CMOS-clean.** Compound semiconductors and lithium niobate or tantalate leave a wafer out of CMOS-clean tools for good, like metal, as general practice. Otherwise answering "a compound semiconductor" would have cleared the CMOS-clean checks.
+124. **The person says what a material is, once, for every project, and the answer only fills in what the app does not know.**
+    - **Where.** On the note ("What is PZT?") or by tapping, in Settings → Materials, a material the checks do not know or one with an answer.
+    - **The answers.** Each answer is put in terms of what the checks care about:
+      - silicon;
+      - a silicon oxide or nitride, or another dielectric with no metal in it;
+      - a fast-diffusing metal, or a compound of one;
+      - another metal, or a compound of one;
+      - something else that is not CMOS-clean;
+      - a resist or polymer;
+      - glass with sodium, or glass without sodium;
+      - fused silica or quartz;
+      - a compound semiconductor;
+      - lithium niobate or tantalate;
+      - another crystal.
+
+      There is no "none of these", so selenium or PZT cannot be waved through by a vague answer. "Not CMOS-clean" is a class of its own, which PFC Bench 01 and RCA Bench 81 bar, as their quotes say ("CMOS-clean materials only", "Only Si, fused silica and glass").
+    - **What an answer does.** It adds to what the app reads and never takes anything away.
+      - An answer for "Ti/PZT" keeps Ti a metal.
+      - An answer about a name the app knows (Au, BCB) changes nothing it reads.
+      - For a film the app knows used as a wafer, the question is what kind of wafer it is ("What kind of wafer is SiO2?"). The answer counts only for wafers of it, so an SiO2 wafer that is fused silica leaves every "SiO2 (thermal)" film as it was.
+      - A glass without sodium is glass but does not anodic bond.
+    - **What the note rests on.** A note that only the answer makes rests on a setting made in the app. `SOURCE_TEXT.yours` reads "From a setting made in this app." (for tool settings too), which also reads right in a traveler someone else holds. At the same level of cleanliness, a reason from the LNF notes or general practice replaces one from a setting.
+    - **The materials list.** Answering adds the name to the materials list.
+    - **Taking an answer back.** "Take my answer back", or removing the material from the list, stores an empty answer, so the change syncs too.
+    - **Undo.** Undo puts back what was there, unless the answer has changed since:
+      - exactly, while no sync has started since;
+      - as a new change after one, so the other devices undo it too.
+    - **Double taps.** A sheet ignores real taps in its first 500 ms, and a choice ignores the taps in the 500 ms after it. The second half of a double tap cannot pick an answer, or check a note, unseen.
+125. **Answers travel with the materials list.**
+    - **Where.** In backups (`settings.materialKinds`) and in each device's sync file (`materialKinds`).
+    - **Conflicts.** For each material the newer answer wins, with a fixed tie-break.
+    - **Reporting.** Imports and syncs say how many answers changed (a newer answer that says the same is no change).
+    - **Older versions.** 1.5.0 reads files and backups that carry answers and ignores them.
+    - **After updating.** A 1.5.1 device reads every other device's file once more (`SYNC_SCOPE`), so answers given before its update reach it.
+    - **Fixes in the same release.**
+      - The S5T2 "Fluorocarbon Removal" recipe no longer counts as leaving fluorocarbon.
+      - Spelled-out names follow their formulas:
+        - phosphosilicate and spin-on glass are films like PSG;
+        - lithium niobate is LiNbO3;
+        - gallium nitride and indium phosphide are compound semiconductors;
+        - "Poly(methyl methacrylate)" is a polymer.
+
+        "Magnesium fluoride" stays a metal, as in 1.5.0.
+      - Each material of a list is read on its own ("Cr/AZ 1518" is a metal and a resist).

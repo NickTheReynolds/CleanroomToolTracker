@@ -20,6 +20,7 @@ import { createAutosave } from '../ui/autosave.js';
 import { openAddWafers, openWaferType, typeButton } from '../ui/wafer-types.js';
 import { stepExtras } from '../ui/plan-step-extras.js';
 import { noteLine, notesSummary, toggleChecked } from '../ui/compat-notes.js';
+import { chooseMaterialKind, askButtons } from '../ui/material-kind.js';
 import { navigate, refresh } from '../router.js';
 import {
   getProject, saveProject, listProjects, listRuns, listTools, listTemplates, getDraft, saveDraft, clearDraft, getSettings,
@@ -149,7 +150,9 @@ export async function render(ctx) {
   let dirty = !!restored;
   /** Compatibility notes for the plan as it stands (archived tools too, as on the project page); painted into each step's slot. */
   let checks = { notes: /** @type {import('../core/compat.js').Note[]} */ ([]), byStep: new Map() };
-  const computeChecks = () => { checks = planChecksWith(/** @type {any} */ (p), allTools, templates, recipes); };
+  /** What the person said materials are; a note's "What is it?" updates it. */
+  let kinds = settings.materialKinds || {};
+  const computeChecks = () => { checks = planChecksWith(/** @type {any} */ (p), allTools, templates, recipes, kinds); };
   const recheck = debounce(() => { computeChecks(); paintChecks(); }, 250);
   /**
    * @param {Record<string, any>} patch
@@ -242,7 +245,28 @@ export async function render(ctx) {
         checked: checked.has(n.key), checkId: `check-${s.id}-${k}`,
         onCheck: (on) => change({ steps: p.steps.map((/** @type {PlanStep} */ x) => (x.id === s.id ? { ...x, checked: toggleChecked(x, n.key, on) } : x)) },
           true, `#check-${CSS.escape(s.id)}-${k}`),
-        action: n.code === 'preclean' && toolMap.has(PFC_ID) && !checked.has(n.key) ? Object.assign(button('Add the PFC Bench 01 clean before this step', {
+        // A material the app does not know: say what it is, and every note on it updates.
+        action: n.materials && !checked.has(n.key) ? askButtons(n.materials, (name, j) => chooseMaterialKind({
+          name,
+          onSaved: async () => {
+            // The editor may have closed meanwhile (an Undo tapped on another screen): show that screen afresh.
+            if (!ctx.isCurrent()) { refresh(); return; }
+            const fresh = await getSettings();
+            kinds = fresh.materialKinds || {};
+            settings.materials = fresh.materials;
+            computeChecks();
+            draw();
+            // Focus stays with the step's notes: the same button if it is still there, else the step's first note
+            // button, else the step's title.
+            const id = CSS.escape(s.id);
+            const target = /** @type {HTMLElement | undefined} */ ([`#kind-${id}-${k}-${j}`, `#checks-${id} button`, `#step-title-${id}`]
+              .map((sel) => body.querySelector(sel)).find(Boolean));
+            target?.focus();
+            // Clear of the action bar at the bottom.
+            target?.scrollIntoView({ block: 'center' });
+          },
+        }), `kind-${s.id}-${k}`)
+          : n.code === 'preclean' && toolMap.has(PFC_ID) && !checked.has(n.key) ? Object.assign(button('Add the PFC Bench 01 clean before this step', {
           icon: 'plus',
           onClick: () => {
             // The clean is for the same wafers as the furnace step.
@@ -357,7 +381,7 @@ export async function render(ctx) {
       || own.some((t) => t.fields.some((f) => f.key === 'method' && list(f.options).includes('Anodic'))));
     const extras = stepExtras({
       project: /** @type {any} */ (p), step: s, current: () => p.steps.find((/** @type {PlanStep} */ x) => x.id === s.id) || s,
-      index: i, bonder, defaultMethod: mounts ? 'temporary' : '', fromRecipe: recipeAdds(s, toolMap, tplMap, recipes),
+      index: i, bonder, defaultMethod: mounts ? 'temporary' : '', fromRecipe: recipeAdds(s, toolMap, tplMap, recipes, kinds),
       open: openExtras.has(s.id), onToggle: (v) => { if (v) openExtras.add(s.id); else openExtras.delete(s.id); },
       update: (patch, redraw = false, focus = null) => { openExtras.add(s.id); update(patch, redraw, focus); },
       picking: picking.get(s.id) || [],

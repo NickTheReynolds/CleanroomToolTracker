@@ -54,7 +54,7 @@ const minimal = (b = {}) => buildBackup({
   tools: [], templates: [], runs: [], measurements: [], events: [], settings, appVersion: '1.0.0', exportedAt: EXPORTED, ...b,
 });
 
-test('buildBackup writes the envelope, keeps only materials and tuning, and adds photos only when given', () => {
+test('buildBackup writes the envelope, keeps only materials, their answers and tuning, and adds photos only when given', () => {
   const b = buildBackup({
     tools: [tool], templates: [template], runs, measurements: [], events: [cleanEvent], settings, appVersion: '1.2.3', exportedAt: EXPORTED,
   });
@@ -70,7 +70,7 @@ test('buildBackup writes the envelope, keeps only materials and tuning, and adds
   assert.equal(b.appVersion, '1.2.3');
   assert.equal(b.exportedAt, EXPORTED);
   assert.deepEqual(b.runs, runs);
-  assert.deepEqual(b.settings, { materials: ['Si', 'SiO2 (thermal)'], tuning: { halfLifeDays: 45 } });
+  assert.deepEqual(b.settings, { materials: ['Si', 'SiO2 (thermal)'], materialKinds: {}, tuning: { halfLifeDays: 45 } });
   for (const k of DEVICE_SETTINGS) assert.ok(!(k in b.settings), `${k} must stay on the device`);
   const text = JSON.stringify(b);
   for (const secret of ['dev-secret', 'Lab phone', 'sync-server']) assert.ok(!text.includes(secret), secret);
@@ -79,9 +79,9 @@ test('buildBackup writes the envelope, keeps only materials and tuning, and adds
   const withPhotos = minimal({ photos: [] });
   assert.deepEqual(withPhotos.photos, []);
   assert.equal(Object.keys(withPhotos).at(-1), 'photos');
-  assert.deepEqual(exportableSettings(null), { materials: [], tuning: {} });
+  assert.deepEqual(exportableSettings(null), { materials: [], materialKinds: {}, tuning: {} });
   const ex = exportableSettings({ materials: ['Al', 7], tuning: { topK: 3 } });
-  assert.deepEqual(ex, { materials: ['Al'], tuning: { topK: 3 } });
+  assert.deepEqual(ex, { materials: ['Al'], materialKinds: {}, tuning: { topK: 3 } });
 });
 
 test('backupFileName uses the local calendar date', () => {

@@ -125,10 +125,30 @@ export function confirmDialog(o) {
   });
 }
 
+/** How long after a sheet opens, or a choice closes one, a tap is taken for the second half of a double tap. */
+const DOUBLE_TAP_MS = 500;
+
+/**
+ * Let real taps do nothing for a moment: after a choice closes a sheet, the
+ * second half of a double tap must not act on what is now under the finger
+ * (a "Mark as checked" on the screen below).
+ * @param {number} [ms]
+ */
+export function holdTaps(ms = DOUBLE_TAP_MS) {
+  const until = performance.now() + ms;
+  const swallow = (/** @type {Event} */ e) => {
+    if (performance.now() > until) document.removeEventListener('click', swallow, true);
+    else if (e.isTrusted) { e.stopImmediatePropagation(); e.preventDefault(); }
+  };
+  document.addEventListener('click', swallow, true);
+  setTimeout(() => document.removeEventListener('click', swallow, true), ms + 50);
+}
+
 /**
  * A bottom sheet (modal dialog) holding arbitrary content. It closes when
  * the app moves to another screen (an in-app link in it, Back, a refresh),
- * so it never stays open over a screen it does not belong to.
+ * so it never stays open over a screen it does not belong to. Taps in its
+ * first half second are taken for the end of the tap that opened it.
  * @param {string} title
  * @param {Node[]} content
  * @param {{onClose?: () => void}} [o]
@@ -143,10 +163,17 @@ export function sheet(title, content, o = {}) {
     h('div', { class: 'sheet-body', tabindex: '-1', autofocus: true }, content)));
   const leave = () => dlg.close();
   window.addEventListener('hashchange', leave);
+  // A tap that lands just after the sheet opens is the second half of the tap that opened it (a double tap or a
+  // double-click): it must not choose whatever is now under the finger.
+  let opened = 0;
+  dlg.addEventListener('click', (e) => {
+    if (e.isTrusted && performance.now() - opened < DOUBLE_TAP_MS) { e.stopImmediatePropagation(); e.preventDefault(); }
+  }, true);
   on(dlg, 'close', () => { window.removeEventListener('hashchange', leave); dlg.remove(); o.onClose?.(); });
   on(dlg, 'click', (e) => { if (e.target === dlg) dlg.close(); });
   document.body.append(dlg);
   dlg.showModal();
+  opened = performance.now();
   return { close: () => dlg.close(), el: dlg };
 }
 

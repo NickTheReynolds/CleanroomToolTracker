@@ -2,6 +2,45 @@
 
 One entry per milestone (spec Section 16).
 
+## 1.5.1: Materials the app does not know
+
+- **No more silent misses.** A material the plan checks don't recognize now gets a **Check** wherever a rule could apply to it, and the note names the rule. Examples: a tool that allows no metals or resists, a CMOS-clean tool, a furnace that takes silicon only, an anodic or fusion bond. In 1.5.0 such a name raised nothing.
+  - **Every word counts, brackets included.** "PZT on Si", "Amorphous selenium", "FTO glass" and "Si (with PZT)" are asked about. Words that only say how, how much or in what state are not: "p+ Si", "Si, p-type", "B-doped Si", "Bare Si" and "Ti/Au 10/100 nm" are known.
+  - **A list is asked about by its unknown part.** For "Ti/PZT", the note asks about PZT and Ti stays a metal.
+- **What is PZT?** Tap the button on the note and pick what the material is:
+  - silicon, or a silicon oxide or nitride (or another dielectric with no metal in it);
+  - a metal, fast-diffusing or not, or a compound of one;
+  - something else that is not CMOS-clean;
+  - a resist or polymer;
+  - glass with sodium, or glass without sodium (AF32, Eagle XG);
+  - fused silica or quartz;
+  - a compound semiconductor, lithium niobate or tantalate, or another crystal.
+
+  The checks then use your answer in every project. A note that rests on your answer says "From a setting made in this app."
+- **Answers only fill in what the app doesn't know.** They never take away what it reads: Ti stays a metal and Au stays a fast-diffusing metal, whatever the answer. An answer counts wherever the material is written with words that only describe it ("Evaporated Se", "Se film").
+  - **Wafers.** For a film the app knows used as a wafer (an SiO2 wafer could be fused silica), the question is **What kind of wafer is SiO2?** The answer counts only for wafers of it, so SiO2 films stay as they are.
+- **Compound semiconductors and lithium niobate or tantalate are not CMOS-clean.** A wafer that carries one (GaAs, InP, LiNbO3, by name or by your answer) now gets **Not allowed** at the tools that take CMOS-clean wafers only: the furnace tubes, PFC Bench 01, Acid Bench 02 and P5000 RIE chamber C. This is general practice, and the note says so. In 1.5.0 such wafers were stopped only where a tool lists the substrates it takes.
+- **Settings → Materials** shows what the checks make of each material and how many they don't know. Tap one they don't know, or one you answered, to say or change what it is. Removing a material also takes its answer back.
+- **Answers sync** with your other devices and travel in backups; the newer answer wins. Imports and syncs say how many answers changed. 1.5.0 devices keep syncing and ignore the answers.
+- **The checks know more names:**
+  - more metals and alloys: ruthenium, rhodium, osmium, manganese, gallium, hafnium, zirconium, scandium, yttrium, lanthanum, erbium, gadolinium, rhenium, antimony, bismuth and cadmium (by name or formula), Pb, and AlCu, AuGe, TaN and other common alloys;
+  - more polymers: BARC, Teflon, Kapton, and polymers by chemical name ("Poly(methyl methacrylate)");
+  - spelled-out compound semiconductors ("Gallium nitride", "Indium phosphide");
+  - the oxides, nitrides and carbon the LNF lists.
+
+  Every LNF material is known except selenium, which you decide.
+- **PFC Bench 01 and RCA Bench 81** also bar a material you say is not CMOS-clean, as their LNF rules ("CMOS-clean materials only", "Only Si, fused silica and glass") say. RCA Bench 81 also bars lithium niobate and tantalate.
+- **Fixes:**
+  - The S5T2 "Fluorocarbon Removal" recipe no longer counts as leaving fluorocarbon on the wafers.
+  - The doped-oxide films PSG and BPSG are no longer read as glass when spelled out: "Phosphosilicate glass", "Spin-on glass" and "Spin on glass".
+  - A resist listed after a metal ("Cr/AZ 1518") now counts as a resist too.
+  - A silicon dopant in a name (boron, phosphorus, arsenic or antimony: "Sb-doped Si", "Si:B") is not a film. Any other dopant counts as what it is: "Au-doped Si", "Al-doped Si" and "Er-doped glass" carry metal.
+  - A metal named with the wafer it is on ("Aluminum on thermal oxide wafer", "Titanium on hafnia") counts as metal.
+  - "Silicon dioxide" written out is asked about as a wafer, as SiO2 is, instead of being read as silicon.
+  - A strip no longer takes a polymer wafer's own material away (a Kapton wafer stays Kapton).
+  - A double tap no longer picks or checks anything you did not see. A sheet ignores taps in its first half second, and an answer ignores the tap right after it.
+- **Under the hood.** Settings gain `materialKinds`; sync files and backups carry it. After updating, each device reads every other device's sync file once more. New tests cover the names the checks know, the new notes, answers and how they merge. The smoke test answers "What is Zeonor?" for a new substrate.
+
 ## M9: Wafer and mask types, bonding, and plan checks
 
 Version 1.5.0.

@@ -227,14 +227,16 @@ test('a checked "Check" never hides a "Not allowed" on the same wafers', () => {
 test('names: resistivity is not resist, "In situ" is not indium, and silicon is silicon however it is written', () => {
   assert.deepEqual([...materialClasses('High-resistivity Si')], []);
   assert.deepEqual([...materialClasses('In situ doped poly')], []);
-  assert.deepEqual([...materialClasses('III-V oxide')], []);
+  assert.deepEqual([...materialClasses('III-V oxide')], ['compound'], 'a III-V, and no vanadium');
   assert.deepEqual([...materialClasses('Au seed')], ['noble']);
   assert.deepEqual([...materialClasses('W')], ['metal'], 'a formula on its own still counts');
   for (const m of ['Si', 'n-type Si', 'p-Si', 'FZ Si', 'Prime Si', 'p-type Si <100>', 'Poly-Si', 'SOI']) assert.equal(substrateClass(m), 'silicon', m);
   assert.equal(substrateClass('SiO2 (thermal)'), 'other');
   assert.equal(substrateClass('FZ wafer'), 'other');
   const tube = step('Tempress S3T1 - Dry Oxide');
-  assert.deepEqual((run([wafer('W1', { material: 'FZ wafer', size: '100mm' })], [step(PFC), tube]).byStep.get(tube.id) || []), [], 'an unlisted substrate is not guessed at');
+  const asks = run([wafer('W1', { material: 'FZ wafer', size: '100mm' })], [step(PFC), tube]).byStep.get(tube.id) || [];
+  assert.deepEqual(asks.map((x) => [x.code, x.severity, x.materials]), [['substrate-unknown', 'caution', ['FZ wafer']]],
+    'an unlisted substrate is not guessed at: the app says it does not know it');
 });
 
 test('carriers, pieces, size limits and thickness', () => {
@@ -271,7 +273,8 @@ test('bonding: methods, sizes, stack thickness, debond', () => {
   assert.equal(run([si, big], [mounted]).byStep.get(mounted.id), undefined, 'a wafer waxed onto a bigger carrier is usual');
   const af32 = wafer('X1', { material: 'AF32', size: '100mm' });
   const unknownGlass = bond([si, af32], 'anodic');
-  assert.equal(run([si, af32], [unknownGlass]).byStep.get(unknownGlass.id), undefined, 'an unlisted material is not guessed at');
+  assert.deepEqual((run([si, af32], [unknownGlass]).byStep.get(unknownGlass.id) || []).map((x) => [x.code, x.severity]), [['bond-unknown', 'caution']],
+    'an unlisted material is not guessed at: the app says it does not know it');
   const evg510 = bond([si, glass], 'anodic', 'EVG 510');
   assert.deepEqual((run([si, glass], [evg510]).byStep.get(evg510.id) || []).map((x) => x.source), ['lnf']);
   // The stack: 525 + 500 µm (± 25) is too thick for the TEL coater, and processes as one.
@@ -314,7 +317,7 @@ test('masks: plate sizes per tool and against the wafer', () => {
   assert.deepEqual(stepWafers({ wafers: [m4] }, step('Heidelberg µPG 501')).map((w) => w.label), ['M1'], 'a mask-making project');
 });
 
-test('the 790 PECVD chamber cautions on polymers; unknown never warns; your settings win', () => {
+test('the 790 PECVD chamber cautions on polymers; nothing set raises nothing; your settings win', () => {
   const w = [wafer('W1', SI100)];
   const pecvd = step('Plasmatherm 790', { templateId: P790_PECVD });
   const r = run(w, [step('CEE 200X photoresist spinner 1'), pecvd]).byStep.get(pecvd.id) || [];
@@ -476,9 +479,10 @@ test('a clean carrier debonded from a metal wafer is told why: the stack, not th
 test('names and titles: AZ products, AlScN, a coat titled lift-off, a KOH etch at Base Bench 63', () => {
   for (const m of ['AZ nLOF 2070', 'AZ P4620', 'AZ MiR 701', 'AZ 9260', 'AZ-4620']) assert.deepEqual([...materialClasses(m)], ['organic'], m);
   assert.deepEqual([...materialClasses('AZO')], ['noble']);
-  for (const m of ['Aluminum scandium nitride', 'Aluminum gallium nitride', 'Chromium oxide', 'Aluminum oxide ALD', 'Titanium dioxide film']) {
+  for (const m of ['Aluminum scandium nitride', 'Chromium oxide', 'Aluminum oxide ALD', 'Titanium dioxide film']) {
     assert.deepEqual([...materialClasses(m)], [], m);
   }
+  assert.deepEqual([...materialClasses('Aluminum gallium nitride')], ['compound'], 'AlGaN, a compound semiconductor as GaN is');
   for (const m of ['nLOF 2070', 'ma-N 2403', 'PMGI SF9', 'Shipley 1813', 'CSAR 62', 'MiR 701', 'Beeswax']) assert.deepEqual([...materialClasses(m)], ['organic'], m);
   assert.deepEqual([...materialClasses('Mirror Al')], ['metal']);
   assert.deepEqual([...materialClasses('Aluminum oxide / Titanium')], ['metal'], 'two materials: the second is a metal');

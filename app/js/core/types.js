@@ -63,6 +63,13 @@
  * A saved wafer or mask the person can add to projects (store "wafers").
  * @typedef {BaseRecord & {name: string, spec: WaferSpec}} SavedWafer
  *
+ * What the person said a material is, for the plan checks (a MaterialKind in core/wafer-spec.js; "" once
+ * cleared, so the clearing syncs too). `at` orders changes: the newer one wins.
+ * @typedef {{name: string, kind: string, at: string}} MaterialKindEntry
+ *
+ * The person's answers by material name, normalised with normText (settings `materialKinds`).
+ * @typedef {Record<string, MaterialKindEntry>} MaterialKinds
+ *
  * Wafers a plan step bonds into one stack.
  * @typedef {{id: string, waferIds: string[], method?: string}} Bond
  *

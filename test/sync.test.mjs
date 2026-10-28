@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { githubClient, parseRepo, GitHubError } from '../app/js/sync/github.js';
 import { encodeSyncFile, decodeSyncFile } from '../app/js/sync/codec.js';
-import { buildSnapshot, validateSnapshot, planMerge, SYNC_STORES, describeResult } from '../app/js/sync/plan.js';
+import { buildSnapshot, validateSnapshot, planMerge, SYNC_STORES, SYNC_SCOPE, describeResult } from '../app/js/sync/plan.js';
 import { runSync, checkRepo } from '../app/js/sync/sync.js';
 import { normalizeRecord, SCHEMA_VERSION } from '../app/js/data/schema.js';
 
@@ -90,6 +90,7 @@ function device(/** @type {string} */ deviceId, /** @type {Record<string, any[]>
         }
       }
       if (plan.materials) settings.materials = plan.materials;
+      if (plan.materialKinds) /** @type {any} */ (settings).materialKinds = plan.materialKinds;
     },
     /** @param {string[]} ids */
     recompute: async (ids) => { recomputed.push(...ids); },
@@ -188,9 +189,33 @@ test('files read by an app version that synced fewer stores are read once more',
   const upgraded = await sync(gh, b);
   assert.equal(upgraded.read, 1, 'the file is read again');
   assert.deepEqual(b.db.projects.map((p) => p.id), ['P']);
-  assert.equal(b.settings.sync.seenStores, SYNC_STORES.join(','));
+  assert.equal(b.settings.sync.seenStores, SYNC_SCOPE);
   const again = await sync(gh, b);
   assert.equal(again.read, 0, 'after that, unchanged files are skipped as before');
+});
+
+test('answers about materials travel with sync: the newer wins, a taken-back one too, and a 1.5.0 file has none', async () => {
+  const gh = fakeGitHub();
+  const a = device('aaa');
+  const b = device('bbb');
+  /** @type {any} */ (a.settings).materialKinds = { pzt: { name: 'PZT', kind: 'metal', at: T(2) } };
+  await sync(gh, a);
+  await sync(gh, b);
+  assert.deepEqual(/** @type {any} */ (b.settings).materialKinds, { pzt: { name: 'PZT', kind: 'metal', at: T(2) } });
+  assert.deepEqual(b.settings.materials, ['Si', 'PZT'], 'a material with an answer joins the list');
+  // B takes the answer back later: the empty answer is the newer one, so A takes it.
+  /** @type {any} */ (b.settings).materialKinds = { pzt: { name: 'PZT', kind: '', at: T(3) } };
+  await sync(gh, b);
+  await sync(gh, a);
+  assert.equal(/** @type {any} */ (a.settings).materialKinds.pzt.kind, '');
+  const snap = buildSnapshot({
+    records: {}, materials: ['Si'], materialKinds: { pzt: { name: 'PZT', kind: 'metal', at: T(1) } }, deviceId: 'ccc', deviceName: 'C', author: 'C',
+    appVersion: 'test', now: T(1),
+  });
+  assert.equal(planMerge({}, snap, ['Si'], { pzt: { name: 'PZT', kind: '', at: T(3) } }).materialKinds, null, 'an older answer changes nothing');
+  const { materialKinds: _k, ...old } = snap;
+  assert.equal(planMerge({}, old, ['Si'], {}).materialKinds, null, 'a file from 1.5.0 has no answers');
+  assert.deepEqual(validateSnapshot(old), []);
 });
 
 test('an equal updatedAt goes to the higher device id on every device', async () => {

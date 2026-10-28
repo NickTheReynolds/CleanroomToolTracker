@@ -217,7 +217,7 @@ async function form(ctx, toolId, templateId) {
   /** @type {Map<string, ReturnType<typeof planChecksWith>>} */
   const checksOf = new Map();
   const stepNotes = (/** @type {import('../core/types.js').Project} */ p, /** @type {string} */ stepId) => {
-    const c = checksOf.get(p.id) || planChecksWith(p, allTools, allTemplates, everyRecipe);
+    const c = checksOf.get(p.id) || planChecksWith(p, allTools, allTemplates, everyRecipe, settings.materialKinds);
     checksOf.set(p.id, c);
     const step = p.steps.find((x) => x.id === stepId);
     return step ? openNotes(c.byStep.get(stepId) || [], step) : [];

@@ -11,11 +11,17 @@
  * Profiles come from three places, in this order: general practice by kind
  * of tool, the LNF's own notes (the tool facts in data/compat-lnf.js, read
  * from the LNF wiki's recipe pages), and the person's settings on the tool.
- * Each note says which one it rests on. Anything not known raises nothing:
- * no size, no material, no profile field means no note. Notes advise; they
- * never block saving. Pure: no DOM and no storage.
+ * Each note says which one it rests on. Anything not set raises nothing: no
+ * size, no material, no profile field means no note. A material the app does
+ * not know raises a "Check" wherever a rule could apply to it, and once the
+ * person says what it is (Settings → Materials), the checks use that and the
+ * notes rest on it. Notes advise; they never block saving. Pure: no DOM and
+ * no storage.
  */
-import { sizeInfo, isMask, classesOf, materialClasses, substrateClass, CLASS_LABELS, SUBSTRATE_LABELS } from './wafer-spec.js';
+import {
+  sizeInfo, isMask, materialClasses, substrateClass, materialKnown, substrateKnown, unknownParts, noSodium, isNothing, CLASS_LABELS,
+  SUBSTRATE_LABELS,
+} from './wafer-spec.js';
 import { normText } from './vocab.js';
 
 /** @typedef {import('./types.js').Project} Project */
@@ -102,11 +108,14 @@ export function mergeProfile(parts) {
  * @property {string} stepId
  * @property {'stop' | 'caution'} severity stop: the tool does not take it or it will not work; caution: check first
  * @property {string} code what kind of problem: size, pieces, thickness, substrate, clean, material, preclean, wet, koh,
- *   koh-order, mask-size, mask-small, bond-size, bond-anodic, bond-polish, bond-clean, bond-tool
+ *   koh-order, mask-size, mask-small, bond-size, bond-anodic, bond-polish, bond-clean, bond-tool; and, for what the
+ *   app does not know, substrate-unknown, material-unknown, bond-unknown
  * @property {string[]} waferIds the wafers it is about
  * @property {string} key what "Mark as checked" stores on the step (noteKey)
  * @property {string} text one or two plain sentences
  * @property {Source} source what it rests on
+ * @property {string[]} [materials] for the -unknown codes: the material names the app does not know, so the screen
+ *   can ask what each is
  */
 
 /**
@@ -123,7 +132,8 @@ export function mergeProfile(parts) {
  * @property {string | null} size
  * @property {number | null} thick nominal thickness, µm
  * @property {number} tol ± µm
- * @property {Set<string>} subs substrate classes
+ * @property {Map<string, string>} subs substrate materials (a stack has several) with their substrate class, or
+ *   "unknown" for one the app does not know as a substrate
  * @property {Set<string>} subNames the substrate materials, normalised (they "are" the wafer; films are "carried")
  * @property {Map<string, {name: string, step: number}>} mats materials on it, by normalised name; step 0 = it came with it
  * @property {'clean' | 'semiclean' | 'metals'} level
@@ -134,6 +144,9 @@ export function mergeProfile(parts) {
  * @property {{toolId: string, name: string, step: number} | null} wet the last wet bench it was at
  * @property {{step: number, piranha: boolean, dev?: string} | null} koh exposed to KOH and not yet cleaned; piranha: Acid 92
  *   done; dev: only a KOH developer, with its bench's rule
+ * @property {'' | 'general' | 'yours'} stain metal or another material that is not CMOS-clean was on it, or a tool marked
+ *   it (an evaporator): what a fusion bond must not have, even after the metal is etched off. 'yours' when only the person's
+ *   settings say so
  * @property {Unit[]} [members] a stack's wafers as they were when bonded
  * @property {number} [bondStep] the step that bonded the stack
  */
@@ -158,8 +171,74 @@ const SOLVENT = /acetone|xylene|toluene|\bnmp\b|\bipa\b|isopropanol|alcohol|meth
 export const SOURCE_TEXT = Object.freeze({
   lnf: 'From the LNF wiki notes in the app.',
   general: 'General practice, not an LNF rule.',
-  yours: 'From a tool setting in this app.',
+  yours: 'From a setting made in this app.',
 });
+/** Classes as a tool's rule names them, for a material the app does not know: fast-diffusing and other metals are metals. */
+const RULE_WORDS = /** @type {Record<string, string>} */ ({
+  noble: 'metals', metal: 'metals', organic: 'resists and polymers', glass: 'glass', silica: 'fused silica',
+  alkali: 'lithium niobate or tantalate', compound: 'compound semiconductors', unclean: 'anything else that is not CMOS-clean',
+});
+/** The classes a kind of wafer can be: a rule on these is a rule on wafers too. */
+const WAFER_CLASSES = ['glass', 'silica', 'compound', 'alkali'];
+
+/**
+ * What the checks make of material names, with the person's answers, each
+ * name worked out once per plan.
+ * @typedef {Object} Know
+ * @property {(name: string) => Set<string>} classes materialClasses
+ * @property {(name: string) => string} substrate substrateClass
+ * @property {(name: string) => boolean} known the app knows the material
+ * @property {(name: string) => boolean} subKnown the app knows what kind of substrate it is
+ * @property {(name: string) => boolean} noSodium a glass without sodium, by the person's answer
+ * @property {(name: string) => string[]} ask the materials of the name the app does not know, to ask about
+ * @property {(name: string) => Set<string>} plain the classes without the person's answers: a note rests on the
+ *   person's settings when only their answer makes it
+ * @property {(name: string) => string} plainSub the substrate class without the person's answers, "unknown" when the
+ *   app does not know it
+ */
+
+/**
+ * @param {import('./types.js').MaterialKinds | null | undefined} kinds
+ * @returns {Know}
+ */
+function knowledge(kinds) {
+  const k = kinds || null;
+  /** @template T @param {(name: string) => T} f @returns {(name: string) => T} */
+  const memo = (f) => {
+    /** @type {Map<string, T>} */
+    const seen = new Map();
+    return (name) => {
+      if (!seen.has(name)) seen.set(name, f(name));
+      return /** @type {T} */ (seen.get(name));
+    };
+  };
+  return {
+    classes: memo((name) => materialClasses(name, k)),
+    substrate: memo((name) => substrateClass(name, k)),
+    known: memo((name) => materialKnown(name, k)),
+    subKnown: memo((name) => substrateKnown(name, k)),
+    noSodium: memo((name) => noSodium(name, k)),
+    ask: memo((name) => unknownParts(name, k)),
+    plain: memo((name) => materialClasses(name)),
+    plainSub: memo((name) => (substrateKnown(name) ? substrateClass(name) : 'unknown')),
+  };
+}
+
+/**
+ * @param {Set<string>} c
+ * @returns {boolean} metal, a compound semiconductor, lithium niobate or tantalate, or anything else that is not
+ *   CMOS-clean: the wafer is not CMOS-clean for good
+ */
+const dirties = (c) => c.has('noble') || c.has('metal') || c.has('unclean') || c.has('compound') || c.has('alkali');
+/** @param {string} name @returns {boolean} a wafer of it could be fused silica (SiO2, silicon dioxide, oxide) */
+const silicaLike = (name) => /\bsio[2x]?\b|silicon[\s-]+(di|mon)?oxide|^(thermal\s+)?oxide$/.test(normText(name));
+/** @param {Set<string>} c @returns {boolean} */
+const isMetal = (c) => c.has('noble') || c.has('metal');
+
+/** @param {Unit} u @returns {string[]} the kinds of substrate it is, as far as the app knows */
+const subKinds = (u) => [...new Set([...u.subs.values()].filter((c) => c !== 'unknown'))];
+/** @param {Unit} u @returns {string[]} its substrate materials the app does not know as substrates */
+const subUnknown = (u) => [...u.subs].filter(([, c]) => c === 'unknown').map(([name]) => name);
 
 /**
  * Whether a step's title or recipe says it strips resist: strip, ash,
@@ -200,6 +279,17 @@ const whyText = (why, many) => {
 };
 /** @param {number | null} thick @param {number} tol @returns {string} "1025 ± 50 µm" */
 const thickText = (thick, tol) => `${Math.round(thick || 0)}${tol ? ` ± ${Math.round(tol)}` : ''} µm`;
+/** @param {string[]} xs @returns {string} "metals", "metals or glass", "metals, resists and polymers, or glass" */
+const orList = (xs) => (xs.length <= 2 ? xs.join(' or ') : `${xs.slice(0, -1).join(', ')}, or ${xs[xs.length - 1]}`);
+/** @param {readonly string[]} classes @returns {string} a rule's classes in words, in a fixed order */
+const ruleWords = (classes) => {
+  const has = (/** @type {string} */ c) => classes.includes(c);
+  const words = [has('noble') && has('metal') ? 'metals' : has('noble') ? 'fast-diffusing metals (gold, copper…)'
+    : has('metal') ? 'metals other than fast-diffusing ones' : ''];
+  for (const c of ['organic', 'glass', 'silica', 'alkali', 'compound']) if (has(c)) words.push(RULE_WORDS[c]);
+  if (has('unclean')) words.push(words.some(Boolean) ? RULE_WORDS.unclean : 'materials that are not CMOS-clean');
+  return orList(words.filter(Boolean));
+};
 
 /**
  * @typedef {Object} PlanInput
@@ -208,6 +298,7 @@ const thickText = (thick, tol) => `${Math.round(thick || 0)}${tol ? ` ± ${Math.
  * @property {(toolId: string | null) => string} toolName
  * @property {(step: PlanStep) => {adds: string[], removes: string[]}} [stepMaterials] what the step leaves and removes,
  *   beyond its own adds and removes (a deposition recipe's film, a spin-coat recipe's resist)
+ * @property {import('./types.js').MaterialKinds | null} [kinds] what the person said materials are (settings)
  */
 
 /**
@@ -247,10 +338,11 @@ export function noteKey(note) {
  */
 export function checkPlan(input) {
   const { project } = input;
+  const know = knowledge(input.kinds);
   const wafers = list(project.wafers).filter((w) => w && typeof w.id === 'string');
   /** @type {Map<string, Unit>} unit by wafer id (every member of a stack points at the stack) */
   const unitOf = new Map();
-  for (const w of wafers) unitOf.set(w.id, newUnit(w));
+  for (const w of wafers) unitOf.set(w.id, newUnit(w, know));
   /** @type {Note[]} */
   const notes = [];
   const steps = list(project.steps);
@@ -263,16 +355,18 @@ export function checkPlan(input) {
     const units = [...new Set(here.map((w) => unitOf.get(w.id)).filter(Boolean))];
     /** @type {Raw[]} */
     const found = [];
-    const note = (/** @type {Unit[]} */ us, /** @type {Note['severity']} */ severity, /** @type {string} */ code,
-      /** @type {Source} */ source, /** @type {(who: string, many: boolean) => string} */ make) => {
-      found.push({ severity, code, source, units: us, make });
+    /** @type {NoteFn} */
+    const note = (us, severity, code, source, make, materials) => {
+      found.push({ severity, code, source, units: us, make, ...(materials && materials.length ? { materials } : {}) });
     };
     const wafersHere = units.filter((u) => !u.mask);
     const masksHere = units.filter((u) => u.mask);
-    if (profile) checkTool(profile, tool, n, wafersHere, masksHere, note);
+    if (profile) checkTool(profile, tool, n, wafersHere, masksHere, note, know);
+    // What the tool's notes already ask about: a bond at the same step does not ask again.
+    const asked = new Set(found.flatMap((x) => x.materials || []).map((name) => normText(name)));
     const mats = input.stepMaterials ? input.stepMaterials(step) : { adds: [], removes: [] };
-    for (const u of units) applyStep(u, profile, tool, n, step, mats);
-    if (list(step.bonds).length) bondStep(step, profile, n, wafers, unitOf, note);
+    for (const u of units) applyStep(u, profile, tool, n, step, mats, know);
+    if (list(step.bonds).length) bondStep(step, profile, n, wafers, unitOf, note, know, asked);
     if (step.debond) for (const u of new Set(here.map((w) => unitOf.get(w.id)))) if (u && u.members) split(u, unitOf);
     notes.push(...merge(step.id, found));
   });
@@ -282,25 +376,52 @@ export function checkPlan(input) {
   return { notes, byStep };
 }
 
-/** @param {Wafer} w @returns {Unit} */
-function newUnit(w) {
+/**
+ * A raw note: the wafers, how serious, its kind, what it rests on, its text given the wafers' labels, and the
+ * names the app does not know (for the -unknown notes).
+ * @typedef {(us: Unit[], sev: Note['severity'], code: string, src: Source, text: (who: string, many: boolean) => string,
+ *   materials?: string[]) => void} NoteFn
+ */
+
+/** @param {Wafer} w @param {Know} know @returns {Unit} */
+function newUnit(w, know) {
   const spec = w.spec || {};
   /** @type {Map<string, {name: string, step: number}>} */
   const mats = new Map();
-  const add = (/** @type {string} */ m) => { if (m && String(m).trim()) mats.set(normText(m), { name: String(m).trim(), step: 0 }); };
+  // "-" or "n/a" says there is no material.
+  const add = (/** @type {string} */ m) => { if (!isNothing(m)) mats.set(normText(m), { name: String(m).trim(), step: 0 }); };
   add(spec.material || '');
   for (const f of list(spec.films)) add(f && f.material);
-  const sub = substrateClass(spec.material);
-  const cls = classesOf([...mats.values()].map((m) => m.name));
-  const metal = cls.has('noble') || cls.has('metal');
+  const material = isNothing(spec.material) ? '' : String(spec.material).trim();
+  // Metal, or another material that is not CMOS-clean (by the person's answer), leaves it out of CMOS-clean tools.
+  const dirt = [...mats.values()].map((m) => m.name).filter((name) => dirties(know.classes(name)));
+  const metal = dirt.some((name) => isMetal(know.classes(name)));
   return {
     ids: [w.id], label: w.label, mask: isMask(w), size: spec.size || null,
     thick: typeof spec.thicknessUm === 'number' ? spec.thicknessUm : null, tol: typeof spec.thicknessTolUm === 'number' ? spec.thicknessTolUm : 0,
-    subs: new Set(sub ? [sub] : []), subNames: new Set(spec.material ? [normText(spec.material)] : []), mats,
-    level: metal ? 'metals' : 'clean', why: metal ? { verb: 'came', rest: 'with metal on it' } : null, whyStep: 0, whySrc: 'general',
-    pre: false, wet: null, koh: null,
+    subs: new Map(material ? [[material, know.subKnown(material) ? know.substrate(material) : 'unknown']] : []),
+    subNames: new Set(material ? [normText(material)] : []), mats,
+    level: dirt.length ? 'metals' : 'clean', why: dirt.length ? { verb: 'came', rest: `with ${metal ? 'metal' : andList(dirt)} on it` } : null, whyStep: 0,
+    // Dirt known only from the person's answer rests on that answer.
+    whySrc: dirt.length && !dirt.some((name) => dirties(know.plain(name))) ? 'yours' : 'general',
+    stain: stainOf([...mats.values()].map((m) => m.name), know), pre: false, wet: null, koh: null,
   };
 }
+
+/** @param {Set<string>} c @returns {boolean} metal, or anything else not CMOS-clean: what a fusion bond's surfaces must not have had */
+const staining = (c) => c.has('noble') || c.has('metal') || c.has('unclean');
+/**
+ * @param {string[]} names materials
+ * @param {Know} know
+ * @returns {Unit['stain']} what they leave for a fusion bond: '' nothing, 'general' by the app's own reading, 'yours' only by
+ *   the person's answers
+ */
+const stainOf = (names, know) => {
+  const hit = names.filter((name) => staining(know.classes(name)));
+  return !hit.length ? '' : hit.some((name) => staining(know.plain(name))) ? 'general' : 'yours';
+};
+/** @param {Unit['stain']} a @param {Unit['stain']} b @returns {Unit['stain']} both stains, the app's own reading first */
+const stains = (a, b) => (a === 'general' || b === 'general' ? 'general' : a || b);
 
 /**
  * What a note rests on when it joins a rule and the wafer's history: the
@@ -323,9 +444,10 @@ function weaker(a, b) {
  * @param {number} n step number
  * @param {Unit[]} units wafers and stacks
  * @param {Unit[]} masks
- * @param {(us: Unit[], sev: Note['severity'], code: string, src: Source, text: (who: string, many: boolean) => string) => void} note
+ * @param {NoteFn} note
+ * @param {Know} know
  */
-function checkTool(p, tool, n, units, masks, note) {
+function checkTool(p, tool, n, units, masks, note, know) {
   const src = (/** @type {string} */ k) => p.src[k] || 'general';
   const is = (/** @type {boolean} */ many) => agree(many, 'is', 'are');
   for (const u of units) {
@@ -363,12 +485,33 @@ function checkTool(p, tool, n, units, masks, note) {
         note([u], 'stop', 'thickness', src('minThicknessUm'), (who, many) => `${who} ${is(many)} ${t} thick; ${tool} takes ${p.minThicknessUm} µm and up.`);
       }
     }
-    // Only kinds of substrate the app knows: an unlisted name ("FZ wafer") is not guessed at.
-    const badSubs = p.substrates ? [...u.subs].filter((s) => s !== 'other' && !(p.substrates || []).includes(s)) : [];
+    // A kind of substrate the tool does not take ("other": the person said it is none of the kinds a tool lists).
+    const allowed = p.substrates ? andList(p.substrates.map((s) => SUBSTRATE_LABELS[/** @type {'silicon'} */ (s)] || s)) : '';
+    const badSubs = p.substrates ? [...u.subs].filter(([, c]) => c !== 'unknown' && !(p.substrates || []).includes(c)) : [];
     if (badSubs.length) {
-      const allowed = andList((p.substrates || []).map((s) => SUBSTRATE_LABELS[/** @type {'silicon'} */ (s)] || s));
-      const bad = andList(badSubs.map((s) => SUBSTRATE_LABELS[/** @type {'silicon'} */ (s)] || s));
-      note([u], 'stop', 'substrate', src('substrates'), (who) => `${who}: ${tool} takes ${allowed} only, not ${bad}.`);
+      const bad = andList([...new Set(badSubs.map(([name, c]) => (c === 'other' ? name : SUBSTRATE_LABELS[/** @type {'silicon'} */ (c)] || c)))]);
+      // When only the person's answer makes it a kind the tool does not take, the note rests on that answer.
+      const plain = badSubs.some(([name]) => { const c = know.plainSub(name); return c !== 'unknown' && !(p.substrates || []).includes(c); });
+      note([u], 'stop', 'substrate', plain ? src('substrates') : weaker(src('substrates'), 'yours'), (who) => `${who}: ${tool} takes ${allowed} only, not ${bad}.`);
+    }
+    // A substrate the app does not know ("FZ wafer", or SiO2, which could be fused silica): the person can say. A tool
+    // that lists what it takes asks about any; one with a rule on a kind of wafer (glass, fused silica…) asks about a
+    // film the app knows used as a wafer (SiO2), since a material it does not know at all is asked about below.
+    const waferRules = WAFER_CLASSES.filter((c) => (p.excludes || []).includes(c) || (p.cautions || []).includes(c));
+    // Without a list of what it takes, only a wafer that could be fused silica or glass (SiO2) is asked about.
+    const unknownSubs = p.substrates ? subUnknown(u)
+      : waferRules.length ? subUnknown(u).filter((name) => know.known(name) && silicaLike(name)) : [];
+    if (unknownSubs.length) {
+      const what = `the app does not know what kind of wafer ${andList(unknownSubs)} ${unknownSubs.length > 1 ? 'are' : 'is'}`;
+      if (p.substrates) {
+        note([u], 'caution', 'substrate-unknown', src('substrates'), (who) => `${who}: ${tool} takes ${allowed} only, and ${what}.`, unknownSubs);
+      } else {
+        const barred = waferRules.filter((c) => (p.excludes || []).includes(c));
+        const cautioned = waferRules.some((c) => (p.cautions || []).includes(c)) ? p.cautionText || '' : '';
+        const rule = [barred.length ? `${tool} allows no ${ruleWords(barred)}` : '', cautioned].filter(Boolean).join(', and ');
+        const source = barred.length && cautioned ? weaker(src('excludes'), src('cautions')) : src(barred.length ? 'excludes' : 'cautions');
+        if (rule) note([u], 'caution', 'substrate-unknown', source, (who) => `${who}: ${what}; ${rule}${/[.)”]$/.test(rule) ? '' : '.'}`, unknownSubs);
+      }
     }
     if (p.accepts && RANK[u.level] > RANK[p.accepts] && u.why) {
       const why = u.why;
@@ -382,22 +525,61 @@ function checkTool(p, tool, n, units, masks, note) {
     }
     // A substrate the tool does not take is said once, by the substrate rule.
     const names = [...u.mats.values()].filter((m) => !(badSubs.length && u.subNames.has(normText(m.name))));
+    // A wafer's own kind counts among what it is: an SiO2 wafer the person said is fused silica is fused silica at the
+    // PFC bench, though SiO2 films stay what they are.
+    const subOf = new Map([...u.subs].map(([name, c]) => [normText(name), c]));
+    const classesHere = (/** @type {{name: string}} */ m, /** @type {boolean} */ plain) => {
+      const c = new Set(plain ? know.plain(m.name) : know.classes(m.name));
+      const sub = subOf.get(normText(m.name));
+      const kind = sub === undefined ? '' : plain ? know.plainSub(m.name) : sub;
+      if (kind === 'silica' || kind === 'glass' || kind === 'compound') c.add(kind);
+      return c;
+    };
+    /** Materials a note here already names (Not allowed or Check): a name is not also asked about. */
+    const stopped = new Set();
     for (const [classes, sev, text] of /** @type {[string[] | null, Note['severity'], string][]} */ ([[p.excludes, 'stop', ''], [p.cautions, 'caution', p.cautionText || '']])) {
       if (!classes) continue;
-      const hit = names.filter((m) => [...materialClasses(m.name)].some((c) => classes.includes(c)));
+      const hit = names.filter((m) => [...classesHere(m, false)].some((c) => classes.includes(c)));
       if (!hit.length) continue;
+      for (const m of hit) stopped.add(m.name);
       const own = hit.filter((m) => u.subNames.has(normText(m.name))).map((m) => m.name);
       const carried = hit.filter((m) => !u.subNames.has(normText(m.name))).map((m) => `${m.name} ${m.step ? `(step ${m.step})` : '(as bought)'}`);
       // In a fixed order ("gold … and other metals"), whatever order the materials came in.
-      const hitClasses = [...new Set(hit.flatMap((m) => [...materialClasses(m.name)].filter((c) => classes.includes(c))))]
+      const hitClasses = [...new Set(hit.flatMap((m) => [...classesHere(m, false)].filter((c) => classes.includes(c))))]
         .sort((a, b) => CLASS_ORDER.indexOf(a) - CLASS_ORDER.indexOf(b));
-      note([u], sev, 'material', src(sev === 'stop' ? 'excludes' : 'cautions'), (who, many) => {
+      const rule = src(sev === 'stop' ? 'excludes' : 'cautions');
+      // When only the person's answers put these materials under the rule, the note rests on those answers.
+      const plain = hit.some((m) => [...classesHere(m, true)].some((c) => classes.includes(c)));
+      note([u], sev, 'material', plain ? rule : weaker(rule, 'yours'), (who, many) => {
         const what = [own.length ? `${is(many)} ${andList(own)}` : '', carried.length ? `${agree(many, 'carries', 'carry')} ${andList(carried)}` : '']
           .filter(Boolean).join(' and ');
         return sev === 'stop'
           ? `${who} ${what}: ${tool} allows no ${andList(hitClasses.map((c) => CLASS_LABELS[/** @type {'noble'} */ (c)] || c))}.`
           : `${who} ${what}: ${text}`;
       });
+    }
+    // Materials the app does not know, where a rule here could apply to them, with the rule, so the person can say
+    // what each is. The clean rule matters only while the wafer is clean enough for it and no rule here already bars
+    // metals and anything else that is not CMOS-clean.
+    const dirtBarred = !!p.excludes && ['noble', 'metal', 'unclean'].every((c) => (p.excludes || []).includes(c));
+    const cleanOnly = !!p.accepts && RANK[u.level] <= RANK[p.accepts] && !dirtBarred;
+    const rules = [p.excludes ? `allows no ${ruleWords(p.excludes)}` : '',
+      cleanOnly ? `takes ${p.accepts === 'clean' ? 'CMOS-clean' : 'clean or semi-clean'} wafers only` : ''].filter(Boolean);
+    const cautionText = !rules.length && p.cautions && p.cautions.length ? p.cautionText || '' : '';
+    const unknown = rules.length || cautionText
+      ? names.filter((m) => !know.known(m.name) && !stopped.has(m.name) && !unknownSubs.some((s) => normText(s) === normText(m.name))) : [];
+    if (unknown.length) {
+      // "PZT (as bought)", "PZT (in Ti/PZT, step 3)": the materials the app does not know, in the name they came in.
+      const what = andList(unknown.map((m) => {
+        const ask = know.ask(m.name);
+        const when = u.subNames.has(normText(m.name)) ? '' : m.step ? `step ${m.step}` : 'as bought';
+        if (ask.length === 1 && normText(ask[0]) === normText(m.name)) return when ? `${m.name} (${when})` : m.name;
+        return `${andList(ask)} (in ${m.name}${when ? `, ${when}` : ''})`;
+      }));
+      const source = !rules.length ? src('cautions') : p.excludes && cleanOnly ? weaker(src('excludes'), src('accepts')) : src(p.excludes ? 'excludes' : 'accepts');
+      note([u], 'caution', 'material-unknown', source, (who) => (rules.length
+        ? `${who}: the app does not know ${what}; ${tool} ${rules.join(' and ')}.`
+        : `${who}: the app does not know ${what}. ${cautionText.charAt(0).toUpperCase()}${cautionText.slice(1)}`), [...new Set(unknown.flatMap((m) => know.ask(m.name)))]);
     }
     if (p.needsPreclean && !u.pre) {
       note([u], 'stop', 'preclean', src('needsPreclean'), (who, many) => `${who} ${agree(many, 'needs', 'need')} the RCA pre-furnace clean at PFC Bench 01 as the step right before ${tool}, on the same day (or kept in Tempress S2T1 storage in between).`);
@@ -425,8 +607,9 @@ function checkTool(p, tool, n, units, masks, note) {
  * @param {number} n
  * @param {PlanStep} step
  * @param {{adds: string[], removes: string[]}} mats
+ * @param {Know} know
  */
-function applyStep(u, p, tool, n, step, mats) {
+function applyStep(u, p, tool, n, step, mats, know) {
   const text = `${step.title || ''} ${step.recipe || ''}`;
   // A stack's bond adhesive sits between its wafers: nothing reaches it until the wafers come apart (this step
   // may be the one that takes them apart, "Debond in acetone").
@@ -437,11 +620,15 @@ function applyStep(u, p, tool, n, step, mats) {
     // Naming the mount ("Crystalbond", "mounting wax") takes its adhesive off.
     if (MOUNT.test(r) && reachable) u.mats.delete(ADHESIVE);
   }
-  const adds = [...list(step.adds), ...mats.adds].filter((a) => a && String(a).trim());
-  // Resist and other removable organics come off (the bond adhesive only when it can be reached).
+  // "-" or "n/a" in What it adds says there is nothing.
+  const adds = [...list(step.adds), ...mats.adds].filter((a) => !isNothing(a));
+  // Resist and other removable organics come off (the bond adhesive only when it can be reached). A polymer wafer
+  // (Kapton) stays what it is, and so does a film named with a metal too ("Cr/AZ 1518": the Cr stays).
   const stripOrganics = () => {
     for (const [k, m] of u.mats) {
-      if (materialClasses(m.name).has('organic') && !PERMANENT.test(m.name) && (k !== ADHESIVE || reachable)) u.mats.delete(k);
+      const cls = know.classes(m.name);
+      if (cls.has('organic') && [...cls].every((c) => c === 'organic') && !PERMANENT.test(m.name) && (k !== ADHESIVE || reachable)
+        && !u.subNames.has(k)) u.mats.delete(k);
     }
   };
   // A step that leaves a film is a deposition, whatever its title says ("Evaporate Au for lift-off").
@@ -450,14 +637,23 @@ function applyStep(u, p, tool, n, step, mats) {
   // LNF recipe (whose removal ends in its solvent). A dry debond (a hot plate slide) leaves it for a later clean.
   if (step.debond && u.members && (SOLVENT.test(text) || /\bmounting\b/i.test(step.recipe || '') || p?.wetBench)) u.mats.delete(ADHESIVE);
   for (const a of adds) u.mats.set(normText(a), { name: String(a).trim(), step: n });
+  // A worse level takes the new reason; at the same level, a reason that does not rest on the person's settings
+  // replaces one that does, so the note rests on the person's settings only when nothing else makes it.
   const lower = (/** @type {Unit['level']} */ level, /** @type {Why} */ why, /** @type {Source} */ whySrc) => {
-    if (RANK[level] > RANK[u.level]) { u.level = level; u.why = why; u.whyStep = n; u.whySrc = whySrc; }
+    if (RANK[level] > RANK[u.level] || (level === u.level && u.whySrc === 'yours' && whySrc !== 'yours')) {
+      u.level = level; u.why = why; u.whyStep = n; u.whySrc = whySrc;
+    }
   };
-  const metals = adds.filter((a) => { const c = materialClasses(a); return c.has('noble') || c.has('metal'); });
-  if (metals.length) lower('metals', { verb: 'carries', rest: `${andList(metals)} from step ${n}` }, 'general');
+  // Metal, or anything else that is not CMOS-clean (by the person's answer).
+  const dirt = adds.filter((a) => dirties(know.classes(a)));
+  // Dirt known only from the person's answer rests on that answer.
+  if (dirt.length) lower('metals', { verb: 'carries', rest: `${andList(dirt)} from step ${n}` }, dirt.some((a) => dirties(know.plain(a))) ? 'general' : 'yours');
   if (p?.marks) {
     lower(p.marks, { verb: p.marks === 'metals' ? 'has been in' : 'has been at', rest: `${tool} (step ${n}${p.marksWhy ? `, ${p.marksWhy}` : ''})` }, p.src.marks || 'general');
   }
+  // What a fusion bond must not have had stays after an etch takes the metal off.
+  u.stain = stains(u.stain, stainOf(adds, know));
+  if (p?.marks === 'metals') u.stain = stains(u.stain, p.src.marks === 'yours' ? 'yours' : 'general');
   if (p?.restores) {
     if (u.level === 'semiclean') { u.level = 'clean'; u.why = null; u.whyStep = 0; u.whySrc = 'general'; }
     stripOrganics();
@@ -479,9 +675,11 @@ function applyStep(u, p, tool, n, step, mats) {
  * @param {number} n
  * @param {Wafer[]} wafers
  * @param {Map<string, Unit>} unitOf
- * @param {(us: Unit[], sev: Note['severity'], code: string, src: Source, text: (who: string, many: boolean) => string) => void} note
+ * @param {NoteFn} note
+ * @param {Know} know
+ * @param {Set<string>} asked materials the tool's notes at this step already ask about, normalised
  */
-function bondStep(step, p, n, wafers, unitOf, note) {
+function bondStep(step, p, n, wafers, unitOf, note, know, asked) {
   const known = new Set(wafers.map((w) => w.id));
   for (const b of list(step.bonds)) {
     const members = [...new Set(list(b && b.waferIds).filter((id) => known.has(id)).map((id) => unitOf.get(id)))]
@@ -495,22 +693,61 @@ function bondStep(step, p, n, wafers, unitOf, note) {
     if (sizes.length > 1 && method !== 'adhesive' && method !== 'temporary') {
       note([group], 'caution', 'bond-size', 'general', (who, many) => `${who} ${agree(many, 'mixes', 'mix')} sizes (${andList(sizes.map((s) => sizeWords(s)))}): bonders usually need wafers of one size.`);
     }
-    const subs = members.map((u) => u.subs);
-    // Only when every wafer's material is a known kind: an unlisted glass (D263, AF32) is "other", so no guess.
-    const allKnown = subs.every((s) => s.size && !s.has('other'));
-    // A glass wafer, or a glass film on a wafer (evaporated Pyrex).
-    const glassy = (/** @type {Unit} */ u) => u.subs.has('glass') || [...u.mats.values()].some((m) => materialClasses(m.name).has('glass'));
-    if (method === 'anodic' && allKnown && !members.some(glassy)) {
-      const silica = subs.some((s) => s.has('silica'));
-      note([group], 'stop', 'bond-anodic', 'general', (who, many) => (silica
-        ? `${who}: anodic bonding needs a sodium-containing glass such as Pyrex or Borofloat; fused silica and quartz have no sodium and do not anodic bond.`
-        : `${who} ${agree(many, 'has', 'have')} no glass wafer: anodic bonding joins a sodium-containing glass (such as Pyrex or Borofloat) to silicon.`));
+    // A glass with sodium: a glass wafer, or a glass film on a wafer (evaporated Pyrex). A glass the person said has no
+    // sodium (AF32) is glass, but does not anodic bond.
+    const sodiumGlass = (/** @type {Unit} */ u) => [...u.subs].some(([name, c]) => c === 'glass' && !know.noSodium(name))
+      || [...u.mats.values()].some((m) => know.classes(m.name).has('glass') && !know.noSodium(m.name));
+    // What the app does not know about the wafers: a material, or the kind of wafer a film it knows makes (SiO2).
+    // To ask about, not to guess at; what the tool's notes here already ask is not asked again.
+    const filmsOf = (/** @type {Unit[]} */ us) => [...new Set(us.flatMap((u) => [...u.mats.values()].filter((m) => !know.known(m.name)).flatMap((m) => know.ask(m.name))))];
+    const wafersOf = (/** @type {Unit[]} */ us) => [...new Set(us.flatMap((u) => subUnknown(u).filter((name) => know.known(name))))];
+    const fresh = (/** @type {string[]} */ names) => names.filter((name) => !asked.has(normText(name)));
+    /** @param {string[]} films @param {string[]} kinds @returns {string} "what AF32 is", "what kind of wafer SiO2 is" */
+    const notKnown = (films, kinds) => [films.length ? `what ${andList(films)} ${films.length > 1 ? 'are' : 'is'}` : '',
+      kinds.length ? `what kind of wafer ${andList(kinds)} ${kinds.length > 1 ? 'are' : 'is'}` : ''].filter(Boolean).join(' or ');
+    if (method === 'anodic' && !members.some(sodiumGlass)) {
+      const films = filmsOf(members);
+      const kinds = wafersOf(members);
+      if (films.length || kinds.length) {
+        const [f, k] = [fresh(films), fresh(kinds)];
+        if (f.length || k.length) {
+          note([group], 'caution', 'bond-unknown', 'general', (who) => `${who}: anodic bonding joins a sodium-containing glass (such as Pyrex or Borofloat) to silicon, and the app does not know ${notKnown(f, k)}.`, [...f, ...k]);
+        }
+      } else if (members.every((u) => subKinds(u).length)) {
+        const silica = members.some((u) => subKinds(u).includes('silica'));
+        const noNa = [...new Set(members.flatMap((u) => [...u.subs].filter(([name, c]) => c === 'glass' && know.noSodium(name)).map(([name]) => name)))];
+        // Without the person's answers the app would ask, or find a glass: then the answers decide, and the note rests on them.
+        const plainAsks = members.some((u) => [...u.subs.keys()].some((name) => know.plainSub(name) === 'unknown')
+          || [...u.mats.values()].some((m) => !materialKnown(m.name)));
+        const plainGlass = members.some((u) => [...u.subs.keys()].some((name) => know.plainSub(name) === 'glass')
+          || [...u.mats.values()].some((m) => know.plain(m.name).has('glass')));
+        note([group], 'stop', 'bond-anodic', plainAsks || plainGlass ? 'yours' : 'general', (who, many) => (silica
+          ? `${who}: anodic bonding needs a sodium-containing glass such as Pyrex or Borofloat; fused silica and quartz have no sodium and do not anodic bond.`
+          : noNa.length ? `${who}: anodic bonding needs a sodium-containing glass such as Pyrex or Borofloat; ${andList(noNa)} ${noNa.length > 1 ? 'have' : 'has'} no sodium.`
+            : `${who} ${agree(many, 'has', 'have')} no glass wafer: anodic bonding joins a sodium-containing glass (such as Pyrex or Borofloat) to silicon.`));
+      }
     }
     if (method === 'fusion') {
       const rough = members.filter((u) => u.ids.some((id) => wafers.find((w) => w.id === id)?.spec?.polish === 'none'));
       if (rough.length) note(rough, 'stop', 'bond-polish', 'general', (who, many) => `${who} ${agree(many, 'is', 'are')} unpolished: fusion bonding needs polished, flat surfaces.`);
-      const dirty = members.filter((u) => u.level === 'metals' || [...u.mats.values()].some((m) => materialClasses(m.name).has('organic')));
-      if (dirty.length) note(dirty, 'caution', 'bond-clean', 'general', (who, many) => `${who} ${agree(many, 'carries', 'carry')} metal or polymer: fusion bonding needs clean surfaces and a high-temperature anneal.`);
+      // Dirt on the surfaces: metal or another material that is not CMOS-clean, now or before (an etch leaves
+      // traces), a tool's mark (an evaporator), or a polymer on it now. A compound semiconductor or lithium niobate
+      // wafer is not dirt for a fusion bond.
+      const polymer = (/** @type {Unit} */ u, /** @type {boolean} */ plain) => [...u.mats.values()]
+        .some((m) => (plain ? know.plain(m.name) : know.classes(m.name)).has('organic'));
+      const dirty = members.filter((u) => u.stain || polymer(u, false));
+      // Dirt known only from the person's settings (a tool's mark, a material's answer) rests on them.
+      const plainDirt = dirty.some((u) => u.stain === 'general' || polymer(u, true));
+      const unclean = dirty.some((u) => [...u.mats.values()].some((m) => know.classes(m.name).has('unclean')));
+      if (dirty.length) {
+        note(dirty, 'caution', 'bond-clean', plainDirt ? 'general' : 'yours', (who, many) => `${who} ${agree(many, 'carries', 'carry')} metal${unclean
+          ? ', polymer or another material that is not CMOS-clean' : ' or polymer'}: fusion bonding needs clean surfaces and a high-temperature anneal.`);
+      }
+      // A wafer the app cannot clear, because it carries a material the app does not know.
+      for (const u of members) {
+        const names = dirty.includes(u) ? [] : fresh(filmsOf([u]));
+        if (names.length) note([u], 'caution', 'bond-unknown', 'general', (who) => `${who}: the app does not know ${andList(names)}; fusion bonding needs clean surfaces, with no metal or polymer.`, names);
+      }
     }
     if (p?.bondNote && method && method !== 'adhesive' && method !== 'temporary') {
       const text = p.bondNote;
@@ -531,14 +768,18 @@ function joinUnits(members, method, n) {
   const mats = new Map();
   for (const u of members) for (const [k, m] of u.mats) mats.set(k, m);
   if (method === 'adhesive' || method === 'temporary') mats.set(ADHESIVE, { name: method === 'adhesive' ? 'Bond adhesive' : 'Temporary bonding adhesive', step: n });
-  const worst = members.reduce((a, b) => (RANK[b.level] > RANK[a.level] ? b : a));
+  const level = members.reduce((a, b) => (RANK[b.level] > RANK[a] ? b.level : a), members[0].level);
+  // At the worst level, a reason that does not rest on the person's settings comes first, as in lower().
+  const atWorst = members.filter((u) => u.level === level);
+  const worst = atWorst.find((u) => u.whySrc !== 'yours') || atWorst[0];
   const big = members.map((u) => u.size).filter(Boolean).sort((a, b) => (sizeInfo(b)?.mm || 0) - (sizeInfo(a)?.mm || 0))[0] || null;
   const thick = members.every((u) => u.thick !== null) ? members.reduce((s, u) => s + (u.thick || 0), 0) : null;
   return {
     ids: members.flatMap((u) => u.ids), label: members.map((u) => u.label).join('+'), mask: false, size: big, thick,
-    tol: members.reduce((s, u) => s + u.tol, 0), subs: new Set(members.flatMap((u) => [...u.subs])),
+    tol: members.reduce((s, u) => s + u.tol, 0), subs: new Map(members.flatMap((u) => [...u.subs])),
     subNames: new Set(members.flatMap((u) => [...u.subNames])), mats,
     level: worst.level, why: worst.why, whyStep: worst.whyStep, whySrc: worst.whySrc, pre: false, wet: null,
+    stain: members.reduce((s, u) => stains(s, u.stain), /** @type {Unit['stain']} */ ('')),
     koh: members.find((u) => u.koh && !u.koh.dev)?.koh || members.find((u) => u.koh)?.koh || null,
     members, bondStep: n,
   };
@@ -557,17 +798,20 @@ function split(stack, unitOf) {
   for (const m of stack.members || []) {
     const mats = new Map([...m.mats].filter(([k]) => stack.mats.has(k)));
     for (const [k, x] of stack.mats) if (x.step >= bonded) mats.set(k, x);
-    const worse = RANK[stack.level] > RANK[m.level];
+    // The stack's reason when it is worse, or as bad and not resting on the person's settings while the wafer's
+    // own does (as lower() does for one wafer).
+    const take = RANK[stack.level] > RANK[m.level] || (stack.level === m.level && m.whySrc === 'yours' && stack.whySrc !== 'yours');
     // Worse because of a step on the stack: that step is the reason. Worse because of another wafer's past
     // (its metal): the bond is, as that metal is not on this wafer.
     const onStack = stack.whyStep >= bonded;
     /** @type {Why | null} */
-    const why = !worse ? m.why : onStack ? stack.why : { verb: 'has been in', rest: `the stack ${stack.label} (bonded at step ${bonded})` };
+    const why = !take ? m.why : onStack ? stack.why : { verb: 'has been in', rest: `the stack ${stack.label} (bonded at step ${bonded})` };
     /** @type {Unit} */
     const back = {
-      ...m, mats, level: worse ? stack.level : m.level, why, whyStep: !worse ? m.whyStep : onStack ? stack.whyStep : bonded,
+      ...m, mats, level: take ? stack.level : m.level, why, whyStep: !take ? m.whyStep : onStack ? stack.whyStep : bonded,
       // That a bonded partner passes its state on is general practice, whatever marked the partner.
-      whySrc: !worse ? m.whySrc : onStack ? stack.whySrc : weaker(stack.whySrc, 'general'), koh: stack.koh, wet: stack.wet, pre: false,
+      whySrc: !take ? m.whySrc : onStack ? stack.whySrc : weaker(stack.whySrc, 'general'), koh: stack.koh, wet: stack.wet, pre: false,
+      stain: stains(m.stain, stack.stain),
     };
     for (const id of back.ids) unitOf.set(id, back);
   }
@@ -580,6 +824,7 @@ function split(stack, unitOf) {
  * @property {Source} source
  * @property {Unit[]} units
  * @property {(who: string, many: boolean) => string} make the text, given the wafers' labels
+ * @property {string[]} [materials] names the app does not know (in the text, so joined notes share them)
  */
 
 /**
@@ -604,6 +849,7 @@ function merge(stepId, found) {
     return {
       stepId, severity: g.severity, code: g.code, source: g.source, waferIds, key: noteKey({ code: g.code, severity: g.severity, waferIds }),
       text: g.make(andList(g.units.map((u) => u.label)), g.units.length > 1),
+      ...(g.materials ? { materials: [...g.materials] } : {}),
     };
   });
 }

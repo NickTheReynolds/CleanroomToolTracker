@@ -162,9 +162,11 @@ function showImportSummary(name, res) {
   const s = sheet('Import finished', [
     h('p', null, added + updated
       ? `From ${name}: ${plural(added, 'record')} added and ${updated} updated.`
-      : `Nothing new in ${name}: this device already had the same or newer versions.`),
+      : res.materialsAdded || res.answersChanged ? `From ${name}: no new records.`
+        : `Nothing new in ${name}: this device already had the same or newer versions.`),
     rows.length ? h('dl', { class: 'facts' }, rows) : h('p', null, 'The backup holds no records.'),
     res.materialsAdded ? h('p', null, `${plural(res.materialsAdded, 'new material')} added to your materials list.`) : null,
+    res.answersChanged ? h('p', null, `${plural(res.answersChanged, 'answer')} about what materials are changed, for the plan checks.`) : null,
     invalid ? h('div', { class: 'banner', role: 'alert' }, icon('alert'),
       h('div', { class: 'banner-body' },
         h('p', null, h('strong', null, `${plural(invalid, 'record')} not imported`), ' because they are not valid:'),

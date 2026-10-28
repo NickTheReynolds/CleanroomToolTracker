@@ -8,6 +8,7 @@ import { getOne, putAll, putOne, deleteKey, getAll } from './db.js';
 import { normalizeRecord, validateRecord } from './schema.js';
 import { uuid } from '../core/ids.js';
 import { toMs } from '../core/time.js';
+import { normText } from '../core/vocab.js';
 
 /**
  * @typedef {Object} Settings
@@ -16,6 +17,8 @@ import { toMs } from '../core/time.js';
  * @property {string} deviceId
  * @property {string} theme "system", "light" or "dark"
  * @property {string[]} materials
+ * @property {import('../core/types.js').MaterialKinds} materialKinds what the person said materials are, for the plan
+ *   checks; travels with the materials list in backups and sync
  * @property {Record<string, number>} tuning lookup overrides {halfLifeDays, eventPenalty, topK}
  * @property {string | null} lastExportAt
  * @property {boolean} iosHintDismissed
@@ -33,6 +36,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   deviceId: '',
   theme: 'system',
   materials: [],
+  materialKinds: {},
   tuning: {},
   lastExportAt: null,
   iosHintDismissed: false,
@@ -75,6 +79,61 @@ export async function saveSettings(patch) {
   const next = { ...(await getSettings()), ...patch };
   await putOne('meta', { key: 'settings', value: next });
   return next;
+}
+
+/**
+ * Say what a material is for the plan checks: a MaterialKind, or "" to take
+ * the answer back (kept as an empty answer, so taking it back syncs too). A
+ * name given an answer joins the materials list. Answers sync; the newer wins.
+ * @param {string} name
+ * @param {string} kind
+ * @param {{list?: string[]}} [o] list: the materials list to keep (Undo puts back the one from before)
+ * @returns {Promise<Settings>}
+ */
+export async function saveMaterialKind(name, kind, o = {}) {
+  const s = await getSettings();
+  const clean = String(name || '').trim();
+  const key = normText(clean);
+  if (!key) return s;
+  const kinds = { ...(s.materialKinds || {}) };
+  kinds[key] = { name: clean, kind: kind || '', at: nextStamp(kinds[key]?.at) };
+  const list = o.list || s.materials;
+  const listed = list.some((m) => normText(m) === key);
+  return saveSettings({ materialKinds: kinds, materials: kind && !listed ? [...list, clean] : list });
+}
+
+/**
+ * Undo an answer: put back what was there before it (another answer, or
+ * none) and the materials list `o.list`. While no sync has started since the
+ * answer, the old answer comes back exactly as it was (none: no entry at
+ * all), so the undone answer never leaves the device and cannot overwrite a
+ * newer answer from another device; after one it comes back as a new change,
+ * so the other devices undo it too. When the answer has changed since the
+ * action being undone (`o.expect`, what that action wrote), it is left as it
+ * is and only the list is put back.
+ * @param {string} name
+ * @param {import('../core/types.js').MaterialKindEntry | null} before
+ * @param {{list?: string[], expect?: import('../core/types.js').MaterialKindEntry | null}} [o]
+ * @returns {Promise<Settings>}
+ */
+export async function restoreMaterialKind(name, before, o = {}) {
+  const s = await getSettings();
+  const key = normText(String(name || '').trim());
+  if (!key) return s;
+  const kinds = { ...(s.materialKinds || {}) };
+  const cur = kinds[key];
+  const changed = o.expect !== undefined && (!cur || !o.expect || cur.at !== o.expect.at || cur.kind !== o.expect.kind);
+  if (!changed) {
+    const sync = /** @type {any} */ (s.sync) || {};
+    const last = Math.max(...[toMs(sync.startedAt), toMs(sync.lastSyncAt)].filter(Number.isFinite));
+    const sent = !!cur && Number.isFinite(last) && last >= toMs(cur.at);
+    if (sent) kinds[key] = { name: before ? before.name : cur.name, kind: before ? before.kind : '', at: nextStamp(cur.at) };
+    else if (before) kinds[key] = { ...before };
+    else delete kinds[key];
+  }
+  const list = o.list || s.materials;
+  const keep = kinds[key] && kinds[key].kind ? kinds[key].name : '';
+  return saveSettings({ materialKinds: kinds, materials: keep && !list.some((m) => normText(m) === key) ? [...list, keep] : list });
 }
 
 /**

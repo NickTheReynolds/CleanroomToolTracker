@@ -278,6 +278,37 @@ async function main() {
     await page.waitFor(`[...document.querySelectorAll('a.row')].some((r) => r.textContent.includes('Smoke folder') && r.textContent.includes('1 project (1 active)'))`);
     await snap('projects-folders');
   });
+  await step('a material the app does not know asks what it is, and the answer is kept with the materials', async () => {
+    await page.evaluate(`location.hash = '#/project/new'`);
+    await page.waitFor(`__t.btn('More…') && __t.btn('Add step')`);
+    // A substrate the app has never heard of, typed as a new name: Zeonor, a cyclo-olefin polymer.
+    await t(`__t.click('More…')`);
+    await page.waitFor(`document.querySelector('dialog.sheet input[type=search]')`);
+    await t(`__t.type('dialog.sheet input[type=search]', 'Zeonor')`);
+    await t(`__t.click('Add')`);
+    await page.waitFor(`!document.querySelector('dialog.sheet') && __t.text().includes('(Zeonor)')`);
+    await t(`__t.click('Add step')`);
+    await page.waitFor(`__t.btn('Choose a tool (optional)')`);
+    await t(`__t.click('Choose a tool (optional)')`);
+    await page.waitFor(`document.querySelector('dialog.sheet .tile')`);
+    await t(`__t.type('dialog.sheet input[type=search]', 'RCA Bench')`);
+    await page.waitFor(`[...document.querySelectorAll('dialog.sheet .tile')].some((x) => x.textContent.includes('RCA Bench 81'))`);
+    await t(`__t.tile('RCA Bench 81')`);
+    await page.waitFor(`document.querySelector('.compat-note.note-check') && __t.btn('What is Zeonor?')`, 10000);
+    await snap('project-edit-unknown');
+    await t(`__t.click('What is Zeonor?')`);
+    await page.waitFor(`document.querySelector('dialog.sheet .kind-choices')`);
+    await checkLabels('material-kind');
+    await snap('material-kind');
+    // A polymer wafer is no kind RCA Bench 81 takes: the Check becomes a Not allowed, with nothing left to ask.
+    await t(`__t.click('A resist, polymer, wax or adhesive')`);
+    await page.waitFor(`!document.querySelector('dialog.sheet') && !__t.btn('What is Zeonor?')
+      && [...document.querySelectorAll('.compat-note.note-stop')].some((x) => x.textContent.includes('not Zeonor'))`, 10000);
+    await snap('project-edit-answered');
+    await page.evaluate(`location.hash = '#/settings/materials'`);
+    await page.waitFor(`[...document.querySelectorAll('.row-tap')].some((b) => b.textContent.includes('Zeonor') && b.textContent.includes('Checks: a resist or polymer (with your answer)'))`);
+    await snap('settings-materials');
+  });
   await step('export a backup file', async () => {
     await page.evaluate(`location.hash = '#/settings/data'`);
     await page.waitFor(`__t.btn('Prepare backup')`);
@@ -298,6 +329,7 @@ async function main() {
     if (!folder || !(backup.projects || []).some((/** @type {any} */ p) => p.name === 'Smoke batch' && p.folderId === folder.id)) {
       throw new Error('the backup does not contain the project in its folder');
     }
+    if (backup.settings?.materialKinds?.zeonor?.kind !== 'organic') throw new Error('the backup does not keep the answer about Zeonor');
     if (!/^lnf-runlog-backup-\d{4}-\d{2}-\d{2}\.json$/.test(file)) throw new Error(`unexpected file name ${file}`);
   });
   await step('export everything as Excel, CSV and PDF', async () => {

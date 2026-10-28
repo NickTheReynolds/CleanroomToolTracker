@@ -23,6 +23,7 @@ import {
 import { makeTravelerExport } from '../data/backup.js';
 import { planChecks } from '../data/plan-checks.js';
 import { noteLine, notesSummary, openNotes, toggleChecked } from '../ui/compat-notes.js';
+import { chooseMaterialKind, askButtons } from '../ui/material-kind.js';
 import { stepStates, nextStep, progress, projectRuns, linkFor, waferText } from '../core/projects.js';
 import { specShort } from '../core/wafer-spec.js';
 import { folderTree, pathText, projectFolderId } from '../core/folders.js';
@@ -131,6 +132,9 @@ export async function render(ctx) {
   /** @param {PlanStep} step @param {() => void} [close] */
   const noteLines = (step, close) => (checks.byStep.get(step.id) || []).map((n) => noteLine(n, {
     checked: (step.checked || []).includes(n.key), onCheck: (on) => setChecked(step, n.key, on, close),
+    // A material the app does not know: say what it is, and the plan is checked again.
+    action: (step.checked || []).includes(n.key) ? null
+      : askButtons(n.materials, (name) => chooseMaterialKind({ name, onSaved: () => { close?.(); refresh(); } })),
   }));
   // The next step, one tap from logging it, with its notes first.
   const nextOpen = next ? openNotes(checks.byStep.get(next.step.id) || [], next.step) : [];

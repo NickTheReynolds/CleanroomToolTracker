@@ -38,6 +38,9 @@ export const MAX_ERRORS = 5;
  * @property {Record<string, any[]>} put records to write, per store
  * @property {Record<string, MergeCounts>} counts per store
  * @property {string[] | null} materials the merged materials list, or null when it gains nothing
+ * @property {import('../core/types.js').MaterialKinds | null} [materialKinds] the merged answers about materials, or
+ *   null when nothing changes
+ * @property {number} [answersChanged] how many materials' answers came in (new or newer)
  * @property {string[]} errors why records were invalid (the first few per store)
  */
 
@@ -102,18 +105,73 @@ export function buildBackup(input) {
 }
 
 /**
- * The settings that travel in a backup: the materials list and the lookup
- * tuning. Device settings (DEVICE_SETTINGS in records.js: name, device id,
- * theme, last export time and so on) never leave the device.
+ * The settings that travel in a backup: the materials list, what the person
+ * said materials are, and the lookup tuning. Device settings
+ * (DEVICE_SETTINGS in records.js: name, device id, theme, last export time
+ * and so on) never leave the device.
  * @param {Record<string, any> | null | undefined} s
- * @returns {{materials: string[], tuning: Record<string, any>}}
+ * @returns {{materials: string[], materialKinds: import('../core/types.js').MaterialKinds, tuning: Record<string, any>}}
  */
 export function exportableSettings(s) {
   const src = isObj(s) ? s : {};
   return {
     materials: list(src.materials).filter((m) => typeof m === 'string'),
+    materialKinds: cleanKinds(src.materialKinds),
     tuning: isObj(src.tuning) ? { ...src.tuning } : {},
   };
+}
+
+/**
+ * @param {{kind: string, at: string}} a
+ * @param {{kind: string, at: string}} b
+ * @returns {boolean} answer a wins over b: it is newer, or as new and first in a fixed order, so every device picks
+ *   the same one
+ */
+function beats(a, b) {
+  const ta = Date.parse(a.at);
+  const tb = Date.parse(b.at);
+  return ta > tb || (ta === tb && a.kind > b.kind);
+}
+
+/**
+ * The person's answers about materials as they may travel: each with a name,
+ * a kind (any text, so a newer app's kinds survive; "" once taken back) and
+ * a time, keyed by the normalised name. Anything else is left out.
+ * @param {unknown} v
+ * @returns {import('../core/types.js').MaterialKinds}
+ */
+export function cleanKinds(v) {
+  /** @type {import('../core/types.js').MaterialKinds} */
+  const out = {};
+  if (!isObj(v)) return out;
+  for (const e of Object.values(v)) {
+    if (!isObj(e) || typeof e.name !== 'string' || typeof e.kind !== 'string' || typeof e.at !== 'string' || !Number.isFinite(Date.parse(e.at))) continue;
+    const name = e.name.trim();
+    const key = normText(name);
+    const entry = { name, kind: e.kind, at: e.at };
+    if (key && (!out[key] || beats(entry, out[key]))) out[key] = entry;
+  }
+  return out;
+}
+
+/**
+ * Merge another device's or a backup's answers about materials into this
+ * device's: for each material the newer answer wins, a taken-back one too.
+ * @param {import('../core/types.js').MaterialKinds} local
+ * @param {unknown} incoming
+ * @returns {import('../core/types.js').MaterialKinds | null} the merged answers, or null when nothing changes
+ */
+export function mergeKinds(local, incoming) {
+  const out = { ...(isObj(local) ? local : {}) };
+  let changed = false;
+  for (const [key, e] of Object.entries(cleanKinds(incoming))) {
+    const mine = out[key];
+    if (!mine || !isObj(mine) || typeof mine.at !== 'string' || beats(e, mine)) {
+      out[key] = e;
+      changed = true;
+    }
+  }
+  return changed ? out : null;
 }
 
 /**
@@ -273,17 +331,18 @@ export function mergeMaterials(local, incoming) {
  * Plan a merge import of a parsed backup across every data store (tools,
  * templates, runs, measurements, events, photos, projects and their
  * folders; a backup from before projects simply has none). From the
- * settings only new material names are taken; local lookup tuning stays as
- * it is.
+ * settings only new material names and newer answers about materials are
+ * taken; local lookup tuning stays as it is.
  * @param {Record<string, any[]>} existingByStore stored records per store, tombstones included
  * @param {any} backup parsed backup JSON
  * @param {string[]} [localMaterials] this device's materials list
- * @param {{deviceTieBreak?: boolean}} [opts] passed to mergeStore
+ * @param {{deviceTieBreak?: boolean, kinds?: import('../core/types.js').MaterialKinds}} [opts] deviceTieBreak: passed
+ *   to mergeStore; kinds: this device's answers about materials
  * @returns {ImportPlan}
  */
 export function planImport(existingByStore, backup, localMaterials = [], opts = {}) {
   /** @type {ImportPlan} */
-  const plan = { put: {}, counts: {}, materials: null, errors: [] };
+  const plan = { put: {}, counts: {}, materials: null, materialKinds: null, answersChanged: 0, errors: [] };
   for (const s of DATA_STORES) {
     plan.put[s] = [];
     plan.counts[s] = { added: 0, updated: 0, skipped: 0, invalid: 0 };
@@ -297,7 +356,16 @@ export function planImport(existingByStore, backup, localMaterials = [], opts = 
     plan.errors.push(...r.errors);
   }
   const local = list(localMaterials).filter((m) => typeof m === 'string');
-  const merged = mergeMaterials(local, isObj(backup.settings) ? list(backup.settings.materials) : []);
+  const incoming = cleanKinds(isObj(backup.settings) ? backup.settings.materialKinds : null);
+  const before = opts.kinds || {};
+  const kinds = mergeKinds(before, incoming);
+  plan.materialKinds = kinds;
+  /** @param {string} k @returns {boolean} the merged answer for this material says something else than this device's did */
+  const changed = (k) => !!kinds && ((before[k] && before[k].kind) || '') !== kinds[k].kind;
+  plan.answersChanged = kinds ? Object.keys(kinds).filter(changed).length : 0;
+  // A material whose answer comes in joins the list, as it is on the device that gave the answer.
+  const answered = kinds ? Object.keys(kinds).filter((k) => changed(k) && kinds[k].kind).map((k) => kinds[k].name) : [];
+  const merged = mergeMaterials(local, [...(isObj(backup.settings) ? list(backup.settings.materials) : []), ...answered]);
   if (merged.length > local.length) plan.materials = merged;
   return plan;
 }

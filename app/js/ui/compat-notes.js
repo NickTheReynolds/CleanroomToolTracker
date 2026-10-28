@@ -3,7 +3,8 @@
  * The plan's compatibility notes on screen. Each note leads with a word and
  * an icon, never colour alone: "Not allowed" (ban) or "Check" (alert), and
  * "Checked" once the person marked it so. It says what it rests on: the LNF
- * wiki notes in the app, general practice, or a tool setting.
+ * wiki notes in the app, general practice, or the person's settings (a tool's
+ * compatibility, what they said a material is).
  */
 import { h } from './dom.js';
 import { icon } from './icons.js';
@@ -15,9 +16,9 @@ import { SOURCE_TEXT } from '../core/compat.js';
 
 /**
  * @param {Note} n
- * @param {{checked?: boolean, onCheck?: (on: boolean) => void, action?: Node | null, checkId?: string}} [o]
- *   onCheck: offer "Mark as checked" (or "Not checked" to undo); action: another button, e.g. adding the PFC clean;
- *   checkId: the check button's id, so focus can return to it after a redraw
+ * @param {{checked?: boolean, onCheck?: (on: boolean) => void, action?: Node | Node[] | null, checkId?: string}} [o]
+ *   onCheck: offer "Mark as checked" (or "Not checked" to undo); action: other buttons, e.g. adding the PFC clean or
+ *   asking what a material is; checkId: the check button's id, so focus can return to it after a redraw
  * @returns {HTMLElement}
  */
 export function noteLine(n, o = {}) {

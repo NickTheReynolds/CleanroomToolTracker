@@ -74,6 +74,7 @@
 .compat-note-word { font-weight: 800; }
 .compat-note-src { font-size: 0.85rem; color: var(--text-2); }
 .compat-note .btn { align-self: flex-start; }
+.kind-choices .btn { justify-content: flex-start; text-align: left; }
 .spec-row { display: flex; flex-wrap: wrap; gap: 8px 12px; }
 .spec-row > .field { flex: 1 1 150px; min-width: 0; }
 .film-row { display: flex; gap: 8px; align-items: center; }

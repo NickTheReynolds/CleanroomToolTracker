@@ -11,8 +11,9 @@
  */
 import { githubClient, GitHubError } from './github.js';
 import { encodeSyncFile, decodeSyncFile } from './codec.js';
+import { mergeKinds, mergeMaterials } from '../data/export-import.js';
 import {
-  buildSnapshot, validateSnapshot, planMerge, touchedRuns, syncPath, deviceIdOf, SYNC_DIR, SYNC_STORES,
+  buildSnapshot, validateSnapshot, planMerge, touchedRuns, syncPath, deviceIdOf, SYNC_DIR, SYNC_STORES, SYNC_SCOPE,
 } from './plan.js';
 
 /**
@@ -20,9 +21,11 @@ import {
  * @property {string} repo "owner/name"
  * @property {string} token
  * @property {Record<string, string>} [seen] device id -> blob sha already merged
- * @property {string} [seenStores] the stores (SYNC_STORES, comma-separated) that `seen` covers; when an app
- *   version syncs more stores, the cache is dropped so every file is read once more for them
+ * @property {string} [seenStores] what `seen` covers (SYNC_SCOPE: the stores, and since 1.5.1 the answers about
+ *   materials); when an app version syncs more, the cache is dropped so every file is read once more for it
  * @property {string} [lastSyncAt]
+ * @property {string} [startedAt] when the last sync built this device's file: from then on it may carry the answers
+ *   about materials made before, so an Undo makes a new change instead of putting the old answer back silently
  * @property {SyncResult} [lastResult]
  */
 
@@ -34,6 +37,7 @@ import {
  * @property {number} added
  * @property {number} updated
  * @property {number} invalid records refused
+ * @property {number} [answers] answers about materials that came in (new or newer)
  * @property {string[]} problems files that could not be read
  */
 
@@ -41,9 +45,10 @@ import {
  * @typedef {Object} SyncStore storage the sync reads and writes
  * @property {() => Promise<Record<string, any[]>>} read all records of the synced stores, tombstones included
  * @property {(plan: import('../data/export-import.js').ImportPlan) => Promise<void>} write
- *   apply a merge plan in one transaction (records and materials)
+ *   apply a merge plan in one transaction (records, materials and the answers about them)
  * @property {(runIds: string[]) => Promise<void>} recompute derived results of these runs
- * @property {() => Promise<{deviceId: string, deviceName: string, userName: string, materials: string[], sync: SyncConfig}>} settings
+ * @property {() => Promise<{deviceId: string, deviceName: string, userName: string, materials: string[],
+ *   materialKinds?: import('../core/types.js').MaterialKinds, sync: SyncConfig}>} settings
  * @property {(sync: SyncConfig) => Promise<void>} saveSync
  */
 
@@ -73,15 +78,16 @@ export async function runSync(deps) {
   say('Checking the repository…');
   await checkRepo(gh);
   const s = await store.settings();
-  // Files read by a version that synced fewer stores (1.3 had no projects or folders) must be read again.
-  const scope = SYNC_STORES.join(',');
+  // Files read by a version that synced less (1.3 had no projects or folders, 1.5.0 no answers about materials)
+  // must be read again.
+  const scope = SYNC_SCOPE;
   const seen = s.sync.seenStores === scope ? { ...(s.sync.seen || {}) } : {};
   say('Reading the other devices…');
   const files = (await gh.list(SYNC_DIR)).filter((f) => f.type === 'file' && deviceIdOf(f.name));
   const own = files.find((f) => deviceIdOf(f.name) === s.deviceId);
   const others = files.filter((f) => f !== own);
   /** @type {SyncResult} */
-  const result = { at: '', devices: others.length, read: 0, added: 0, updated: 0, invalid: 0, problems: [] };
+  const result = { at: '', devices: others.length, read: 0, added: 0, updated: 0, invalid: 0, answers: 0, problems: [] };
   /** @type {Set<string>} */
   const touched = new Set();
   for (const f of others) {
@@ -102,13 +108,14 @@ export async function runSync(deps) {
       continue;
     }
     const current = await store.settings();
-    const plan = planMerge(await store.read(), snap, current.materials);
+    const plan = planMerge(await store.read(), snap, current.materials, current.materialKinds || {});
     await store.write(plan);
     for (const st of SYNC_STORES) {
       result.added += plan.counts[st].added;
       result.updated += plan.counts[st].updated;
       result.invalid += plan.counts[st].invalid;
     }
+    result.answers = (result.answers || 0) + (plan.answersChanged || 0);
     for (const r of touchedRuns(plan)) touched.add(r);
     seen[id] = f.sha;
     result.read += 1;
@@ -120,8 +127,10 @@ export async function runSync(deps) {
   say('Sending this device’s data…');
   const fresh = await store.settings();
   const at = now();
+  // From here this device's file carries its answers about materials: an Undo now must not put an answer back silently.
+  await store.saveSync({ ...fresh.sync, startedAt: at });
   const bytes = await encodeSyncFile(buildSnapshot({
-    records: await store.read(), materials: fresh.materials, deviceId: fresh.deviceId,
+    records: await store.read(), materials: fresh.materials, materialKinds: fresh.materialKinds || {}, deviceId: fresh.deviceId,
     deviceName: fresh.deviceName, author: fresh.userName, appVersion: deps.appVersion, now: at,
   }));
   const who = [fresh.deviceName, fresh.userName].filter(Boolean).join(', ');
@@ -135,7 +144,7 @@ export async function runSync(deps) {
     await gh.put(syncPath(fresh.deviceId), bytes, message, again ? again.sha : undefined);
   }
   result.at = at;
-  await store.saveSync({ ...fresh.sync, seen, seenStores: scope, lastSyncAt: at, lastResult: result });
+  await store.saveSync({ ...fresh.sync, startedAt: at, seen, seenStores: scope, lastSyncAt: at, lastResult: result });
   return result;
 }
 
@@ -164,7 +173,13 @@ export async function syncNow(onProgress) {
       const byStore = {};
       for (const s of SYNC_STORES) byStore[s] = plan.put[s] || [];
       await putAll(byStore);
-      if (plan.materials) await repo.saveSettings({ materials: plan.materials });
+      if (plan.materials || plan.materialKinds) {
+        // Merged into what is stored now, so an answer given on another screen while the sync ran stays.
+        const now = /** @type {any} */ (await repo.getSettings());
+        const materials = plan.materials ? mergeMaterials(now.materials || [], plan.materials) : null;
+        const materialKinds = plan.materialKinds ? mergeKinds(now.materialKinds || {}, plan.materialKinds) : null;
+        if (materials || materialKinds) await repo.saveSettings({ ...(materials ? { materials } : {}), ...(materialKinds ? { materialKinds } : {}) });
+      }
     },
     async recompute(ids) {
       for (const id of ids) await repo.recomputeRun(id);

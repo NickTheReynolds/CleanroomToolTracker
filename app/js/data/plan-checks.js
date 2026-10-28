@@ -2,10 +2,12 @@
 /**
  * Runs the compatibility checks (core/compat.js) on a project's plan with
  * what the app knows about each step: the tool's profile (data/compat-lnf.js
- * and the person's settings) and, from the step's LNF recipe, the film a
- * deposition leaves or the resist a spin coat leaves.
+ * and the person's settings), from the step's LNF recipe the film a
+ * deposition leaves or the resist a spin coat leaves, and what the person
+ * said materials are (Settings → Materials).
  */
 import { allRecipes } from './recipes.js';
+import { getSettings } from './records.js';
 import { toolProfile, lnfType } from './compat-lnf.js';
 import { checkPlan, strips } from '../core/compat.js';
 import { materialClasses } from '../core/wafer-spec.js';
@@ -28,9 +30,10 @@ const DEPOSITS = new Set(['pecvd', 'lpcvd', 'sputter', 'ebeam-evaporation', 'the
  * @param {ReadonlyMap<string, Tool>} toolMap
  * @param {ReadonlyMap<string, Template>} tplMap
  * @param {readonly WikiRecipe[]} recipes
+ * @param {import('../core/types.js').MaterialKinds | null} [kinds] what the person said materials are
  * @returns {string[]}
  */
-export function recipeAdds(step, toolMap, tplMap, recipes) {
+export function recipeAdds(step, toolMap, tplMap, recipes, kinds = null) {
   const tool = step.toolId ? toolMap.get(step.toolId) : null;
   if (!tool) return [];
   const type = lnfType(tool.id);
@@ -41,10 +44,12 @@ export function recipeAdds(step, toolMap, tplMap, recipes) {
     // a title such as "Spin S1813 (lift-off bilayer)" still coats.
     if (strips(step.recipe || '')) return [];
     // The person named the resist in What it adds: that is the one on the wafer.
-    if ((Array.isArray(step.adds) ? step.adds : []).some((a) => materialClasses(a).has('organic'))) return [];
+    if ((Array.isArray(step.adds) ? step.adds : []).some((a) => materialClasses(a, kinds).has('organic'))) return [];
     // A recipe that lists several resists says what it suits, not which one is on the wafer.
     return recipe && recipe.films.length === 1 ? [...recipe.films] : ['Photoresist'];
   }
+  // A furnace's "Fluorocarbon Removal" takes its film off rather than leaving it.
+  if (recipe && (strips(recipe.name) || /\bremov/i.test(recipe.name))) return [];
   // Plating at a wet bench (Acid Bench 92's copper or nickel pulse plating) leaves its metal too.
   if (recipe && (DEPOSITS.has(type) || tpl?.processType === 'deposition' || /\bplating\b/i.test(recipe.name))) return [...recipe.films];
   return [];
@@ -67,9 +72,10 @@ function withSubstrate(project) {
  * @param {readonly Tool[]} tools every tool, archived ones too
  * @param {readonly Template[]} templates
  * @param {readonly WikiRecipe[]} recipes
+ * @param {import('../core/types.js').MaterialKinds | null} [kinds] what the person said materials are
  * @returns {{notes: Note[], byStep: Map<string, Note[]>}}
  */
-export function planChecksWith(project, tools, templates, recipes) {
+export function planChecksWith(project, tools, templates, recipes, kinds = null) {
   const toolMap = new Map(tools.map((t) => [t.id, t]));
   const tplMap = new Map(templates.map((t) => [t.id, t]));
   return checkPlan({
@@ -82,12 +88,14 @@ export function planChecksWith(project, tools, templates, recipes) {
       const t = id ? toolMap.get(id) : null;
       return t ? t.shortName || t.name : 'this tool';
     },
-    stepMaterials: (step) => ({ adds: recipeAdds(step, toolMap, tplMap, recipes), removes: [] }),
+    stepMaterials: (step) => ({ adds: recipeAdds(step, toolMap, tplMap, recipes, kinds), removes: [] }),
+    kinds,
   });
 }
 
 /**
- * The checks for a plan, with the LNF recipes loaded (without them when they cannot load).
+ * The checks for a plan, with the LNF recipes loaded (without them when they cannot load) and what the person
+ * said materials are.
  * @param {{wafers: Wafer[], steps: PlanStep[], substrate?: string}} project
  * @param {readonly Tool[]} tools
  * @param {readonly Template[]} templates
@@ -97,5 +105,6 @@ export async function planChecks(project, tools, templates) {
   /** @type {WikiRecipe[]} */
   let recipes = [];
   try { recipes = await allRecipes(); } catch { /* checks without recipe films */ }
-  return planChecksWith(project, tools, templates, recipes);
+  const { materialKinds } = await getSettings();
+  return planChecksWith(project, tools, templates, recipes, materialKinds);
 }

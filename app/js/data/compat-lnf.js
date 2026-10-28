@@ -57,14 +57,18 @@ export const LNF_COMPAT = Object.freeze({
   },
   // Wet benches.
   [PFC_01]: {
-    accepts: 'clean', restores: true, precleans: true, excludes: ['noble', 'metal', 'organic', 'glass'], cautions: ['silica'],
+    // "CMOS-clean materials only": also anything else the person said is not CMOS-clean.
+    accepts: 'clean', restores: true, precleans: true, excludes: ['noble', 'metal', 'organic', 'glass', 'unclean'], cautions: ['silica'],
     cautionText: 'the PFC bench takes fused silica only with staff approval.',
     // Its own clean counts too: a wafer cleaned here, then in a furnace, comes back for its next clean.
     wetFrom: [ACID_02, RCA_81, PFC_01], wetText: 'the PFC bench takes no wafers from wet benches other than Acid 02 or RCA 81',
     note: 'PFC Bench 01: "CMOS-clean materials only: no metals, photoresist or glass (fused silica only with staff approval), and no wafers from wet benches other than Acid 02 or RCA 81." Its three-stage RCA clean is required before any CMOS-clean furnace.',
   },
   [RCA_81]: {
-    restores: true, kohSafe: true, kohStage: 'rca', substrates: ['silicon', 'silica', 'glass'], excludes: ['noble', 'metal', 'compound', 'organic'],
+    // "Only Si, fused silica and glass are allowed": also lithium niobate or tantalate, and anything else the person said
+    // is not CMOS-clean.
+    restores: true, kohSafe: true, kohStage: 'rca', substrates: ['silicon', 'silica', 'glass'],
+    excludes: ['noble', 'metal', 'compound', 'alkali', 'organic', 'unclean'],
     askSizes: ['150mm'], askText: 'RCA Bench 81 is built for 4 in wafers, and 6 in wafers need a helpdesk ticket', pieces: 'ask',
     note: 'RCA Bench 81: "Only Si, fused silica and glass are allowed (no metals, compound semiconductors, photoresists or other polymers)"; "the bench is built for 4" wafers, and 6" wafers or pieces need a helpdesk ticket." Its RCA clean removes organic and ionic contaminants from samples that are not CMOS-clean.',
   },

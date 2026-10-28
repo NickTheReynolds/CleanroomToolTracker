@@ -115,11 +115,12 @@ Photos are resized on the device to at most 1600 px on the long edge and stored 
 | `deviceId` | Random UUID created on first run | no |
 | `theme` | system, light or dark | no |
 | `materials` | Material picker list | yes; imports merge it as a union |
+| `materialKinds` | What the person said materials are, for the plan checks: `{[normText(name)]: {name, kind, at}}`. `kind` is a `MaterialKind` (`core/wafer-spec.js`), or `""` once taken back, so taking an answer back syncs too. An answer only fills in what the app does not know (a material, or the kind of wafer a known film makes); it never changes what the app reads. A name with an answer is on the materials list. New in 1.5.1. | yes, and in sync files; for each material the newer answer wins |
 | `tuning` | `{halfLifeDays, eventPenalty, topK}` lookup overrides | yes; imports leave local tuning unchanged |
 | `lastExportAt` | Time of the last backup export (drives the Home reminder) | no |
 | `iosHintDismissed`, `persistAsked`, `firstRunAt` | Device housekeeping | no |
 | `publicUrl` | The published HTTPS address, for the install QR code | no |
-| `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, seenStores, lastSyncAt, lastResult}`; `seenStores` names the stores `seen` covers, so a version that syncs more stores reads every file again once | no, and the token never leaves the device |
+| `sync` | GitHub sync: `{repo, token, seen: {deviceId: blobSha}, seenStores, lastSyncAt, lastResult}`. `seenStores` names what `seen` covers (`SYNC_SCOPE`: the stores and, since 1.5.1, the answers about materials), so a version that syncs more reads every file again once | no, and the token never leaves the device |
 | `myTools` | Ids of the tools this person uses; tool pickers show them (and tools used in the last 60 days) first | no |
 
 `meta.seedVersion` records which seed the database has: 1 is the generic examples, 2 is the LNF equipment list, 3 adds a PECVD template for the Plasmatherm 790's second chamber (`LNF_EXTRA_TEMPLATES` in `data/seed-lnf.js`, fixed id). Older databases are upgraded once (see `data/seed-upgrade.js`). The upgrade only adds records that are missing (a deleted one stays deleted), merges new materials, and archives example tools that were never used or edited.
@@ -165,7 +166,7 @@ Each recipe (`WikiRecipe` in `core/recipes.js`):
 ## Versions and migrations
 
 - **`DB_VERSION`** is the IndexedDB structural version (object stores and indexes): 1 is the first layout, 2 added `projects`, 3 added `folders`, 4 added `wafers`. `DB_LAYOUT` in `schema.js` lists the stores and indexes each version adds; opening the database creates whatever an older one lacks.
-- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup. It is still 1: run steps, project links, projects, folders, wafer types, wafer specs, bonds and tool compatibility settings only add to the format: every new field either has a default or is optional (a missing one reads as not set), and an older app version keeps the fields it does not know and skips the stores it does not know. So devices on different versions keep syncing, and a backup from this version imports into an older one, without the stores that version lacks (projects and folders before 1.4, saved wafer types before 1.5).
+- **`SCHEMA_VERSION`** is the record format version. It is stored in `meta.schemaVersion` and in every backup. It is still 1: run steps, project links, projects, folders, wafer types, wafer specs, bonds and tool compatibility settings only add to the format: every new field either has a default or is optional (a missing one reads as not set), and an older app version keeps the fields it does not know and skips the stores it does not know. So devices on different versions keep syncing, and a backup from this version imports into an older one, without the stores that version lacks (projects and folders before 1.4, saved wafer types before 1.5) and without the answers about materials (before 1.5.1, which travel as a settings field older versions ignore).
 - **`MIGRATIONS`** in `schema.js` is the ordered list of record migrations: a function that upgrades one record from the previous format. Older backups are upgraded with the same functions during import. A backup from a newer format is refused with a message asking to update the app.
 
 ## LNF wiki links
