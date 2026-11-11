@@ -376,6 +376,22 @@ async function main() {
     await page.waitFor(`[...document.querySelectorAll('.row-tap')].some((b) => b.textContent.includes('Zeonor') && b.textContent.includes('Checks: a resist or polymer (with your answer)'))`);
     await snap('settings-materials');
   });
+  await step('a project that comes with the app is added to the device from Settings', async () => {
+    await page.evaluate(`location.hash = '#/settings/data'`);
+    await page.waitFor(`__t.btn('Add to this device')`);
+    await checkLabels('settings-data');
+    await t(`__t.click('Add to this device')`);
+    await page.waitFor(`[...document.querySelectorAll('.shared-row .btn')].some((b) => b.textContent.trim() === 'Open')
+      && [...document.querySelectorAll('.toast-msg')].some((x) => x.textContent.includes('nrr_regjig_v9_1 added'))`, 10000);
+    await page.evaluate(`location.hash = '#/projects'`);
+    await page.waitFor(`[...document.querySelectorAll('#view .project-name')].some((x) => x.textContent.includes('nrr_regjig_v9_1'))`);
+    await t(`[...document.querySelectorAll('#view .project-name')].find((x) => x.textContent.includes('nrr_regjig_v9_1')).click()`);
+    await page.waitFor(`[...document.querySelectorAll('.section-title')].some((x) => x.textContent.includes('Steps (0 of 25 done)'))`);
+    await snap('shared-project');
+    // Adding it again changes nothing.
+    await page.evaluate(`location.hash = '#/settings/data'`);
+    await page.waitFor(`[...document.querySelectorAll('.shared-row .btn')].some((b) => b.textContent.trim() === 'Open') && !__t.btn('Add to this device')`);
+  });
   await step('export a backup file', async () => {
     await page.evaluate(`location.hash = '#/settings/data'`);
     await page.waitFor(`__t.btn('Prepare backup')`);

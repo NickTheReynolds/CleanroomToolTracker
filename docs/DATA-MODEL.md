@@ -197,6 +197,10 @@ Settings → Backup and data writes one file of the live records (no tombstones)
 
 Every run row also names the run's projects (with its wafers and plan step) and its steps. The workbook gets a "Projects" sheet when there are projects: each project's folder, status, dates, wafers, steps done and runs, and what went wrong for a failed one.
 
+## Projects that come with the app
+
+`app/projects/<name>.json` holds a project the app ships (2.2), as a backup file: the envelope of a backup with every list empty but `projects`, which holds that one record with fixed ids. `data/shared-projects.js` lists them (id, file, name, about), the service worker precaches them, and Settings → Backup and data adds one to the device through `importBackupFile`, so the merge rules of an import apply: matched by id, the newer version wins, nothing is deleted. `test/shared-projects.test.mjs` checks each file: a valid envelope and record, every step's tool a seeded LNF tool with its seeded template, and that a second import skips it.
+
 ## A project's traveler
 
 The project page exports its traveler (`core/project-report.js`): every run the project's wafers went through, oldest first, with the plan and each wafer's path.

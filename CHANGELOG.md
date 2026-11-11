@@ -2,6 +2,12 @@
 
 One entry per milestone (spec Section 16).
 
+## 2.2.0: Projects that come with the app
+
+- **nrr_regjig_v9_1.** The registration-jig sweep v9 process sequence comes with the app as a project: its 24 rows, from the 2 µm wet oxide to the cleave (the µPG 501 layers 1/0 and 2/0, the DGRIE oxide etches, two Pegasus Recipe 3 runs), after the RCA pre-furnace clean the LNF requires right before the oxide tube, which the plan's checks asked for; 25 steps in all, with the two 100 mm DSP wafers, each step's tool, recipe and the figures to check against, and the GDS layout named on both exposure steps. The steps the wiki does not cover say [staff].
+- **Settings → Backup and data → Projects that come with the app.** One tap, **Add to this device**, puts a shipped project under Projects; it is the app's own file, so this works offline, and it merges like an import (adding it again changes nothing you edited). **Open** takes you there once it is on the device.
+- The files live in the repository under `app/projects/`, in the backup format, so they can also be imported by hand on any device.
+
 ## 2.1.0: Tool pages in their colours, steps tracked by the project, time on tools
 
 The owner's notes after 2.0.0.

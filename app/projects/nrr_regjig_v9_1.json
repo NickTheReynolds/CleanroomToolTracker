@@ -1,0 +1,344 @@
+{
+  "format": "lnf-runlog",
+  "version": 1,
+  "exportedAt": "2026-11-11T00:00:00.000Z",
+  "about": "A project that comes with LNF Run Log. Import it from Settings → Backup and data, or add it there under Projects that come with the app.",
+  "tools": [],
+  "templates": [],
+  "runs": [],
+  "measurements": [],
+  "events": [],
+  "photos": [],
+  "projects": [
+    {
+      "id": "7d3f6a2e-9b41-4c58-8e2a-5f0c1d9e4b72",
+      "createdAt": "2026-11-11T00:00:00.000Z",
+      "updatedAt": "2026-11-11T00:00:00.000Z",
+      "deleted": false,
+      "deviceId": "shared",
+      "author": "Nick Reynolds",
+      "name": "nrr_regjig_v9_1",
+      "goal": "Registration-jig sweep v9 on 100 mm DSP prime Si p/B ⟨100⟩, 525 µm: a 2 µm wet-oxide hard mask patterned on the µPG 501 (layer 1/0), run 1 on the Pegasus (Recipe 3, 150 cycles) for 375 µm blind windows, crosses and cleave lines, then 5 µm SPR 220 aligned to the run-1 crosses (layer 2/0) and run 2 (60 cycles) for the through-holes, grooves, wells, fullers, slots and tag bars.",
+      "status": "active",
+      "startedAt": "2026-11-11T00:00:00.000Z",
+      "endedAt": null,
+      "substrate": "Si",
+      "folderId": null,
+      "notes": "Open before booking: µPG single-layer selection at conversion; SPR 220 doses on the µPG (3 and 5 µm); autofocus over the 375 µm step; furnace recipe; DGRIE 4 in-on-6 in mounting; Bench 84 class ticket; back-face strip method.\nFigures are from the LNF wiki pages (STS Pegasus 4 / LNF Recipe 3; SPR 220; STS APS DGRIE; Ar Descum; Solvent Bench 84; Material Restrictions; Heidelberg µPG 501 Mask Maker; TEL Mark Vz Coater) and are for verification, not instruction; [staff] marks what the wiki does not cover.",
+      "wafers": [
+        {
+          "id": "36dd840b-9129-4597-ba12-a976847e42cf",
+          "label": "W1",
+          "status": "active",
+          "notes": "nrr_regjig_sweep_v9.gds",
+          "spec": {
+            "material": "Si",
+            "size": "100mm",
+            "thicknessUm": 525,
+            "orientation": "⟨100⟩",
+            "polish": "dsp",
+            "doping": "p",
+            "dopant": "B",
+            "grade": "Prime"
+          }
+        },
+        {
+          "id": "210f25e5-19db-44ac-a123-55415565c571",
+          "label": "W2",
+          "status": "active",
+          "notes": "Joe’s wafer: joe_stage_nrr_regjig_sweep_v9.gds. Run 1 at 115 cycles, then measure and top up to 375 (5 % open, etches faster); run 2 at 150 / (X / N1) cycles.",
+          "spec": {
+            "material": "Si",
+            "size": "100mm",
+            "thicknessUm": 525,
+            "orientation": "⟨100⟩",
+            "polish": "dsp",
+            "doping": "p",
+            "dopant": "B",
+            "grade": "Prime"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "id": "670a3925-a4ce-40e5-b680-b177ca2f7563",
+          "title": "RCA pre-furnace clean",
+          "toolId": "ff0c929c-9d8d-4cce-b327-dc92429353fa",
+          "templateId": "683eb2fa-c4aa-49e1-b2a0-9796387e9d60",
+          "recipe": "RCA clean, three stages",
+          "notes": "Not one of the README’s 24 rows: the LNF requires this clean as the step right before any CMOS-clean furnace tube, the same day (or kept in Tempress S2T1 storage in between). Bare wafer, nothing on it yet.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "9f2267b1-326a-402a-91f0-899fd2c4c789",
+          "title": "Wet thermal oxide, 2.0 µm both faces [staff]",
+          "toolId": "fc51e5eb-912f-4a19-9a4c-52abe838c756",
+          "templateId": "bd221a24-22ac-4999-a62d-0b5cf78f0764",
+          "recipe": "Wet oxide 2.0 µm",
+          "notes": "Bare wafer in. The furnace recipe is for staff to set. Hard-mask rates under Pegasus Recipe 3: thermal 222, HTO 219, LTO 230 Å/min; PECVD unknown.",
+          "doneAt": null,
+          "skipped": false,
+          "adds": [
+            "SiO2 (thermal)"
+          ]
+        },
+        {
+          "id": "c8fb1737-e7b2-4a0b-909d-8303665f169c",
+          "title": "Measure the oxide thickness",
+          "toolId": "fd581d38-9a1d-480e-891a-b0654534f8cc",
+          "templateId": "273c1e72-325a-4da2-8562-e6021ec6b32f",
+          "recipe": "Oxide thickness",
+          "notes": "2.0 µm ± 10 %. It sets the DGRIE times. The Nanospec does as well.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "5befc946-a5fa-440a-9f7d-2c00d9400c50",
+          "title": "Coat SPR 220, 3 µm",
+          "toolId": "d7e61157-0dfd-46a5-89c4-d8af8372a6ab",
+          "templateId": "ba2f7e2c-79de-48ed-a512-aa2eee0a206e",
+          "recipe": "SPR 220 3.0 3um recipe",
+          "notes": "HMDS vapour prime; soft bake 115 °C 90 s. 4 in wafer, no through holes, no backside PR. Wait at least 5 min before exposing.",
+          "doneAt": null,
+          "skipped": false,
+          "adds": [
+            "SPR 220"
+          ]
+        },
+        {
+          "id": "2a370f75-a487-4bb2-bb27-7d19ecf3ca32",
+          "title": "Expose layer 1/0, the oxide pattern",
+          "toolId": "353b8e89-6133-4553-adf4-4940fe75d11b",
+          "templateId": "c0d8b717-539b-4334-90db-79eb35c22462",
+          "recipe": "Standard Exposure",
+          "notes": "nrr_regjig_sweep_v9.gds, layer 1/0 only. Min feature 100 µm → High Throughput, about 108 min; field 103.4 × 104.0 mm (SOP 100 × 100; CLEAVE_OVERRUN_MM=0 → 100). Polarity clear, no mirror. SPR 220 dose: ask staff.",
+          "doneAt": null,
+          "skipped": false,
+          "gds": {
+            "name": "nrr_regjig_sweep_v9.gds",
+            "layer": "1/0"
+          }
+        },
+        {
+          "id": "fedda26c-017d-4ebd-8145-fed60cc5a3f4",
+          "title": "Post-exposure bake and develop",
+          "toolId": "d7e61157-0dfd-46a5-89c4-d8af8372a6ab",
+          "templateId": "ba2f7e2c-79de-48ed-a512-aa2eee0a206e",
+          "recipe": "AZ726 – DP3030",
+          "notes": "PEB 115 °C 90 s; develop AZ726 – DP3030.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "fb9d06af-1db9-4aa8-9c53-3a5e06c634c5",
+          "title": "Inspect the resist",
+          "toolId": "4e401ac7-14b3-4e38-ac71-db2f0c769d3a",
+          "templateId": "51188189-0059-4a18-9e69-a0eaadd05f93",
+          "recipe": "Inspect",
+          "notes": "Window 11.000 × 5.000 mm; cleave lines 100 µm; crosses 2.000 × 0.200 mm at (±30, ±30). Resist clear in the openings. Any inspection microscope.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "66ff5878-621c-46df-b507-d2ee46482eda",
+          "title": "Etch the oxide, 2 µm",
+          "toolId": "b1ff2d07-087c-407d-a624-deb84a6709da",
+          "templateId": "0b982fc6-e9a1-4d86-abd1-0ea07849b374",
+          "recipe": "uk submicron etch",
+          "notes": "0.26 µm/min, 2.5:1 to PR → 2 µm in about 7.7 min plus 10–20 % over-etch; about 0.8 µm of resist consumed. 4 in on a 6 in bare-Si carrier (mounting: ask staff); Semi-Clean.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "a60b319b-9303-41ea-8e24-da29447df939",
+          "title": "Check the oxide cleared in the openings",
+          "toolId": "fd581d38-9a1d-480e-891a-b0654534f8cc",
+          "templateId": "273c1e72-325a-4da2-8562-e6021ec6b32f",
+          "recipe": "Oxide thickness",
+          "notes": "0 µm in the window. Nanospec or microscope.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "d14eafb7-e13e-44c8-b446-6e1e97998bb8",
+          "title": "Strip the resist",
+          "toolId": "80e80fdc-a853-40b0-a9d9-d2590227b367",
+          "templateId": "ce302f00-91c2-493f-b24d-133aa09d5a33",
+          "recipe": "Remover PG, acetone, IPA; DI; N2",
+          "notes": "Non-CMOS-clean from here → Semi-Clean Pegasus: a one-line ticket.",
+          "doneAt": null,
+          "skipped": false,
+          "removes": [
+            "SPR 220"
+          ]
+        },
+        {
+          "id": "dd593829-590c-4760-96bd-5dc6ae381764",
+          "title": "Descum (optional)",
+          "toolId": "477d965c-3402-46cb-b733-eac37c52b991",
+          "templateId": "647e837f-6d95-4517-b78a-49cbeb9a42a3",
+          "recipe": "LNF Ar Descum",
+          "notes": "PR descum and native oxide.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "9e5e7b5a-a3d0-49e6-8764-2f3b23822cb4",
+          "title": "RUN 1: Recipe 3, 150 cycles, oxide mask alone",
+          "toolId": "477d965c-3402-46cb-b733-eac37c52b991",
+          "templateId": "647e837f-6d95-4517-b78a-49cbeb9a42a3",
+          "recipe": "LNF Recipe 3",
+          "notes": "150 cycles at 12.5 s/cycle → 31 min. Window 375, crosses 375, cleaves 375 µm with a 150 µm web; blind; 19.1 % open; oxide −0.69 µm. W2 (Joe’s wafer, 5 % open, etches faster): 115 cycles, then measure and top up to 375.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "8c803e0a-0165-4d4f-852c-34977c136ecc",
+          "title": "Measure the window floor depth X",
+          "toolId": "770fb01a-5159-422b-9bf9-0d6dea9b93b2",
+          "templateId": "d45bc9e2-e833-4f91-b0f2-e84991b53fc4",
+          "recipe": "Step height",
+          "notes": "375 ± 15 µm; one cleave trench too (the Zygo NewView does as well). X short → step 13 tops up; X long → shorten step 20.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "4c226869-5522-49ed-8bd8-78e7fa13a249",
+          "title": "Top up to 375 µm (if needed)",
+          "toolId": "477d965c-3402-46cb-b733-eac37c52b991",
+          "templateId": "647e837f-6d95-4517-b78a-49cbeb9a42a3",
+          "recipe": "LNF Recipe 3",
+          "notes": "(375 − X) / (X / 150) cycles. No resist on the wafer, so this is free.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "9247932d-73de-4d9f-b187-4a3d34297752",
+          "title": "Coat SPR 220, 5 µm, over the topography",
+          "toolId": "d7e61157-0dfd-46a5-89c4-d8af8372a6ab",
+          "templateId": "ba2f7e2c-79de-48ed-a512-aa2eee0a206e",
+          "recipe": "SPR 220 3.0 5um recipe",
+          "notes": "HMDS; soft bake 115 °C 120 s plus a 30 s stepdown. Over 375 µm of topography, allowed (blind). The trenches fill and a fillet forms at the window walls: expected.",
+          "doneAt": null,
+          "skipped": false,
+          "adds": [
+            "SPR 220"
+          ]
+        },
+        {
+          "id": "1ae03e5d-288e-459e-bb63-c1ab305d75cb",
+          "title": "Expose layer 2/0, the resist pattern, aligned to the run-1 crosses",
+          "toolId": "353b8e89-6133-4553-adf4-4940fe75d11b",
+          "templateId": "c0d8b717-539b-4334-90db-79eb35c22462",
+          "recipe": "Alignment mode",
+          "notes": "Same file, layer 2/0 only, in Alignment mode on the run-1 crosses. Min feature 2 µm → High Precision, about 215 min. The 5 µm dose and autofocus over the 375 µm step: ask staff.",
+          "doneAt": null,
+          "skipped": false,
+          "gds": {
+            "name": "nrr_regjig_sweep_v9.gds",
+            "layer": "2/0"
+          }
+        },
+        {
+          "id": "fb134dae-baf9-4602-8f6b-52a54b3581e5",
+          "title": "Post-exposure bake and develop",
+          "toolId": "d7e61157-0dfd-46a5-89c4-d8af8372a6ab",
+          "templateId": "ba2f7e2c-79de-48ed-a512-aa2eee0a206e",
+          "recipe": "AZ726 – 50-50DP",
+          "notes": "PEB 115 °C 90 s; develop AZ726 – 50-50DP.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "2e8748d1-d7be-476f-9576-fa0bb8c5a0eb",
+          "title": "Inspect the overlay",
+          "toolId": "4e401ac7-14b3-4e38-ac71-db2f0c769d3a",
+          "templateId": "51188189-0059-4a18-9e69-a0eaadd05f93",
+          "recipe": "Inspect",
+          "notes": "Doubled crosses give the overlay (ledge = w/2 ∓ d); floor clear except the wall fillet; cleave trenches still full; tags legible.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "6f21df0a-020d-4217-99b1-4495d5c3991a",
+          "title": "Etch the oxide through the resist mask",
+          "toolId": "b1ff2d07-087c-407d-a624-deb84a6709da",
+          "templateId": "0b982fc6-e9a1-4d86-abd1-0ea07849b374",
+          "recipe": "uk submicron etch",
+          "notes": "About 7.7 min plus over-etch; about 0.8 µm of the 5 µm resist. Tightest: 2 µm tag bars through 2 µm oxide; the floors are already bare Si.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "6b011dae-5912-4b54-b808-3d68dc4aa126",
+          "title": "Check Si exposed in a groove and a tag bar",
+          "toolId": "4e401ac7-14b3-4e38-ac71-db2f0c769d3a",
+          "templateId": "51188189-0059-4a18-9e69-a0eaadd05f93",
+          "recipe": "Inspect",
+          "notes": "",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "550ccb31-f08c-4128-9cec-67eb16390e88",
+          "title": "RUN 2: Recipe 3, 60 cycles",
+          "toolId": "477d965c-3402-46cb-b733-eac37c52b991",
+          "templateId": "647e837f-6d95-4517-b78a-49cbeb9a42a3",
+          "recipe": "LNF Recipe 3",
+          "notes": "60 cycles → 12.5 min: window and crosses through; grooves 115/130/139/145/150; wells 150; fullers 100; slots 85; tag bars 66; cleaves stay at 375; 18.7 % open; resist −0.96 µm. If X ≠ 375: (525 − X) / (X / 150) cycles; over-etch a few % at most. W2 (Joe’s wafer): 150 / (X / N1) cycles.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "5e623a0f-1b44-4598-b0bc-e1832d36598a",
+          "title": "Inspect the through-holes and measure a groove",
+          "toolId": "4e401ac7-14b3-4e38-ac71-db2f0c769d3a",
+          "templateId": "51188189-0059-4a18-9e69-a0eaadd05f93",
+          "recipe": "Inspect",
+          "notes": "Through-holes with backlight; groove depth on the Dektak, one die per setting. A bottom ledge under the fillet is expected.",
+          "doneAt": null,
+          "skipped": false
+        },
+        {
+          "id": "7c04073a-a702-46c4-80a8-a81ac05c9937",
+          "title": "Strip the resist",
+          "toolId": "80e80fdc-a853-40b0-a9d9-d2590227b367",
+          "templateId": "ce302f00-91c2-493f-b24d-133aa09d5a33",
+          "recipe": "Remover PG, acetone, IPA; DI; N2",
+          "notes": "As step 9. Through holes now: no more TEL.",
+          "doneAt": null,
+          "skipped": false,
+          "removes": [
+            "SPR 220"
+          ]
+        },
+        {
+          "id": "52f143d4-cc2f-449a-8e5b-8a48dcee3110",
+          "title": "Back-face oxide strip [staff]",
+          "toolId": null,
+          "templateId": null,
+          "recipe": "Acid bench or HF vapour",
+          "notes": "Front protected; under the 1 × 9 mm Ti/Pt/Au pads. The front oxide may stay. Method: ask staff.",
+          "doneAt": null,
+          "skipped": false,
+          "removes": [
+            "SiO2 (thermal)"
+          ]
+        },
+        {
+          "id": "81d4d406-2ffc-4b1c-9f8e-cbba70551f7f",
+          "title": "Cleave along the 100 µm lines",
+          "toolId": null,
+          "templateId": null,
+          "recipe": "Off-tool",
+          "notes": "Snap the Si lands along the side grooves: 375 µm / 150 µm web against the proven 402 / 123. Snap the lands after bonding.",
+          "doneAt": null,
+          "skipped": false
+        }
+      ]
+    }
+  ],
+  "folders": [],
+  "wafers": []
+}

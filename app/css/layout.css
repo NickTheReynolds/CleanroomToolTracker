@@ -260,6 +260,11 @@ details.fold .card { box-shadow: none; }
 .project-card-go { position: relative; z-index: 1; flex: none; min-height: 44px; padding: 6px 14px; }
 .run-summary dd { overflow-wrap: anywhere; }
 .home-aside { margin: -6px 2px 0; }
+/* A project that comes with the app: its Add or Open button sits under the description. */
+.shared-row { align-items: flex-start; }
+.shared-row .row-lead { margin-top: 2px; }
+.shared-row .row-sub { overflow-wrap: anywhere; }
+.shared-actions { display: flex; margin-top: 8px; }
 /* Time on tools, on a project's head: the clock icon sits in the line of text. */
 .time-line p { margin: 0; }
 .time-line .icon { display: inline-block; vertical-align: -3px; color: var(--text-2); }

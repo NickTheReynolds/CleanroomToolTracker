@@ -7,7 +7,7 @@
  * scripts/bump-version.mjs changes CACHE_NAME; test/sw-assets.test.mjs
  * checks that ASSETS lists every file in app/.
  */
-const CACHE_NAME = 'lnf-runlog-v2.1.0-dev';
+const CACHE_NAME = 'lnf-runlog-v2.2.0-dev';
 
 const ASSETS = [
   './',
@@ -203,6 +203,9 @@ const ASSETS = [
   'js/data/compat-lnf.js',
   'js/data/plan-checks.js',
   'js/data/attachments.js',
+  'js/data/shared-projects.js',
+  // Projects that come with the app (data/shared-projects.js).
+  'projects/nrr_regjig_v9_1.json',
   'js/ui/wafer-spec-editor.js',
   'js/ui/wafer-types.js',
   'js/views/wafer-types.js',

@@ -8,14 +8,15 @@
  */
 import { h, append, fill } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
-import { button, section, toggle, toast, confirmDialog, sheet, badge, errorText, segmented } from '../ui/components.js';
+import { button, linkButton, section, toggle, toast, confirmDialog, sheet, badge, errorText, segmented } from '../ui/components.js';
 import { exportFlow, formatBytes } from '../ui/export-flow.js';
 import { storageStatus, requestPersist } from '../ui/pwa.js';
-import { refresh } from '../router.js';
+import { refresh, navigate } from '../router.js';
+import { SHARED_PROJECTS } from '../data/shared-projects.js';
 import {
   estimatePhotoBytes, makeBackupFile, makeCsvFiles, makeAllExport, markExported, importBackupFile, eraseAllData,
 } from '../data/backup.js';
-import { getSettings, photoUsage } from '../data/repo.js';
+import { getSettings, photoUsage, getProject } from '../data/repo.js';
 import { UI } from '../config.js';
 import { HELP } from '../core/app-help.js';
 import { ageDays, formatDateTime } from '../core/time.js';
@@ -217,6 +218,52 @@ function importSection(ctx) {
     status);
 }
 
+/**
+ * Projects that come with the app (data/shared-projects.js): each a backup
+ * file of the app's own, added to this device with one tap, through the
+ * same merge as an import.
+ * @param {import('../router.js').ViewContext} ctx
+ * @returns {Promise<HTMLElement>}
+ */
+async function sharedSection(ctx) {
+  const rows = await Promise.all(SHARED_PROJECTS.map(async (sp) => ({ sp, have: !!(await getProject(sp.id)) })));
+  const status = h('p', { class: 'field-note', role: 'status' });
+  const add = (/** @type {import('../data/shared-projects.js').SharedProject} */ sp, /** @type {HTMLButtonElement} */ btn) => async () => {
+    btn.disabled = true;
+    status.textContent = `Adding ${sp.name}…`;
+    try {
+      // The app's own file (cached by the service worker, so it comes offline too), merged like a backup.
+      const res = await fetch(`projects/${sp.file}`);
+      if (!res.ok) throw new Error(`The project file could not be loaded (${res.status}).`);
+      const r = await importBackupFile(new File([await res.text()], sp.file, { type: 'application/json' }));
+      const c = r.counts.projects || { added: 0, updated: 0, skipped: 0, invalid: 0 };
+      status.textContent = '';
+      if (c.invalid) throw new Error(r.errors.join(' ') || 'The project file is not valid.');
+      if (ctx.isCurrent()) refresh();
+      toast(c.added ? `${sp.name} added. Find it under Projects.` : c.updated ? `${sp.name} brought up to date.` : `${sp.name} is already on this device.`,
+        { action: { label: 'Open', fn: () => navigate(`/project/${encodeURIComponent(sp.id)}`) }, timeout: 10000 });
+    } catch (err) {
+      status.textContent = '';
+      btn.disabled = false;
+      toast(`Could not add ${sp.name}: ${errorText(err)}`, { kind: 'error' });
+    }
+  };
+  return section('Projects that come with the app',
+    h('p', null, 'Plans worked out in advance, with their wafers and steps. Add one to this device, then open it under Projects and start its steps. Adding it again changes nothing you edited.'),
+    h('div', { class: 'list' }, rows.map(({ sp, have }) => {
+      const btn = button('Add to this device', { icon: 'download' });
+      btn.addEventListener('click', add(sp, btn));
+      // The button sits under the text, so a long description keeps the row's width.
+      return h('div', { class: 'row shared-row' },
+        h('span', { class: 'row-lead' }, icon('project')),
+        h('span', { class: 'row-main' }, h('span', { class: 'row-title' }, sp.name), h('span', { class: 'row-sub' }, sp.about),
+          h('span', { class: 'shared-actions' },
+            have ? linkButton('Open', `#/project/${encodeURIComponent(sp.id)}`, { kind: 'ghost', icon: 'chevron' }) : btn)));
+    })),
+    status,
+    h('p', { class: 'muted small' }, 'These files live in the app’s repository under app/projects/, in the backup format, so they can also be imported by hand on any device.'));
+}
+
 /** @returns {HTMLElement} */
 function storageSection() {
   const box = h('div', { class: 'stack' }, h('p', { class: 'muted' }, 'Checking storage…'));
@@ -286,12 +333,13 @@ function eraseSection() {
 /** @param {import('../router.js').ViewContext} ctx */
 export async function render(ctx) {
   ctx.setTitle('Backup and data');
-  const [settings, photos, photoEstimate] = await Promise.all([getSettings(), photoUsage(), estimatePhotoBytes()]);
+  const [settings, photos, photoEstimate, shared] = await Promise.all([getSettings(), photoUsage(), estimatePhotoBytes(), sharedSection(ctx)]);
   append(ctx.root, [
     backupSection(settings, photos, photoEstimate),
     everythingSection(),
     csvSection(),
     importSection(ctx),
+    shared,
     storageSection(),
     eraseSection(),
   ]);
